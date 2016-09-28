@@ -1,0 +1,44 @@
+html
+  head
+    title= title
+    link(rel='stylesheet', href='/css/bootstrap.min.css')
+    link(rel='stylesheet', href='/css/jquery.dataTables.min.css')
+    link(rel='stylesheet', href='/css/image-picker.css')
+    link(rel='stylesheet', href='/css/jsgrid.min.css')
+    link(rel='stylesheet', href='/css/jsgrid-theme.min.css')
+    link(rel='stylesheet', href='/css/style.css')
+  body
+    div.container
+      nav.navbar.navbar-inverse(role='navigation')
+        ul.nav.navbar-nav
+          li.active
+            a(href="/") Home
+          li
+            a(href="/") Operations
+      div.jumbotron
+        div.canvas
+          canvas#canvas
+        div.properties
+          form
+            input(type="hidden", name="id")#propID
+            div.form-group
+              label Name:
+              input(type="text", name="name" onchange="updatePropName(this.value)").form-control#propName
+            div.form-group
+              label Address:
+              input(type="text", name="address" onchange="updatePropAddress(this.value)").form-control#propAddress
+            div.form-group
+              label Icon:
+              select.image-picker#propIcon
+                each icon in icons
+                  option(data-img-src="/images/sm_icons/" + icon, data-img-class="first", value=icon) icon
+            div.form-group
+              button#newNode New Node
+      div.jumbotron
+        div#jsGrid
+script(src='/js/jquery.js')
+script(src='/js/jsgrid.min.js')
+script(src='/socket.io/socket.io.js')
+script(src='/js/bootstrap.min.js')
+script(src='/js/image-picker.min.js')
+script(src='/js/copper.js')

@@ -1,0 +1,18 @@
+{
+  "name": "copper",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "BSD-2-Clause",
+  "dependencies": {
+    "express": "~4.14.0",
+    "canvas": "~1.5.0",
+    "pug": "~2.0.0-beta6",
+    "mysql": "~2.11.1",
+    "socket.io": "~1.4.8",
+  }
+}
