@@ -55,10 +55,41 @@ io.on('connection', function(socket) {
     });
     socket.on('insert_event', function(msg) {
         var evt = JSON.parse(msg);
-        connection.query('INSERT INTO events (event_time, source_node, source_port, dest_node, dest_port, analyst) values (?, ?, ?, ?, ?, ?)', [evt.event_time, evt.source_node, evt.source_port, evt.dest_node, evt.dest_port, evt.analyst], function (err, results) {
+        connection.query('INSERT INTO events (mission, event_time, source_node, source_port, dest_node, dest_port, analyst) values (1, ?, ?, ?, ?, ?, ?)', [evt.event_time, evt.source_node, evt.source_port, evt.dest_node, evt.dest_port, evt.analyst], function (err, results) {
             if (!err) {
                 evt.id = results.insertId;
                 io.emit('insert_event', JSON.stringify(evt));
+            }
+        });
+    });
+    socket.on('insert_node', function(msg) {
+        var node = JSON.parse(msg);
+        connection.query('INSERT INTO nodes (mission, name, address, image, x, y, width, height) values (1, ?, ?, ?, 64, 64, 64, 64)', [node.name, node.address, node.icon], function (err, results) {
+            if (!err) {
+                node.id = results.insertId;
+                node.x = 64;
+                node.y = 64;
+                node.height = 64;
+                node.width = 64;
+                io.emit('insert_node', JSON.stringify(node));
+            }
+        });
+    });
+    socket.on('insert_link', function(msg) {
+        var link = JSON.parse(msg);
+        console.log(link);
+        connection.query('INSERT INTO links (node_a, node_b) values (?, ?)', [link.node_a, link.node_b], function (err, results) {
+            if (!err) {
+                link.id = results.insertId;
+                io.emit('insert_link', JSON.stringify(link));
+            }
+        });
+    });
+    socket.on('delete_node', function(msg) {
+        var node = JSON.parse(msg);
+        connection.query('DELETE FROM nodes WHERE id = ?', [node.id], function (err, results) {
+            if (!err) {
+                io.emit('delete_node', JSON.stringify(node.id));
             }
         });
     });

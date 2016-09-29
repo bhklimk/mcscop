@@ -7,10 +7,20 @@ var offsetX = canvasOffset.left;
 var offsetY = canvasOffset.top;
 
 var mouseIsDown = false;
+var creatingLink = false;
+var firstNode = null;
+var secondNode = null;
 var selectedNode = null;
 var startX = 0;
 var startY = 0;
+var scale = 1;
+var originx = 0;
+var originy = 0;
+var zoomIntensity = 0.2;
+var maxX = 5000;
+var maxY = 5000;
 
+var newNode = false;
 var nodes = [];
 var nodeSelect = [{id:0, name:'none'}];
 var links = [];
@@ -19,12 +29,12 @@ var tableData = [];
 
 var socket = io();
 
-var MyCustomDirectLoadStrategy = function(grid) {
+var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
 };
  
-MyCustomDirectLoadStrategy.prototype = new jsGrid.loadStrategies.DirectLoadingStrategy();
-MyCustomDirectLoadStrategy.prototype.finishInsert = function(loadedData) {
+CustomDirectLoadStrategy.prototype = new jsGrid.loadStrategies.DirectLoadingStrategy();
+CustomDirectLoadStrategy.prototype.finishInsert = function(loadedData) {
     var grid = this._grid;
     if (loadedData['id'] != 0) {
         grid.option("data").push(loadedData);
@@ -32,6 +42,54 @@ MyCustomDirectLoadStrategy.prototype.finishInsert = function(loadedData) {
     }
     grid.inserting = false;
 };
+
+function addZero(i) {
+    if (i < 10) {
+        i = "0" + i;
+    }
+    return i;
+}
+
+var DateField = function(config) {
+    jsGrid.Field.call(this, config);
+};
+ 
+DateField.prototype = new jsGrid.Field({
+    css: "date-field",
+    align: "center",
+    sorter: function(date1, date2) {
+        return new Date(date1) - new Date(date2);
+    },
+    itemTemplate: function(value) {
+        var date = new Date(value);
+        return (date.getFullYear() + '-' + addZero(date.getMonth()) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds());
+    },
+    insertTemplate: function(value) {
+        return this._insertPicker = $("<input>").datetimepicker({
+            timeFormat: "HH:mm:ss.l",
+            controlType: 'select',
+            showMillisec: true
+        });
+    },
+    editTemplate: function(value) {
+        this._editPicker = $("<input>").datetimepicker({
+            setDate: new Date(value),
+            timeFormat: "HH:mm:ss.l",
+            controlType: 'select',
+            showMillisec: true
+        });
+        this._editPicker.datetimepicker('setDate', new Date(value));
+        return this._editPicker;
+    },
+    insertValue: function() {
+        return this._insertPicker.datepicker("getDate").toISOString();
+    },
+    editValue: function() {
+        console.log('here');
+        return this._editPicker.datepicker("getDate").toISOString();
+    }
+});
+jsGrid.fields.date = DateField;
 
 socket.emit('get_diagram','1');
 socket.emit('get_events','1');
@@ -81,6 +139,40 @@ socket.on('insert_event', function(msg) {
     $('#jsGrid').jsGrid('insertItem', evt);
 });
 
+socket.on('insert_node', function(msg) {
+    var node = JSON.parse(msg);
+    nodes[node['id']] = node;
+});
+
+socket.on('insert_link', function(msg) {
+    var link = JSON.parse(msg);
+    links[link['id']] = link;
+});
+
+socket.on('delete_node', function(msg) {
+    var id = JSON.parse(msg);
+    delete nodes[id];
+    selectedNode = null;
+    closeProperties();
+});
+
+canvas.onmousewheel = function (e){
+    e.preventDefault();
+    var mousex = e.clientX - offsetX;
+    var mousey = e.clientY - offsetY;
+    var wheel = e.wheelDelta/120;
+    var zoom = Math.exp(wheel*zoomIntensity);
+    scale *= zoom;
+    if (scale > 3)
+        scale = 3;
+    else if (scale < 1/5)
+        scale = 1/5;
+    else {
+        originx -= mousex/(scale*zoom) - mousex/scale;
+        originy -= mousey/(scale*zoom) - mousey/scale;
+    }
+}
+
 function draw() {
     requestAnimationFrame(draw);
     drawAll();
@@ -88,17 +180,31 @@ function draw() {
 draw();
 
 function resize(canvas) {
-    var displayWidth  = canvas.clientWidth;
+    var displayWidth  = $('#diagram').parent().width();
     var displayHeight = canvas.clientHeight;
-    if (canvas.width  != displayWidth || canvas.height != displayHeight) {
+    if ($('#properties').is(':hidden')) {
+        $('#diagram').width(displayWidth);
         canvas.width  = displayWidth;
-        canvas.height = displayHeight;
+    } else {
+        $('#diagram').width(displayWidth - 310);
+        canvas.width = $('#diagram').width();
     }
+    canvas.height = displayHeight;
 }
 
 function drawAll() {
     resize(canvas);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale,scale);
+    if (originx < -(maxX / 2))
+        originx = -(maxX / 2);
+    if (originy < -(maxY / 2))
+        originy = -(maxY / 2);
+    ctx.translate(-originx, -originy);
+    ctx.rect(-(maxX/2),-(maxY/2),maxX,maxY);
+    ctx.fillStyle = "ghostwhite";
+    ctx.fill();
+    ctx.fillStyle = "black";
     for (link in links) {
         if (nodes[links[link]['node_a']] && nodes[links[link]['node_b']]) {
             drawLink(links[link]);
@@ -116,9 +222,31 @@ function drawAll() {
 function drawLink(link) {
     ctx.beginPath();
     ctx.moveTo(nodes[link.node_a].x + nodes[link.node_a].width/2, nodes[link.node_a].y + nodes[link.node_a].height/2);
+    ctx.lineTo(nodes[link.node_a].x + nodes[link.node_a].width/2+10, nodes[link.node_a].y + nodes[link.node_a].height/2+10);
+    ctx.lineTo(nodes[link.node_b].x + nodes[link.node_b].width/2+10, nodes[link.node_b].y + nodes[link.node_b].height/2+10);
     ctx.lineTo(nodes[link.node_b].x + nodes[link.node_b].width/2, nodes[link.node_b].y + nodes[link.node_b].height/2);
     ctx.closePath();
     ctx.stroke();
+}
+
+function newLink() {
+    selectedNode = null;
+    closeProperties();
+    creatingLink = true;
+    showMessage('Click on a node to start a new link.');
+    $('#newNode').hide();
+    $('#newLink').hide();
+    $('#cancelLink').show();
+}
+
+function cancelLink() {
+    selectedNode = null;
+    firstNode = null;
+    creatingLink = false;
+    showMessage('Link cancelled.',5);
+    $('#newNode').show();
+    $('#newLink').show();
+    $('#cancelLink').hide();
 }
 
 function drawNode(node) {
@@ -137,6 +265,20 @@ function drawNode(node) {
         ctx.fillText(node.address,node.x - ctx.measureText(node.address).width/2 + node.width/2, node.y + node.height + 28);
 }
 
+function insertNode() {
+    socket.emit('insert_node', JSON.stringify({name:$('#propName').val(), address:$('#propAddress').val(), image:$('#propIcon').val()})); 
+}
+
+function deleteNode() {
+    if (selectedNode !== null && selectedNode['id']) {
+        socket.emit('delete_node', JSON.stringify(selectedNode));
+    }
+}
+
+function showMessage(msg, timeout) {
+    $('#message').html(msg);
+}
+
 function handleMouseDown(e) {
     e.preventDefault();
     mouseX = parseInt(e.clientX - offsetX);
@@ -144,18 +286,43 @@ function handleMouseDown(e) {
     startX = mouseX;
     startY = mouseY;
     selectedNode = null;
+    mouseIsDown = true;
     for (node in nodes) {
         var node = nodes[node];
         drawNode(node);
         if (ctx.isPointInPath(mouseX, mouseY)) {
-            selectedNode = node;
-            $('#propID').val(node.id);
-            $('#propName').val(node.name);
-            $('#propAddress').val(node.address);
-            $('#propIcon').val(node.image);
-            $('#propIcon').data('picker').sync_picker_with_select();
-            mouseIsDown = true;
+            if (creatingLink) {
+                if (firstNode === null) {
+                    firstNode = node;
+                    showMessage('Click on a second node to complete the link.');
+                } else {
+                    $('#newNode').show();
+                    $('#newLink').show();
+                    $('#cancelLink').hide();
+                    showMessage('Link created.', 5);
+                    socket.emit('insert_link', JSON.stringify({node_a: firstNode.id, node_b: node.id}));
+                    firstNode = null;
+                    creatingLink = false;
+                }
+            } else {
+                selectedNode = node;
+                $('#propID').val(node.id);
+                $('#propName').val(node.name);
+                $('#propAddress').val(node.address);
+                $('#propIcon').val(node.image);
+                $('#propIcon').data('picker').sync_picker_with_select();
+                newNode = false;
+                openProperties();
+            }
             break;
+        }
+    }
+    for (link in links) {
+        var link = links[link];
+
+        drawLink(link);
+        if (ctx.isPointInPath(mouseX, mouseY)) {
+            console.log('clicked link');
         }
     }
     if (selectedNode === null) {
@@ -164,6 +331,8 @@ function handleMouseDown(e) {
         $('#propAddress').val('');
         $('#propIcon').val('');
         $('#propIcon').data('picker').sync_picker_with_select();
+        newNode = false;
+        closeProperties();
     }
 }
 
@@ -191,10 +360,13 @@ function handleMouseMove(e) {
     startX = mouseX;
     startY = mouseY;
     if (selectedNode !== null) {
-        selectedNode.x += dx;
-        selectedNode.y += dy;
+        selectedNode.x += dx / scale;
+        selectedNode.y += dy / scale;
         if (dx != 0 && dy != 0)
             socket.emit('update_node', JSON.stringify(selectedNode));
+    } else {
+        originx -= dx / scale;
+        originy -= dy / scale;
     }
     lastX = mouseX;
     lastY = mouseY;
@@ -214,6 +386,35 @@ function updatePropAddress(address) {
         selectedNode.address = address;
         socket.emit('update_node', JSON.stringify(selectedNode))
     }
+}
+
+function openProperties(makeNew) {
+    if (makeNew === undefined || makeNew === null || makeNew === '') {
+        $('#propTitle').html('Edit Node');
+        $('#insertNodeButton').hide();
+        $('#deleteNodeButton').show();
+        newNode = false;
+    } else {
+        selectedNode = null;
+        $('#propTitle').html('New Node');
+        $('#insertNodeButton').show();
+        $('#propID').val('');
+        $('#propName').val('');
+        $('#propAddress').val('');
+        $('#propIcon').val('0000-default.png');
+        $('#propIcon').data('picker').sync_picker_with_select();
+        $('#deleteNodeButton').hide();
+        newNode = true;
+    }
+    if ($('#properties').is(':hidden')) {
+        $('#properties').show();
+        $('#diagram').width($('#diagram').width() - 310);
+    }
+}
+
+function closeProperties() {
+    $('#properties').hide();
+    $('#diagram').width('100%');
 }
 
 $(document).on('scroll', function() {
@@ -242,6 +443,22 @@ $(document).ready(function() {
             }
         }
     });
+    function timestamp(str){
+        return new Date(str).getTime();   
+    }
+    var dateSlider = document.getElementById('slider');
+    noUiSlider.create(dateSlider, {
+        range: {
+            min: timestamp('2010-11-20 00:00:01'),
+            max: timestamp('2010-11-20 23:59:59')
+        },
+        step: 1000,
+        start: [ timestamp('2011-11-20 00:00:01') ]
+    });
+
+    dateSlider.noUiSlider.on('update', function( values, handle ) {
+        console.log(values[handle]);
+    });
 
     $('#jsGrid').jsGrid({
         autoload: false,
@@ -252,7 +469,7 @@ $(document).ready(function() {
         paging: true,
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
-            { name: 'event_time', title: 'Event Time', type : 'text' },
+            { name: 'event_time', title: 'Event Time', type : 'date' },
             { name: 'source_node', title: 'Source Node', type: 'select', items: nodeSelect, valueField: 'id', textField: 'name', filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
@@ -298,7 +515,7 @@ $(document).ready(function() {
             }
         },
         loadStrategy: function() {
-            return new MyCustomDirectLoadStrategy(this);
+            return new CustomDirectLoadStrategy(this);
         },
         rowClick: function(args) {
             var $row = $(args.event.target).closest("tr");

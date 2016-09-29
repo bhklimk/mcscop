@@ -6,6 +6,10 @@ html
     link(rel='stylesheet', href='/css/image-picker.css')
     link(rel='stylesheet', href='/css/jsgrid.min.css')
     link(rel='stylesheet', href='/css/jsgrid-theme.min.css')
+    link(rel='stylesheet', href='/css/jquery-ui.min.css')
+    link(rel='stylesheet', href='/css/jquery-ui.theme.min.css')
+    link(rel='stylesheet', href='/css/jquery-ui-timepicker-addon.min.css')
+    link(rel='stylesheet', href='/css/nouislider.min.css')
     link(rel='stylesheet', href='/css/style.css')
   body
     div.container
@@ -16,9 +20,14 @@ html
           li
             a(href="/") Operations
       div.jumbotron
-        div.canvas
+        div.canvas#diagram
+          span.message#message
           canvas#canvas
-        div.properties
+          button.newNode#newNode(onclick='openProperties(true)') New Node
+          button.newLink#newLink(onclick='newLink()') New Link
+          button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
+        div.properties#properties
+          span.propTitle#propTitle Edit Node
           form
             input(type="hidden", name="id")#propID
             div.form-group
@@ -32,8 +41,12 @@ html
               select.image-picker#propIcon
                 each icon in icons
                   option(data-img-src="/images/sm_icons/" + icon, data-img-class="first", value=icon) icon
-            div.form-group
-              button#newNode New Node
+            div.form-group#makeNode
+                button.insertNodeButton#insertNodeButton(type='button' onclick="insertNode()") Insert Node
+                button.deleteNodeButton#deleteNodeButton(type='button' onclick="deleteNode()") Delete Node
+                button(type='button' onclick="closeProperties()") Cancel
+      div.jumbotron
+        div#slider
       div.jumbotron
         div#jsGrid
 script(src='/js/jquery.js')
@@ -41,4 +54,7 @@ script(src='/js/jsgrid.min.js')
 script(src='/socket.io/socket.io.js')
 script(src='/js/bootstrap.min.js')
 script(src='/js/image-picker.min.js')
+script(src='/js/jquery-ui.min.js')
+script(src='/js/jquery-ui-timepicker-addon.min.js')
+script(src='/js/nouislider.min.js')
 script(src='/js/copper.js')
