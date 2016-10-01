@@ -4,7 +4,7 @@ body {
 
 canvas {
     width: 100%;
-    height: 500px;
+    height: 100%;
     border:1px solid black;
 }
 
@@ -69,8 +69,13 @@ canvas {
 .canvas {
     position: relative;
     width: 100%;
-    height: 500px;
+    height: 100%;
     float: left;
+}
+
+.resizable {
+    resize: vertical;
+    overflow: hidden;
 }
 
 .properties {
@@ -84,4 +89,8 @@ canvas {
     margin-bottom: 2px;
     width: 48px;
     height: 48px;
+}
+
+table {
+    font-size: 12px;
 }

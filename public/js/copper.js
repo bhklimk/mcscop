@@ -8,9 +8,9 @@ var offsetY = canvasOffset.top;
 
 var mouseIsDown = false;
 var creatingLink = false;
+var panning = true;
 var firstNode = null;
-var secondNode = null;
-var selectedNode = null;
+var selectedLink = null;
 var startX = 0;
 var startY = 0;
 var scale = 1;
@@ -20,11 +20,10 @@ var zoomIntensity = 0.2;
 var maxX = 5000;
 var maxY = 5000;
 
-var newNode = false;
-var nodes = [];
+var objects = {};
 var nodeSelect = [{id:0, name:'none'}];
-var links = [];
-var images = [];
+var links = {};
+var images = {};
 var tableData = [];
 
 var socket = io();
@@ -82,11 +81,10 @@ DateField.prototype = new jsGrid.Field({
         return this._editPicker;
     },
     insertValue: function() {
-        return this._insertPicker.datepicker("getDate").toISOString();
+        return this._insertPicker.datepicker("getDate").getTime();
     },
     editValue: function() {
-        console.log('here');
-        return this._editPicker.datepicker("getDate").toISOString();
+        return this._editPicker.datepicker("getDate").getTime();
     }
 });
 jsGrid.fields.date = DateField;
@@ -95,11 +93,11 @@ socket.emit('get_diagram','1');
 socket.emit('get_events','1');
 
 socket.on('all_nodes', function (msg) {
-    nodes = [];
     nodeSelect = msg;
-
     for (var node in msg) {
-        nodes[msg[node]['id']] = msg[node];
+        msg[node].selected = false;
+        objects[msg[node]['uuid']] = msg[node];
+        objects[msg[node]['uuid']].type = 'node';
     }
     nodeSelect.unshift({id:0, name:''});
     $('#jsGrid').jsGrid("fieldOption", "source_node","items",nodeSelect);
@@ -110,6 +108,8 @@ socket.on('all_links', function (msg) {
     links = []
     for (var link in msg) {
         links[msg[link]['id']] = msg[link];
+        objects[msg[link].uuid] = msg[link];
+        objects[msg[link].uuid].type = 'link';
     }
 });
 
@@ -120,11 +120,14 @@ socket.on('all_events', function (msg) {
     $('#jsGrid').jsGrid('loadData');
 });
 
-socket.on('update_node', function(msg) {
-    var node = JSON.parse(msg);
-    nodes[node.id] = node;
-    $('#jsGrid').jsGrid("fieldOption", "source_node","items",nodeSelect)
-    $('#jsGrid').jsGrid("fieldOption", "dest_node","items",nodeSelect)
+socket.on('update_object', function(msg) {
+    var o = JSON.parse(msg);
+    console.log(o.x, o.y);
+    objects[o.uuid] = o;
+    if (o.type === 'node') {
+        $('#jsGrid').jsGrid("fieldOption", "source_node","items",nodeSelect)
+        $('#jsGrid').jsGrid("fieldOption", "dest_node","items",nodeSelect)
+    }
 });
     
 socket.on('update_event', function(msg) {
@@ -139,20 +142,14 @@ socket.on('insert_event', function(msg) {
     $('#jsGrid').jsGrid('insertItem', evt);
 });
 
-socket.on('insert_node', function(msg) {
-    var node = JSON.parse(msg);
-    nodes[node['id']] = node;
+socket.on('insert_object', function(msg) {
+    var o = JSON.parse(msg);
+    objects[o.uuid] = o;
 });
 
-socket.on('insert_link', function(msg) {
-    var link = JSON.parse(msg);
-    links[link['id']] = link;
-});
-
-socket.on('delete_node', function(msg) {
-    var id = JSON.parse(msg);
-    delete nodes[id];
-    selectedNode = null;
+socket.on('delete_object', function(msg) {
+    var uuid = JSON.parse(msg);
+    delete objects[uuid];
     closeProperties();
 });
 
@@ -172,6 +169,12 @@ canvas.onmousewheel = function (e){
         originy -= mousey/(scale*zoom) - mousey/scale;
     }
 }
+
+var fps = 10;
+var now;
+var then = Date.now();
+var interval = 1000/fps;
+var delta;
 
 function draw() {
     requestAnimationFrame(draw);
@@ -205,32 +208,18 @@ function drawAll() {
     ctx.fillStyle = "ghostwhite";
     ctx.fill();
     ctx.fillStyle = "black";
-    for (link in links) {
-        if (nodes[links[link]['node_a']] && nodes[links[link]['node_b']]) {
-            drawLink(links[link]);
-        }
+    for (o in objects) {
+        if (objects[o].type === 'link')
+           drawObject(objects[o]);
     }
-    for (node in nodes) {
-        if (!images[nodes[node].image]) {
-            images[nodes[node].image] = new Image();
-            images[nodes[node].image].src = "images/icons/" + nodes[node].image;
-        }
-        drawNode(nodes[node]);
+    for (o in objects) {
+        if (objects[o].type !== 'link')
+            drawObject(objects[o]);
     }
-}
-
-function drawLink(link) {
-    ctx.beginPath();
-    ctx.moveTo(nodes[link.node_a].x + nodes[link.node_a].width/2, nodes[link.node_a].y + nodes[link.node_a].height/2);
-    ctx.lineTo(nodes[link.node_a].x + nodes[link.node_a].width/2+10, nodes[link.node_a].y + nodes[link.node_a].height/2+10);
-    ctx.lineTo(nodes[link.node_b].x + nodes[link.node_b].width/2+10, nodes[link.node_b].y + nodes[link.node_b].height/2+10);
-    ctx.lineTo(nodes[link.node_b].x + nodes[link.node_b].width/2, nodes[link.node_b].y + nodes[link.node_b].height/2);
-    ctx.closePath();
-    ctx.stroke();
 }
 
 function newLink() {
-    selectedNode = null;
+    unselectObjects();
     closeProperties();
     creatingLink = true;
     showMessage('Click on a node to start a new link.');
@@ -239,8 +228,13 @@ function newLink() {
     $('#cancelLink').show();
 }
 
+function newNode() {
+    unselectObjects();
+    openProperties();
+}
+
 function cancelLink() {
-    selectedNode = null;
+    unselectObjects();
     firstNode = null;
     creatingLink = false;
     showMessage('Link cancelled.',5);
@@ -249,34 +243,98 @@ function cancelLink() {
     $('#cancelLink').hide();
 }
 
-function drawNode(node) {
-    ctx.drawImage(images[node.image], node.x, node.y, 64, 64);
-    ctx.beginPath();
-    ctx.moveTo(node.x-2, node.y-2);
-    ctx.lineTo(node.x + node.width+2, node.y-2);
-    ctx.lineTo(node.x + node.width+2, node.y + node.height+2);
-    ctx.lineTo(node.x-2, node.y + node.height+2);
-    ctx.closePath();
-    if (selectedNode !== null && selectedNode['id'] === node.id)
-        ctx.stroke();
-    ctx.font = "14px Arial";
-    ctx.fillText(node.name,node.x - ctx.measureText(node.name).width/2 + node.width/2, node.y + node.height + 12);
-    if (node.address !== null)
-        ctx.fillText(node.address,node.x - ctx.measureText(node.address).width/2 + node.width/2, node.y + node.height + 28);
+function drawObject(o, select) {
+    if (o.type != 'link') {
+        ctx.beginPath();
+        ctx.moveTo(o.x-4, o.y-2);
+        ctx.lineTo(o.x + o.width+2, o.y-2);
+        ctx.lineTo(o.x + o.width+2, o.y + o.height+2);
+        ctx.lineTo(o.x-4, o.y + o.height+2);
+        ctx.closePath();
+        if (o.selected) {
+            ctx.fillStyle = 'lightgreen';
+            ctx.strokeStyle = 'lightgreen';
+            ctx.fill();
+        }
+        ctx.fillStyle = 'black';
+        ctx.strokeStyle = 'black';
+        if (o.image !== undefined && o.image !== null) {
+           if (!images[o.image]) {
+                images[o.image] = new Image();
+                images[o.image].src = "images/icons/" + o.image;
+            }
+            ctx.drawImage(images[o.image], o.x, o.y, 64, 64);
+        }
+        if (o.type === 'node') {
+            ctx.font = "14px Arial";
+            ctx.fillText(o.name, o.x - ctx.measureText(o.name).width/2 + o.width/2, o.y + o.height + 12);
+            if (o.address !== null)
+                ctx.fillText(o.address,o.x - ctx.measureText(o.address).width/2 + o.width/2, o.y + o.height + 28);
+        }
+    } else {
+        if (select || (selectedLink !== null && selectedLink.id == link.id)) {
+            x1 = objects[o.node_a].x + objects[o.node_a].width/2;
+            y1 = objects[o.node_a].y + objects[o.node_a].height/2;
+            x2 = objects[o.node_b].x + objects[o.node_b].width/2;
+            y2 = objects[o.node_b].y + objects[o.node_b].height/2;
+            var dx = x2 - x1;
+            var dy = y2 - y1;
+            var lineLength = Math.sqrt(dx * dx + dy * dy);
+            var lineRadianAngle = Math.atan2(dy, dx);
+            var lineWidth = 15;
+            ctx.save();
+            ctx.beginPath();
+            ctx.translate(x1, y1);
+            ctx.rotate(lineRadianAngle);
+            ctx.rect(0, -lineWidth / 2, lineLength, lineWidth);
+            ctx.translate(-x1, -y1);
+            ctx.rotate(-lineRadianAngle);
+            ctx.fillStyle = 'lightgreen';
+            ctx.strokeStyle = 'lightgreen';
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+        if (!select) {
+            ctx.beginPath();
+            ctx.moveTo(objects[o.node_a].x + objects[o.node_a].width/2, objects[o.node_a].y + objects[o.node_a].height/2);
+            ctx.lineTo(objects[o.node_b].x + objects[o.node_b].width/2, objects[o.node_b].y + objects[o.node_b].height/2);
+            ctx.closePath();
+            ctx.stroke();
+        }
+    }
 }
 
 function insertNode() {
-    socket.emit('insert_node', JSON.stringify({name:$('#propName').val(), address:$('#propAddress').val(), image:$('#propIcon').val()})); 
+    socket.emit('insert_object', JSON.stringify({name:$('#propName').val(), address:$('#propAddress').val(), image:$('#propIcon').val(), type:'node'})); 
 }
 
-function deleteNode() {
-    if (selectedNode !== null && selectedNode['id']) {
-        socket.emit('delete_node', JSON.stringify(selectedNode));
+function deleteObject() {
+    for (o in objects) {
+        if (objects[o].selected) {
+            socket.emit('delete_object', JSON.stringify({uuid:objects[o].uuid, type:objects[o].type}));
+        }
     }
 }
 
 function showMessage(msg, timeout) {
     $('#message').html(msg);
+}
+
+function unselectObjects() {
+    for (o in objects) {
+        objects[o].selected = false;
+    }
+}
+
+function countSelected() {
+    var count = 0;
+    for (o in objects) {
+        if (objects[o].selected)
+            count++;
+    }
+    console.log(count);
+    return count;
 }
 
 function handleMouseDown(e) {
@@ -285,61 +343,77 @@ function handleMouseDown(e) {
     mouseY = parseInt(e.clientY - offsetY);
     startX = mouseX;
     startY = mouseY;
-    selectedNode = null;
+    panning = true;
     mouseIsDown = true;
-    for (node in nodes) {
-        var node = nodes[node];
-        drawNode(node);
+    for (o in objects) {
+        var o = objects[o];
+        drawObject(o, true);
         if (ctx.isPointInPath(mouseX, mouseY)) {
+            panning = false;
             if (creatingLink) {
                 if (firstNode === null) {
-                    firstNode = node;
+                    firstNode = o;
                     showMessage('Click on a second node to complete the link.');
                 } else {
                     $('#newNode').show();
                     $('#newLink').show();
                     $('#cancelLink').hide();
                     showMessage('Link created.', 5);
-                    socket.emit('insert_link', JSON.stringify({node_a: firstNode.id, node_b: node.id}));
+                    socket.emit('insert_object', JSON.stringify({node_a: firstNode.uuid, node_b: o.uuid, type:'link'}));
                     firstNode = null;
                     creatingLink = false;
                 }
             } else {
-                selectedNode = node;
-                $('#propID').val(node.id);
-                $('#propName').val(node.name);
-                $('#propAddress').val(node.address);
-                $('#propIcon').val(node.image);
-                $('#propIcon').data('picker').sync_picker_with_select();
-                newNode = false;
-                openProperties();
+                if (!e.shiftKey && !o.selected)
+                    unselectObjects();
+                if (!o.selected) {
+                    o.selected = true;
+                    if (countSelected() === 1) {
+                        $('#propID').val(o.id);
+                        $('#propName').val(o.name);
+                        $('#propAddress').val(o.address);
+                        $('#propIcon').val(o.image);
+                        $('#propIcon').data('picker').sync_picker_with_select();
+                        openProperties();
+                    } else {
+                        closeProperties();
+                    }
+                }
             }
             break;
         }
     }
-    for (link in links) {
-        var link = links[link];
-
-        drawLink(link);
-        if (ctx.isPointInPath(mouseX, mouseY)) {
-            console.log('clicked link');
+    if (panning)
+        unselectObjects();
+    /*
+    if (!creatingLink) {
+        for (link in links) {
+            var link = links[link];
+            drawLink(link, true);
+            if (ctx.isPointInPath(mouseX, mouseY)) {
+                panning = false;
+                selectedLink = link;
+                openProperties();
+                break;
+            }
         }
-    }
-    if (selectedNode === null) {
+    }*/
+    if (countSelected() === 0) {
         $('#propID').val('0');
         $('#propName').val('');
         $('#propAddress').val('');
         $('#propIcon').val('');
         $('#propIcon').data('picker').sync_picker_with_select();
-        newNode = false;
         closeProperties();
     }
 }
 
 function handleMouseUp(e) {
     e.preventDefault();
-    if (selectedNode !== null) {
-        socket.emit('update_node', JSON.stringify(selectedNode));
+    for (o in objects) {
+        if (objects[o].selected) {
+            socket.emit('update_object', JSON.stringify(objects[o]));
+        }
     }
     mouseIsDown = false;
 }
@@ -359,11 +433,21 @@ function handleMouseMove(e) {
     var dy = mouseY - startY;
     startX = mouseX;
     startY = mouseY;
-    if (selectedNode !== null) {
-        selectedNode.x += dx / scale;
-        selectedNode.y += dy / scale;
-        if (dx != 0 && dy != 0)
-            socket.emit('update_node', JSON.stringify(selectedNode));
+    if (!panning) {
+        for (o in objects) {
+            if (objects[o].selected && objects[o].type != 'link') {
+                objects[o].x += (dx / scale);
+                objects[o].y += (dy / scale);
+                if (dx != 0 && dy != 0) {
+                    now = Date.now();
+                    delta = now - then;
+                    if (delta > interval) {
+                        socket.emit('update_object', JSON.stringify(objects[o]));
+                        then = now - (delta % interval);
+                    }
+                }
+            }
+        }
     } else {
         originx -= dx / scale;
         originy -= dy / scale;
@@ -373,29 +457,34 @@ function handleMouseMove(e) {
 }
 
 function updatePropName(name) {
-    if (selectedNode !== null) {
-        selectedNode.name = name;
-        socket.emit('update_node', JSON.stringify(selectedNode))
-        $('#jsGrid').jsGrid("fieldOption", "source_node","items",nodeSelect)
-        $('#jsGrid').jsGrid("fieldOption", "dest_node","items",nodeSelect)
+    for (o in objects) {
+        if (objects[o].selected) {
+            objects[o].name = name;
+            socket.emit('update_object', JSON.stringify(objects[o]))
+            if (objects[o].type === 'node') {
+                $('#jsGrid').jsGrid("fieldOption", "source_node","items",nodeSelect)
+                $('#jsGrid').jsGrid("fieldOption", "dest_node","items",nodeSelect)
+            }
+        }
     }
 }
 
 function updatePropAddress(address) {
-    if (selectedNode !== null) {
-        selectedNode.address = address;
-        socket.emit('update_node', JSON.stringify(selectedNode))
+    for (o in objects) {
+        if (objects[o].selected) {
+            objects[o].address = address;
+            socket.emit('update_object', JSON.stringify(objects[o]))
+        }
     }
 }
 
-function openProperties(makeNew) {
-    if (makeNew === undefined || makeNew === null || makeNew === '') {
+function openProperties() {
+    if (countSelected() > 0) {
         $('#propTitle').html('Edit Node');
         $('#insertNodeButton').hide();
         $('#deleteNodeButton').show();
-        newNode = false;
     } else {
-        selectedNode = null;
+        unselectObjects();
         $('#propTitle').html('New Node');
         $('#insertNodeButton').show();
         $('#propID').val('');
@@ -404,7 +493,6 @@ function openProperties(makeNew) {
         $('#propIcon').val('0000-default.png');
         $('#propIcon').data('picker').sync_picker_with_select();
         $('#deleteNodeButton').hide();
-        newNode = true;
     }
     if ($('#properties').is(':hidden')) {
         $('#properties').show();
@@ -432,14 +520,19 @@ $("#canvas").mousemove(function (e) {
 $("#canvas").mouseup(function (e) {
     handleMouseUp(e);
 });
+$('#canvas').mouseout(function (e) {
+    handleMouseOut(e);
+});
 
 $(document).ready(function() {
     $('#propIcon').imagepicker({
         hide_select : true,
         selected : function() {
-            if (selectedNode !== null) {
-                selectedNode.image = $(this).val();
-                socket.emit('update_node', JSON.stringify(selectedNode))
+            for (o in objects) {
+                if (objects[o].selected) {
+                  objects[o].image = $(this).val();
+                  socket.emit('update_object', JSON.stringify(objects[o]))
+                }
             }
         }
     });
@@ -469,17 +562,18 @@ $(document).ready(function() {
         paging: true,
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
-            { name: 'event_time', title: 'Event Time', type : 'date' },
+            { name: 'event_time', title: 'Event Time', type : 'date', width: 55},
             { name: 'source_node', title: 'Source Node', type: 'select', items: nodeSelect, valueField: 'id', textField: 'name', filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
-            { name: 'source_port', title: 'Source Port', type: 'number'},
+            { name: 'source_port', title: 'Source Port', type: 'number', width: 35},
             { name: 'dest_node', title: 'Destination Node', type: 'select', items: nodeSelect, valueField: 'id', textField: 'name', filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
-            { name: 'dest_port', title: 'Destination Port', type: 'number'},
+            { name: 'dest_port', title: 'Destination Port', type: 'number', width: 35},
+            { name: 'short_desc', title: 'Event Text', type: 'text'},
             { name: 'analyst', title: 'Analyst', type: 'text'},
             { 
                 type: "control",
@@ -511,6 +605,7 @@ $(document).ready(function() {
             },
             updateItem: function(item) {
                 socket.emit('update_event', JSON.stringify(item));
+                console.log(item);
                 tableData[item['id']] = item;
             }
         },

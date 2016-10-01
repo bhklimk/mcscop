@@ -21,11 +21,17 @@ io.on('connection', function(socket) {
     socket.on('get_diagram', function(msg) {
         connection.query('SELECT * FROM nodes', function(err, rows, fields) {
             if (!err) {
+                for (i = 0; i < rows.length; i++) {
+                    rows[i].type = 'node';
+                }
                 socket.emit('all_nodes',rows);
             }
         });
         connection.query('SELECT * FROM links', function(err, rows, fields) {
             if (!err) {
+                for (i = 0; i < rows.length; i++) {
+                    rows[i].type = 'link';
+                }
                 socket.emit('all_links',rows);
             }
         });
@@ -37,17 +43,19 @@ io.on('connection', function(socket) {
             }
         });
     });
-    socket.on('update_node', function(msg) {
-        var node = JSON.parse(msg);
-        connection.query('UPDATE nodes SET name = ?, address = ?, image = ?, x = ?, y = ? WHERE id = ?', [node.name, node.address, node.image, node.x, node.y, node.id], function (err, results) {
-            if (!err) {
-                socket.broadcast.emit('update_node', msg);
-            }
-        });
+    socket.on('update_object', function(msg) {
+        var o = JSON.parse(msg);
+        if (o.type !== undefined && o.type === 'node') {
+            connection.query('UPDATE nodes SET name = ?, address = ?, image = ?, x = ?, y = ? WHERE id = ?', [o.name, o.address, o.image, o.x, o.y, o.id], function (err, results) {
+                if (!err) {
+                    socket.broadcast.emit('update_object', msg);
+                }
+            });
+        }
     });
     socket.on('update_event', function(msg) {
         var evt = JSON.parse(msg);
-        connection.query('UPDATE events SET event_time = ?, source_node = ?, source_port = ?, dest_node = ?, dest_port = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_node, evt.source_port, evt.dest_node, evt.dest_port, evt.analyst, evt.id], function (err, results) {
+        connection.query('UPDATE events SET event_time = ?, source_node = ?, source_port = ?, dest_node = ?, dest_port = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_node, evt.source_port, evt.dest_node, evt.dest_port, evt.short_desc, evt.analyst, evt.id], function (err, results) {
             if (!err) {
                 socket.broadcast.emit('update_event', msg);
             }
@@ -62,36 +70,43 @@ io.on('connection', function(socket) {
             }
         });
     });
-    socket.on('insert_node', function(msg) {
-        var node = JSON.parse(msg);
-        connection.query('INSERT INTO nodes (mission, name, address, image, x, y, width, height) values (1, ?, ?, ?, 64, 64, 64, 64)', [node.name, node.address, node.icon], function (err, results) {
-            if (!err) {
-                node.id = results.insertId;
-                node.x = 64;
-                node.y = 64;
-                node.height = 64;
-                node.width = 64;
-                io.emit('insert_node', JSON.stringify(node));
-            }
-        });
+    socket.on('insert_object', function(msg) {
+        var o = JSON.parse(msg);
+        if (o.type === 'node') {
+            connection.query('INSERT INTO nodes (mission, name, address, image, x, y, width, height) values (1, ?, ?, ?, 64, 64, 64, 64)', [o.name, o.address, o.image], function (err, results) {
+                if (!err) {
+                    o.id = results.insertId;
+                    connection.query('SELECT * FROM nodes WHERE id = ?', [o.id], function(err, rows, fields) {
+                        if (!err) {
+                            rows[0].type = 'node';
+                            socket.emit('insert_object',JSON.stringify(rows[0]));
+                        }
+                    });
+                }
+            });
+        } else if (o.type === 'link') {
+            connection.query('INSERT INTO links (node_a, node_b) values (?, ?)', [o.node_a, o.node_b], function (err, results) {
+                if (!err) {
+                    o.id = results.insertId;
+                    connection.query('SELECT * FROM links WHERE id = ?', [o.id], function(err, rows, fields) {
+                        if (!err) {
+                            rows[0].type = 'link';
+                            io.emit('insert_object', JSON.stringify(rows[0]));
+                        }
+                    });
+                }
+            });
+        }
     });
-    socket.on('insert_link', function(msg) {
-        var link = JSON.parse(msg);
-        console.log(link);
-        connection.query('INSERT INTO links (node_a, node_b) values (?, ?)', [link.node_a, link.node_b], function (err, results) {
-            if (!err) {
-                link.id = results.insertId;
-                io.emit('insert_link', JSON.stringify(link));
-            }
-        });
-    });
-    socket.on('delete_node', function(msg) {
-        var node = JSON.parse(msg);
-        connection.query('DELETE FROM nodes WHERE id = ?', [node.id], function (err, results) {
-            if (!err) {
-                io.emit('delete_node', JSON.stringify(node.id));
-            }
-        });
+    socket.on('delete_object', function(msg) {
+        var o = JSON.parse(msg);
+        if (o.type !== undefined && o.type === 'node') {
+            connection.query('DELETE FROM nodes WHERE uuid = ?', [o.uuid], function (err, results) {
+                if (!err) {
+                    io.emit('delete_object', JSON.stringify(o.uuid));
+                }
+            });
+        }
     });
     console.log('connection');
 });
