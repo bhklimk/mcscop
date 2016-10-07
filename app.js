@@ -2,8 +2,20 @@ var express = require('express');
 var app = express();
 var http = require('http').Server(app);
 var fs = require('fs');
+var session = require('express-session');
+var cookieParser = require('cookie-parser');
+var bcrypt = require('bcrypt-nodejs');
+var bodyParser = require('body-parser');
 app.set('view engine', 'pug');
 app.use(express.static('public'));
+app.use(session({
+    secret: 'ProtectxorTheCybxors',
+    name: 'session',
+    resave: true,
+    saveUninitialized: true
+}));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 var mysql = require('mysql');
 var connection = mysql.createConnection({
@@ -16,6 +28,10 @@ var connection = mysql.createConnection({
 connection.connect();
 
 var io = require('socket.io')(http);
+io.engine.ws = new (require('uws').Server)({
+    noServer: true,
+    perMessageDeflate: true
+});
 
 io.on('connection', function(socket) {
     socket.on('get_diagram', function(msg) {
@@ -37,7 +53,7 @@ io.on('connection', function(socket) {
         });
     });
     socket.on('get_events', function(msg) {
-        connection.query('SELECT * FROM events', function(err, rows, fields) {
+        connection.query('SELECT * FROM events ORDER BY event_time ASC', function(err, rows, fields) {
             if (!err) {
                 socket.emit('all_events',rows);
             }
@@ -46,9 +62,19 @@ io.on('connection', function(socket) {
     socket.on('update_object', function(msg) {
         var o = JSON.parse(msg);
         if (o.type !== undefined && o.type === 'node') {
-            connection.query('UPDATE nodes SET name = ?, address = ?, image = ?, x = ?, y = ? WHERE id = ?', [o.name, o.address, o.image, o.x, o.y, o.id], function (err, results) {
+            connection.query('UPDATE nodes SET name = ?, address = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.name, o.address, o.image, o.x, o.y, o.uuid], function (err, results) {
                 if (!err) {
                     socket.broadcast.emit('update_object', msg);
+                }
+            });
+        }
+    });
+    socket.on('update_object_pos', function(msg) {
+        var o = JSON.parse(msg);
+        if (o.type !== undefined && o.type === 'node') {
+            connection.query('UPDATE nodes SET x = ?, y = ? WHERE uuid = ?', [o.x, o.y, o.uuid], function (err, results) {
+                if (!err) {
+                    socket.broadcast.emit('update_object_pos', msg);
                 }
             });
         }
@@ -108,15 +134,82 @@ io.on('connection', function(socket) {
             });
         }
     });
-    console.log('connection');
 });
 
 app.get('/', function (req, res) {
-    fs.readdir('./public/images/icons', function(err, items) {
-        res.render('index', { title: 'COPTool', message: 'Big table goes here...', icons: items});
-    }); 
+    if (!req.session.loggedin) {
+            res.render('index', { title: 'CS-COP'});
+    } else {
+       res.redirect('/login');
+    }
+});
+
+app.get('/logout', function (req, res) {
+    req.session.destroy();
+    res.redirect('/login');
+});
+
+app.post('/api', function (req, res) {
+    res.writeHead(200, {"Content-Type": "application/json"});
+    if (req.body.table !== undefined && req.body.table === 'missions') {
+        if (req.body.action !== undefined && req.body.action === 'select') {
+            connection.query('SELECT * FROM missions', function(err, rows, fields) {
+                if (!err) {
+                    res.end(JSON.stringify(rows));
+                }
+            });
+        } else if (req.body.action !== undefined && req.body.action === 'update') {
+        } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
+            var row = JSON.parse(req.body.row);
+            connection.query('INSERT INTO missions (name, start_date, analyst) values (?, ?, ?)', [row.name, row.start_date, row.analyst], function (err, results) {
+                if (!err) {
+                    res.end(JSON.stringify('OK'));
+                }
+            });
+        } else if (req.body.action !== undefined && req.body.action === 'delete') {
+        }
+    }
+});
+
+app.get('/cop', function (req, res) {
+    if (!req.session.loggedin) {
+        fs.readdir('./public/images/icons', function(err, items) {
+            res.render('cop', { title: 'CS-COP', icons: items});
+        });
+    } else {
+       res.redirect('/login');
+    }
+});
+
+app.post('/login', function (req, res) {
+    if (req.body.username !== undefined && req.body.username !== '' && req.body.password !== undefined && req.body.password !== '') {
+        connection.query('SELECT password FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
+            if (!err) {
+                if (rows.length === 1) {
+                    bcrypt.compare(req.body.password, rows[0].password, function(err, bres) {
+                        if (bres) {
+                            req.session.loggedin = true;
+                            res.redirect('/login');
+                        } else
+                            res.render('login', { title: 'CS-COP', message: 'Invalid username or password.' });
+                    });
+                } else {
+                    res.render('login', { title: 'CS-COP', message: 'Invalid username or password.' });
+                }
+            }
+        });
+    } else {
+        res.render('login', { title: 'CS-COP', message: 'Invalid username or password.' });
+    }
+});
+
+app.get('/login', function (req, res) {
+    if (req.session.loggedin)
+        res.redirect('/');
+    else
+        res.render('login', { title: 'CS-COP Login' });
 });
 
 http.listen(3000, function () {
-    console.log('Example app listening on port 3000!');
+    console.log('Server listening on port 3000!');
 });

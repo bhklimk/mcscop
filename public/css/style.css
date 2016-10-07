@@ -5,32 +5,75 @@ body {
 canvas {
     width: 100%;
     height: 100%;
-    border:1px solid black;
 }
 
 .jumbotron {
     padding: 20px !important;
     overflow: hidden;
+    border: 1px solid black;
+}
+
+.sidebar {
+    float: right;
+    border-collapse: collapse;
+    display: table;
+}
+
+.highlight td {
+    background-color: lightblue !important;
+}
+
+.wrapper {
+    margin-top: 80px;
+    margin-bottom: 80px;
+}
+
+.form-signin {
+    max-width: 400px;
+    padding: 15px 35px 45px;
+    margin: 0 auto;
+    background-color: lightgray;
+    border: 1px solid rgba(0,0,0,0.1);
+    .form-signin-heading {
+        margin-bottom: 30px;
+    }
+}
+
+.form-control {
+    position: relative;
+    font-size: 16px;
+    height: auto;
+    padding: 10px;
+    @include box-sizing(border-box);
+
+    &:focus {
+        z-index: 2;
+    }
+}
+
+.btn-login {
+    background-color: #080808;
+    color: white;
+}
+
+input[type="text"] {
+    margin-bottom: -1px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+input[type="password"] {
+    margin-bottom: 20px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
 }
 
 .insertNodeButton {
     margin-right: 10px;
 }
 
-.deleteNodeButton {
+.deleteButton {
     margin-right: 10px;
-}
-
-.newNode {
-    position: relative;
-    left: 6px;
-    bottom: 30px;
-}
-
-.newLink {
-    position: relative;
-    left: 12px;
-    bottom: 30px;
 }
 
 .cancelLink {
@@ -78,11 +121,31 @@ canvas {
     overflow: hidden;
 }
 
+.nav-button {
+    width: 100%;
+    height: 100px;
+    background-color: lightgray;
+    margin-bottom: 4px;
+    border-radius: 4px 0px 0px 4px;
+    border: 1px black solid;
+    text-align: center;
+}
+
+.properties-nav {
+    width: 40px;
+    height: 100%;
+    float: left;
+}
+
 .properties {
-    width: 300px;
+    width: 310px;
+    height: 470px;
     float: right;
-    padding-top: 10px;
+    padding: 10px;
     display: none;
+    border-radius: 0px 4px 4px 4px;
+    border: 1px black solid;
+    background-color: lightgray;
 }
 
 .thumbnail {
