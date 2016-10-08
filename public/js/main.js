@@ -1,3 +1,5 @@
+var users = [{id:0, name:'none'}];
+
 var DateField = function(config) {
     jsGrid.Field.call(this, config);
 };
@@ -21,17 +23,13 @@ DateField.prototype = new jsGrid.Field({
     },
     insertTemplate: function(value) {
         return this._insertPicker = $("<input>").datetimepicker({
-            timeFormat: "HH:mm:ss.l",
-            controlType: 'select',
-            showMillisec: true
+            controlType: 'select'
         });
     },
     editTemplate: function(value) {
         this._editPicker = $("<input>").datetimepicker({
             setDate: new Date(value),
-            timeFormat: "HH:mm:ss.l",
-            controlType: 'select',
-            showMillisec: true
+            controlType: 'select'
         });
         this._editPicker.datetimepicker('setDate', new Date(value));
         return this._editPicker;
@@ -53,14 +51,24 @@ $(document).ready(function() {
         sorting: true,
         paging: true,
         autoload: true,
+        rowClick: function(args) {
+            console.log('test');
+            return false;
+        },
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
-            { name: 'name', title: 'Mission Name', type : 'text', width: 65},
+            { name: 'name', title: 'Mission Name', type : 'text', width: 65, itemTemplate: function(value, item) {
+                return ('<a href="/cop?mission=' + item.id + '">' + item.name + "</a>");
+                }
+            },
             { name: 'start_date', title: 'Start Date', type: 'date', width: 25},
-            { name: 'analyst', title: 'Battle Captain', type: 'number', width: 25},
+            { name: 'analyst', title: 'Battle Captain', type: 'select', items: users, valueField: 'id', textField: 'name', width: 65, filterValue: function() {
+                    return this.items[this.filterControl.val()][this.textField];
+                }
+            },
             {
                 type: "control",
-                editButton: false,
+                editButton: true,
                 headerTemplate: function() {
                     var grid = this._grid;
                     var isInserting = grid.inserting;
@@ -106,6 +114,34 @@ $(document).ready(function() {
                 return d.promise();
             },
             updateItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: '/api',
+                    data: {
+                        action: 'update',
+                        table: 'missions',
+                        row: JSON.stringify(item)
+                    }
+                }).done(function() {
+                    d.resolve();
+                });
+                return d.promise();
+            },
+            deleteItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: '/api',
+                    data: {
+                        action: 'delete',
+                        table: 'missions',
+                        id: JSON.stringify(item.id)
+                    }
+                }).done(function() {
+                    d.resolve();
+                });
+                return d.promise();
             }
         }
     });

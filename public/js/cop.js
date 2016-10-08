@@ -11,14 +11,19 @@ var scale = 1;
 var originx = 0;
 var originy = 0;
 var zoomIntensity = 0.2;
-
-var nodeSelect = [{id:0, name:'none'}];
+var mission = null;
+var nodeSelect = [{id:0, name:'none/unknown'}];
 var dateSlider = null;
 var images = {};
 var tableData = [];
 var eventTimes = [];
-
+var objectsLoaded = null;
 var socket = io();
+var fps = 10;
+var now;
+var then = Date.now();
+var interval = 1000/fps;
+var delta;
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -33,13 +38,6 @@ CustomDirectLoadStrategy.prototype.finishInsert = function(loadedData) {
     }
     grid.inserting = false;
 };
-
-function addZero(i) {
-    if (i < 10) {
-        i = "0" + i;
-    }
-    return i;
-}
 
 var DateField = function(config) {
     jsGrid.Field.call(this, config);
@@ -81,73 +79,47 @@ DateField.prototype = new jsGrid.Field({
 });
 jsGrid.fields.date = DateField;
 
-socket.emit('get_diagram','1');
-socket.emit('get_events','1');
-
 socket.on('all_nodes', function (msg) {
-    nodeSelect = msg;
+    nodeSelect = nodeSelect.concat(msg);
+    objectsLoaded = [];
     for (var node in msg) {
-        if (msg[node].image !== undefined && msg[node].image !== null) {
-            if (!images[msg[node].image]) {
-                images[msg[node].image] = new Image();
-                images[msg[node].image].src = "images/icons/" + msg[node].image;
-            }
-            var image = new fabric.Image(images[msg[node].image], {
-                originX: 'center',
-                originY: 'bottom',
-                width: msg[node].width,
-                height: msg[node].height,
-            });
-            var name = new fabric.Text(msg[node].name, {
-                textAlign: 'center',
-                fontSize: 14,
-                originX: 'center'
-            });
-            var address = new fabric.Text(msg[node].address, {
-                textAlign: 'center',
-                fontSize: 14,
-                originX: 'center',
-                top: 18
-            });
-            canvas.add(new fabric.Group([image, name, address], {
-                uuid: msg[node].uuid,
-                type: 'node',
-                image: image,
-                image_file: msg[node].image,
-                name: name,
-                address: address,
-                left: msg[node].x,
-                top: msg[node].y
-            }));
-        }
+        objectsLoaded.push(false);
+        addObjectToCanvas(msg[node]);
     }
-    setTimeout(function() { canvas.renderAll(); }, 100);
-    nodeSelect.unshift({id:0, name:''});
-    $('#events').jsGrid("fieldOption", "source_node","items",nodeSelect);
-    $('#events').jsGrid("fieldOption", "dest_node","items",nodeSelect);
+    checkIfObjectsLoaded();    
 });
+
+function checkIfObjectsLoaded() {
+    if (objectsLoaded.length == 0) {
+        socket.emit('get_links', mission);
+        console.log('loaded');
+    } else {
+        setTimeout(checkIfObjectsLoaded, 100);
+    }
+}
 
 socket.on('all_links', function (msg) {
     links = []
+    console.log('link');
     for (var link in msg) {
-        var firstObject = null;
-        var secondObject = null;
+        var fromObject = null;
+        var toObject = null;
         for (var i = 0; i < canvas.getObjects().length; i++) {
             if (canvas.item(i).uuid == msg[link].node_a) {
-                firstObject = canvas.item(i);
+                fromObject = canvas.item(i);
             }
             if (canvas.item(i).uuid == msg[link].node_b) {
-                secondObject = canvas.item(i);
+                toObject = canvas.item(i);
             }
         }
-        if (firstObject !== null && secondObject !== null) {
-            var from = firstObject.getCenterPoint();
-            var to = secondObject.getCenterPoint();
+        if (fromObject !== null && toObject !== null) {
+            var from = fromObject.getCenterPoint();
+            var to = toObject.getCenterPoint();
             var line = new fabric.Line([from.x, from.y, to.x, to.y], {
                 uuid: msg[link].uuid,
                 type: 'link',
-                fromObj: firstObject,
-                toObj: secondObject,
+                from: msg[link].node_a,
+                to: msg[link].node_b,
                 fill: 'black',
                 stroke: 'black',
                 strokeWidth: 2,
@@ -180,8 +152,38 @@ socket.on('all_events', function (msg) {
 socket.on('update_object', function(msg) {
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
-        if (canvas.item(i).uuid = o.uuid) {
+        if (canvas.item(i).uuid == o.uuid) {
+            if (o.type === 'node') {
+                canvas.item(i).name.text = o.name;
+                canvas.item(i).name.address = o.address;
+                if (canvas.item(i).image !== o.image) {
+                    canvas.item(i).image = o.image;
+                    canvas.item(i).color = o.color;
+                    fabric.loadSVGFromURL('images/icons/' + o.image, function(objects, options) {
+                        colorSet = o.color;
+                        var shape = fabric.util.groupSVGElements(objects, options);
+                        shape.set({
+                            originX: 'center',
+                            originY: 'bottom'
+                        });
+                        if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
+                            shape.setFill(colorSet);
+                        } else if (shape.paths) {
+                            for (var j = 0; j < shape.paths.length; j++) {
+                                if (shape.paths[j].fill !== 'rgba(255,255,255,1)')
+                                    shape.paths[j].setFill(colorSet);
+                            }
+                        }
+                        canvas.item(i).shape.set('paths', shape.paths);
+                        canvas.renderAll();
+                    });
+                }
+                if (canvas.item(i).color !== o.color) {
 
+                }
+                canvas.renderAll();
+            }
+            break;
         }
     }
     if (o.type === 'node') {
@@ -223,11 +225,16 @@ socket.on('insert_event', function(msg) {
 
 socket.on('insert_object', function(msg) {
     var o = JSON.parse(msg);
+    addObjectToCanvas(o);
 });
 
 socket.on('delete_object', function(msg) {
     var uuid = JSON.parse(msg);
-    closeProperties();
+    for (var i = 0; i < canvas.getObjects().length; i++) {
+        if (canvas.item(i).uuid == uuid) {
+            canvas.remove(canvas.item(i)); 
+        }
+    }
 });
 
 function startPan(event) {
@@ -252,10 +259,6 @@ function startPan(event) {
     $(window).contextmenu(cancelMenu);
 };
 
-function cancelMenu() {
-    $(window).off('contextmenu', cancelMenu);
-    return false;
-}
 $('#diagram').mousedown(startPan);
 
 canvas.on('object:modified', function(options) {
@@ -279,7 +282,8 @@ canvas.on('object:selected', function(options) {
                 $('#propID').val(options.target.uuid);
                 $('#propName').val(options.target.name.text);
                 $('#propAddress').val(options.target.address.text);
-                $('#propIcon').val(options.target.image_file);
+                $('#propColor').val(options.target.color);
+                $('#propIcon').val(options.target.image);
                 $('#propIcon').data('picker').sync_picker_with_select();
                 openProperties(options.target.type);
             }
@@ -296,26 +300,105 @@ canvas.on('before:selection:cleared', function(options) {
 canvas.on('before:render', function(e) {
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).type !== undefined && canvas.item(i).type === 'link') {
-            var fromObj = canvas.item(i).fromObj;
-            var toObj = canvas.item(i).toObj;
-            if (fromObj.group !== undefined || toObj.group !== undefined) {
-                if (fromObj.group !== undefined)
+            var from = canvas.item(i).from;
+            var to = canvas.item(i).to;
+            var fromObj = null;
+            var toObj = null;
+            for (var j = 0; j < canvas.getObjects().length; j++) {
+                if (canvas.item(j).uuid === from) {
+                    fromObj = canvas.item(j);
+                }
+                if (canvas.item(j).uuid === to) {
+                    toObj = canvas.item(j);
+                }
+            }
+            if (fromObj !== null && toObj !== null) {
+                if (fromObj.group !== undefined && fromObj.group !== null)
                     canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x + fromObj.group.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y + fromObj.group.getCenterPoint().y });
-                if (toObj.group !== undefined)
-                    canvas.item(i).set({ 'x2': toObj.getCenterPoint().x + toObj.group.getCenterPoint().x, 'y2': toObj.getCenterPoint().y + toObj.group.getCenterPoint().y });
-            } else {
-                canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
-                canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
+                else
+                    canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
+                if (toObj.group !== undefined && toObj.group !== null)
+                        canvas.item(i).set({ 'x2': toObj.getCenterPoint().x + toObj.group.getCenterPoint().x, 'y2': toObj.getCenterPoint().y + toObj.group.getCenterPoint().y });
+                else
+                    canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
             }
         }
     }
 });
 
-var fps = 10;
-var now;
-var then = Date.now();
-var interval = 1000/fps;
-var delta;
+function cancelMenu() {
+    $(window).off('contextmenu', cancelMenu);
+    return false;
+}
+
+function addZero(i) {
+    if (i < 10) {
+        i = "0" + i;
+    }
+    return i;
+}
+
+function addObjectToCanvas(o) {
+    if (o.image !== undefined && o.image !== null) {
+        fabric.loadSVGFromURL('images/icons/' + o.image, function(objects, options) {
+            colorSet = o.color;
+            console.log(o.color);
+            var shape = fabric.util.groupSVGElements(objects, options);
+            shape.set({
+                originX: 'center',
+                originY: 'bottom',
+            });
+            if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
+                shape.setFill(colorSet);
+            } else if (shape.paths) {
+                for (var i = 0; i < shape.paths.length; i++) {
+                    if (shape.paths[i].fill !== 'rgba(255,255,255,1)')
+                        shape.paths[i].setFill(colorSet);
+                }
+            }
+            var name = new fabric.Text(o.name, {
+                textAlign: 'center',
+                fontSize: 14,
+                originX: 'center',
+                originY: 'top'
+            });
+            var address = new fabric.Text(o.address, {
+                top: 16,
+                textAlign: 'center',
+                fontSize: 14,
+                originX: 'center',
+                originY: 'top'
+            });
+            canvas.add(new fabric.Group([name, address, shape], {
+                uuid: o.uuid,
+                type: o.type,
+                color: o.color,
+                shape: shape,
+                image: o.image,
+                name: name,
+                address: address,
+                left: o.x,
+                top: o.y
+            }));
+            canvas.renderAll();
+            objectsLoaded.pop();
+        });
+        nodeSelect.unshift({id:0, name:''});
+        $('#events').jsGrid("fieldOption", "source_node","items",nodeSelect);
+        $('#events').jsGrid("fieldOption", "dest_node","items",nodeSelect);
+    }
+}
+
+
+function getParameterByName(name, url) {
+    if (!url) url = window.location.href;
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+        results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
+}
 
 function resize() {
     var displayWidth  = $('#diagram').parent().width();
@@ -355,14 +438,12 @@ function cancelLink() {
 }
 
 function insertNode() {
-    socket.emit('insert_object', JSON.stringify({name:$('#propName').val(), address:$('#propAddress').val(), image:$('#propIcon').val(), type:'node'})); 
+    socket.emit('insert_object', JSON.stringify({mission: mission, name:$('#propName').val(), address:$('#propAddress').val(), color:$('#propColor').val(), image:$('#propIcon').val(), type:'node'})); 
 }
 
 function deleteObject() {
-    for (o in objects) {
-        if (selectedObjects[objects[o].uuid]) {
-            socket.emit('delete_object', JSON.stringify({uuid:objects[o].uuid, type:objects[o].type}));
-        }
+    if (canvas.getActiveObject().uuid) {
+        socket.emit('delete_object', JSON.stringify({uuid:canvas.getActiveObject().uuid, type:canvas.getActiveObject().type}));
     }
 }
 
@@ -384,6 +465,14 @@ function updatePropName(name) {
     }
 }
 
+function updatePropColor(color) {
+    if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
+        canvas.getActiveObject().color = color;
+
+        updateObject(canvas.getActiveObject());
+    }
+}
+
 function updatePropAddress(address) {
     if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
         canvas.getActiveObject().address.text = address;
@@ -393,8 +482,19 @@ function updatePropAddress(address) {
 }
 
 function updateObject(o) {
-
-    //socket.emit('update_object', JSON.stringify(objects[o]))
+    var tempObj = {};
+    tempObj.uuid = o.uuid;
+    tempObj.x = o.left;
+    tempObj.y = o.top;
+    tempObj.type = o.type;
+    tempObj.color = o.color;
+    tempObj.image = o.image;
+    if (o.type === 'node') {
+        tempObj.name = o.name.text;
+        tempObj.address = o.address.text;
+    }
+    console.log(tempObj);
+    socket.emit('update_object', JSON.stringify(tempObj));
 }
 
 function toggleProperties(type) {
@@ -439,6 +539,7 @@ function openProperties(type) {
             $('#propTitle').html('New Node');
             $('#insertNodeButton').show();
             $('#propID').val('');
+            $('#propColor').val('#000000');
             $('#propName').val('');
             $('#propAddress').val('');
             $('#propIcon').val('00-000-hub.png');
@@ -487,19 +588,36 @@ function closeProperties() {
 }
 
 $(document).ready(function() {
+    mission = getParameterByName('mission');
+    socket.emit('get_objects', mission);
+    socket.emit('get_events', mission);
     resize();
     $('#propIcon').imagepicker({
         hide_select : true,
         selected : function() {
             if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
-                canvas.getActiveObject().image_file = $(this).val();
-                if (!images[$(this).val()]) {
-                    images[$(this).val()] = new Image();
-                    images[$(this).val()].src = "images/icons/" + $(this).val();
-                }
-                canvas.getActiveObject().image.setElement(images[$(this).val()]);
-                canvas.getActiveObject().image.setWidth(64);
-                canvas.getActiveObject().image.setHeight(64);
+                canvas.getActiveObject().image = $(this).val();
+                fabric.loadSVGFromURL('images/icons/' + $(this).val(), function(objects, options) {
+                    canvas.getActiveObject().removeWithUpdate(canvas.getActiveObject().item(2));
+                    colorSet = canvas.getActiveObject().color;
+                    var shape = fabric.util.groupSVGElements(objects, options);
+                    shape.set({
+                        originX: 'center',
+                        originY: 'bottom',
+                        left: canvas.getActiveObject().getCenterPoint().x,
+                        top: canvas.getActiveObject().top
+                    });
+                    if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
+                        shape.setFill(colorSet);
+                    } else if (shape.paths) {
+                        for (var j = 0; j < shape.paths.length; j++) {
+                            if (shape.paths[j].fill !== 'rgba(255,255,255,1)')
+                                shape.paths[j].setFill(colorSet);
+                        }
+                    }
+                    canvas.getActiveObject().addWithUpdate(shape);
+                    canvas.renderAll();
+                });
                 updateObject(canvas.getActiveObject());
                 setTimeout(function () { canvas.renderAll(); }, 100);
             }
@@ -574,7 +692,8 @@ $(document).ready(function() {
                 return Object.keys(tableData).map(function (key) { return tableData[key]; });
             },
             insertItem: function(item) {
-                if (item['id'] == '0') {
+                if (item.id === '0') {
+                    item.mission = mission;
                     socket.emit('insert_event', JSON.stringify(item));
                 }
                 return item;

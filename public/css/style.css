@@ -41,9 +41,9 @@ canvas {
 
 .form-control {
     position: relative;
-    font-size: 16px;
+    font-size: 14px;
     height: auto;
-    padding: 10px;
+    padding: 6px;
     @include box-sizing(border-box);
 
     &:focus {
@@ -92,6 +92,10 @@ input[type="password"] {
 .propTitle {
     font-size: 20px;
     font-weight: bold;
+}
+
+.propColor {
+    height: 30px;
 }
 
 .container {

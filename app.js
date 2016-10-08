@@ -22,7 +22,7 @@ var connection = mysql.createConnection({
     host : 'localhost',
     user : 'copper',
     password : 'copper_password123',
-    database: 'copper'
+    database: 'copper',
 });
 
 connection.connect();
@@ -34,8 +34,9 @@ io.engine.ws = new (require('uws').Server)({
 });
 
 io.on('connection', function(socket) {
-    socket.on('get_diagram', function(msg) {
-        connection.query('SELECT * FROM nodes', function(err, rows, fields) {
+    socket.on('get_objects', function(msg) {
+        var mission = JSON.parse(msg);
+        connection.query('SELECT * FROM nodes WHERE mission = ?', [mission], function(err, rows, fields) {
             if (!err) {
                 for (i = 0; i < rows.length; i++) {
                     rows[i].type = 'node';
@@ -43,7 +44,10 @@ io.on('connection', function(socket) {
                 socket.emit('all_nodes',rows);
             }
         });
-        connection.query('SELECT * FROM links', function(err, rows, fields) {
+    });
+    socket.on('get_links', function(msg) {
+        var mission = JSON.parse(msg);
+        connection.query('SELECT * FROM links WHERE mission = ?', [mission], function(err, rows, fields) {
             if (!err) {
                 for (i = 0; i < rows.length; i++) {
                     rows[i].type = 'link';
@@ -53,7 +57,8 @@ io.on('connection', function(socket) {
         });
     });
     socket.on('get_events', function(msg) {
-        connection.query('SELECT * FROM events ORDER BY event_time ASC', function(err, rows, fields) {
+        var mission = JSON.parse(msg);
+        connection.query('SELECT * FROM events WHERE mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
             if (!err) {
                 socket.emit('all_events',rows);
             }
@@ -62,7 +67,7 @@ io.on('connection', function(socket) {
     socket.on('update_object', function(msg) {
         var o = JSON.parse(msg);
         if (o.type !== undefined && o.type === 'node') {
-            connection.query('UPDATE nodes SET name = ?, address = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.name, o.address, o.image, o.x, o.y, o.uuid], function (err, results) {
+            connection.query('UPDATE nodes SET name = ?, address = ?, color = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.name, o.address, o.color, o.image, o.x, o.y, o.uuid], function (err, results) {
                 if (!err) {
                     socket.broadcast.emit('update_object', msg);
                 }
@@ -89,7 +94,7 @@ io.on('connection', function(socket) {
     });
     socket.on('insert_event', function(msg) {
         var evt = JSON.parse(msg);
-        connection.query('INSERT INTO events (mission, event_time, source_node, source_port, dest_node, dest_port, analyst) values (1, ?, ?, ?, ?, ?, ?)', [evt.event_time, evt.source_node, evt.source_port, evt.dest_node, evt.dest_port, evt.analyst], function (err, results) {
+        connection.query('INSERT INTO events (mission, event_time, source_node, source_port, dest_node, dest_port, analyst) values (?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_node, evt.source_port, evt.dest_node, evt.dest_port, evt.analyst], function (err, results) {
             if (!err) {
                 evt.id = results.insertId;
                 io.emit('insert_event', JSON.stringify(evt));
@@ -99,7 +104,7 @@ io.on('connection', function(socket) {
     socket.on('insert_object', function(msg) {
         var o = JSON.parse(msg);
         if (o.type === 'node') {
-            connection.query('INSERT INTO nodes (mission, name, address, image, x, y, width, height) values (1, ?, ?, ?, 64, 64, 64, 64)', [o.name, o.address, o.image], function (err, results) {
+            connection.query('INSERT INTO nodes (mission, name, address, color, image, x, y, width, height) values (?, ?, ?, ?, ?, 64, 64, 64, 64)', [o.mission, o.name, o.address, o.color, o.image], function (err, results) {
                 if (!err) {
                     o.id = results.insertId;
                     connection.query('SELECT * FROM nodes WHERE id = ?', [o.id], function(err, rows, fields) {
@@ -111,7 +116,7 @@ io.on('connection', function(socket) {
                 }
             });
         } else if (o.type === 'link') {
-            connection.query('INSERT INTO links (node_a, node_b) values (?, ?)', [o.node_a, o.node_b], function (err, results) {
+            connection.query('INSERT INTO links (mission, node_a, node_b) values (?, ?, ?)', [o.mission, o.node_a, o.node_b], function (err, results) {
                 if (!err) {
                     o.id = results.insertId;
                     connection.query('SELECT * FROM links WHERE id = ?', [o.id], function(err, rows, fields) {
@@ -153,12 +158,18 @@ app.post('/api', function (req, res) {
     res.writeHead(200, {"Content-Type": "application/json"});
     if (req.body.table !== undefined && req.body.table === 'missions') {
         if (req.body.action !== undefined && req.body.action === 'select') {
-            connection.query('SELECT * FROM missions', function(err, rows, fields) {
+            connection.query("SELECT id, name, start_date, (SELECT username FROM users WHERE users.id = id) as analyst FROM missions", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
                 }
             });
-        } else if (req.body.action !== undefined && req.body.action === 'update') {
+        } else if (req.body.action !== undefined && req.body.action === 'update' && req.body.row !== undefined) {
+            var row = JSON.parse(req.body.row);
+            connection.query('UPDATE missions SET name = ?, start_date = ?, analyst = ? WHERE id = ?', [row.name, row.start_date, row.analyst, row.id], function (err, results) {
+                if (!err) {
+                    res.end(JSON.stringify('OK'));
+                }
+            });
         } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             connection.query('INSERT INTO missions (name, start_date, analyst) values (?, ?, ?)', [row.name, row.start_date, row.analyst], function (err, results) {
@@ -166,16 +177,26 @@ app.post('/api', function (req, res) {
                     res.end(JSON.stringify('OK'));
                 }
             });
-        } else if (req.body.action !== undefined && req.body.action === 'delete') {
+        } else if (req.body.action !== undefined && req.body.action === 'delete' && req.body.id !== undefined) {
+            var id = JSON.parse(req.body.id);
+            connection.query('DELETE FROM missions WHERE id = ?', [id], function (err, results) {
+                if (!err) {
+                    res.end(JSON.stringify('OK'));
+                }
+            });
         }
     }
 });
 
 app.get('/cop', function (req, res) {
     if (!req.session.loggedin) {
-        fs.readdir('./public/images/icons', function(err, items) {
-            res.render('cop', { title: 'CS-COP', icons: items});
-        });
+        if (req.query.mission !== undefined && req.query.mission > 0) {
+            fs.readdir('./public/images/icons', function(err, items) {
+                res.render('cop', { title: 'CS-COP', icons: items});
+            });
+        } else {
+            res.redirect('/');
+        }
     } else {
        res.redirect('/login');
     }
