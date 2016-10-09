@@ -7,6 +7,18 @@ canvas {
     height: 100%;
 }
 
+.modal-header {
+    background-color: darkgray;
+}
+
+.modal-content {
+    background-color: lightgray;
+}
+
+.modal-footer {
+    background-color: darkgray;
+}
+
 .jumbotron {
     padding: 20px !important;
     overflow: hidden;
@@ -68,11 +80,7 @@ input[type="password"] {
     border-top-right-radius: 0;
 }
 
-.insertNodeButton {
-    margin-right: 10px;
-}
-
-.deleteButton {
+.propButton {
     margin-right: 10px;
 }
 
@@ -120,6 +128,10 @@ input[type="password"] {
     float: left;
 }
 
+.diagram_jumbotron {
+    padding: 0px !important;
+}
+
 .resizable {
     resize: vertical;
     overflow: hidden;
@@ -128,10 +140,12 @@ input[type="password"] {
 .nav-button {
     width: 100%;
     height: 100px;
-    background-color: lightgray;
-    margin-bottom: 4px;
+    background-color: darkgray;
+    margin-top: 4px;
     border-radius: 4px 0px 0px 4px;
-    border: 1px black solid;
+    border-top: 1px solid black;
+    border-left: 1px solid black;
+    border-bottom: 1px solid black;
     text-align: center;
 }
 
@@ -143,12 +157,13 @@ input[type="password"] {
 
 .properties {
     width: 310px;
-    height: 470px;
+    height: 500px;
     float: right;
     padding: 10px;
     display: none;
-    border-radius: 0px 4px 4px 4px;
-    border: 1px black solid;
+    border-radius: 0px 0px 0px 4px;
+    border-left: 1px black solid;
+    border-bottom: 1px black solid;
     background-color: lightgray;
 }
 
@@ -156,6 +171,11 @@ input[type="password"] {
     margin-bottom: 2px;
     width: 48px;
     height: 48px;
+}
+
+.thumbnails.image_picker_selector img {
+    width: 46px;
+    height: 42px;
 }
 
 table {

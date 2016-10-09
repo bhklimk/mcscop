@@ -52,7 +52,6 @@ $(document).ready(function() {
         paging: true,
         autoload: true,
         rowClick: function(args) {
-            console.log('test');
             return false;
         },
         fields: [
@@ -145,4 +144,98 @@ $(document).ready(function() {
             }
         }
     });
+    $('#users').jsGrid({
+        autoload: false,
+        width: '100%',
+        editing: true,
+        sorting: true,
+        paging: true,
+        autoload: true,
+        rowClick: function(args) {
+            return false;
+        },
+        fields: [
+            { name: 'id', type: 'number', css: 'hide', width: 0},
+            { name: 'username', title: 'Username', type : 'text', width: 65},
+            { name: 'access_level', title: 'Access Level', type: 'number', width: 45},
+            {
+                type: "control",
+                editButton: true,
+                headerTemplate: function() {
+                    var grid = this._grid;
+                    var isInserting = grid.inserting;
+                    var $button = $("<input>").attr("type", "button")
+                        .addClass([this.buttonClass, this.modeButtonClass, this.insertModeButtonClass].join(" "))
+                        .on("click", function() {
+                            isInserting = !isInserting;
+                            grid.option("inserting", isInserting);
+                        });
+
+                    return $button;
+                }
+            }
+        ],
+        controller: {
+            loadData: function () {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: '/api',
+                    data: {
+                        action: 'select',
+                        table: 'users'
+                    }
+                }).done(function(response) {
+                    d.resolve(response);
+                });
+                return d.promise();
+            },
+            insertItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: '/api',
+                    data: {
+                        action: 'insert',
+                        table: 'users',
+                        row: JSON.stringify(item)
+                    }
+                }).done(function() {
+                    d.resolve();
+                });
+                return d.promise();
+            },
+            updateItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: '/api',
+                    data: {
+                        action: 'update',
+                        table: 'users',
+                        row: JSON.stringify(item)
+                    }
+                }).done(function() {
+                    d.resolve();
+                });
+                return d.promise();
+            },
+            deleteItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: '/api',
+                    data: {
+                        action: 'delete',
+                        table: 'users',
+                        id: JSON.stringify(item.id)
+                    }
+                }).done(function() {
+                    d.resolve();
+                });
+                return d.promise();
+            }
+        }
+    });
+
 });

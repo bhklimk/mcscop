@@ -2,9 +2,7 @@ var canvas = new fabric.Canvas('canvas');
 canvas.selection = false;
 
 var creatingLink = false;
-var panning = true;
 var firstNode = null;
-var selectedLink = null;
 var startX = 0;
 var startY = 0;
 var scale = 1;
@@ -12,7 +10,7 @@ var originx = 0;
 var originy = 0;
 var zoomIntensity = 0.2;
 var mission = null;
-var nodeSelect = [{id:0, name:'none/unknown'}];
+var objectSelect = [{id:0, name:'none/unknown'}];
 var dateSlider = null;
 var images = {};
 var tableData = [];
@@ -79,12 +77,14 @@ DateField.prototype = new jsGrid.Field({
 });
 jsGrid.fields.date = DateField;
 
-socket.on('all_nodes', function (msg) {
-    nodeSelect = nodeSelect.concat(msg);
+socket.on('all_objects', function (msg) {
+    canvas.clear();
+    objectSelect = [{id:0, name:'none/unknown'}];
     objectsLoaded = [];
-    for (var node in msg) {
+    for (var o in msg) {
+        objectSelect.push({uuid:msg[o].uuid, name:msg[o].name});
         objectsLoaded.push(false);
-        addObjectToCanvas(msg[node]);
+        addObjectToCanvas(msg[o]);
     }
     checkIfObjectsLoaded();    
 });
@@ -97,6 +97,20 @@ function checkIfObjectsLoaded() {
         setTimeout(checkIfObjectsLoaded, 100);
     }
 }
+
+socket.on('connect', function() {
+    $('#modal').modal('hide');
+    socket.emit('get_objects', mission);
+    socket.emit('get_events', mission);
+});
+
+socket.on('disco', function (msg) {
+    $('#modal').modal('show');
+});
+
+socket.on('disconnect', function() {
+    $('#modal').modal('show')
+});
 
 socket.on('all_links', function (msg) {
     links = []
@@ -153,13 +167,16 @@ socket.on('update_object', function(msg) {
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
-            if (o.type === 'node') {
+            if (o.type === 'node' || o.type === 'shape') {
                 canvas.item(i).name.text = o.name;
                 canvas.item(i).name.address = o.address;
                 if (canvas.item(i).image !== o.image) {
                     canvas.item(i).image = o.image;
                     canvas.item(i).color = o.color;
-                    fabric.loadSVGFromURL('images/icons/' + o.image, function(objects, options) {
+                    var path = 'images/icons/';
+                    if (o.type === 'shape')
+                        path = 'images/shapes/';
+                    fabric.loadSVGFromURL(path + o.image, function(objects, options) {
                         colorSet = o.color;
                         var shape = fabric.util.groupSVGElements(objects, options);
                         shape.set({
@@ -186,10 +203,8 @@ socket.on('update_object', function(msg) {
             break;
         }
     }
-    if (o.type === 'node') {
-        $('#events').jsGrid("fieldOption", "source_node","items",nodeSelect)
-        $('#events').jsGrid("fieldOption", "dest_node","items",nodeSelect)
-    }
+    $('#events').jsGrid("fieldOption", "source_object","items",objectSelect)
+    $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect)
 });
 
 socket.on('update_object_pos', function (msg) {
@@ -278,13 +293,18 @@ canvas.on('object:modified', function(options) {
 canvas.on('object:selected', function(options) {
     if (options.target) {
         if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null) {
-            if (options.target.type !== undefined && options.target.type === 'node') {
+            if (options.target.type !== undefined && (options.target.type === 'node' || options.target.type === 'shape')) {
                 $('#propID').val(options.target.uuid);
                 $('#propName').val(options.target.name.text);
                 $('#propAddress').val(options.target.address.text);
                 $('#propColor').val(options.target.color);
-                $('#propIcon').val(options.target.image);
-                $('#propIcon').data('picker').sync_picker_with_select();
+                if (options.target.type === 'node') {
+                    $('#propIcon').val(options.target.image);
+                    $('#propIcon').data('picker').sync_picker_with_select();
+                } else if (options.target.type === 'shape') {
+                    $('#propShape').val(options.target.image);
+                    $('#propShape').data('picker').sync_picker_with_select();
+                }
                 openProperties(options.target.type);
             }
         } else {
@@ -316,11 +336,11 @@ canvas.on('before:render', function(e) {
                 if (fromObj.group !== undefined && fromObj.group !== null)
                     canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x + fromObj.group.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y + fromObj.group.getCenterPoint().y });
                 else
-                    canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
+                    canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y + toObj.item(2).getCenterPoint().y });
                 if (toObj.group !== undefined && toObj.group !== null)
                         canvas.item(i).set({ 'x2': toObj.getCenterPoint().x + toObj.group.getCenterPoint().x, 'y2': toObj.getCenterPoint().y + toObj.group.getCenterPoint().y });
                 else
-                    canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
+                    canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y + toObj.item(2).getCenterPoint().y });
             }
         }
     }
@@ -340,9 +360,11 @@ function addZero(i) {
 
 function addObjectToCanvas(o) {
     if (o.image !== undefined && o.image !== null) {
-        fabric.loadSVGFromURL('images/icons/' + o.image, function(objects, options) {
+        var path = 'images/icons/';
+        if (o.type === 'shape')
+            path = 'images/shapes/';
+        fabric.loadSVGFromURL(path + o.image, function(objects, options) {
             colorSet = o.color;
-            console.log(o.color);
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
                 originX: 'center',
@@ -352,15 +374,17 @@ function addObjectToCanvas(o) {
                 shape.setFill(colorSet);
             } else if (shape.paths) {
                 for (var i = 0; i < shape.paths.length; i++) {
-                    if (shape.paths[i].fill !== 'rgba(255,255,255,1)')
-                        shape.paths[i].setFill(colorSet);
+                //    if (shape.paths[i].fill !== 'rgba(255,255,255,1)')
+                //        shape.paths[i].setFill(colorSet);
                 }
             }
             var name = new fabric.Text(o.name, {
                 textAlign: 'center',
                 fontSize: 14,
                 originX: 'center',
-                originY: 'top'
+                originY: 'top',
+                scaleX : 1,
+                scaleY: 1
             });
             var address = new fabric.Text(o.address, {
                 top: 16,
@@ -378,14 +402,14 @@ function addObjectToCanvas(o) {
                 name: name,
                 address: address,
                 left: o.x,
-                top: o.y
+                top: o.y,
+                lockRotation: true
             }));
             canvas.renderAll();
             objectsLoaded.pop();
         });
-        nodeSelect.unshift({id:0, name:''});
-        $('#events').jsGrid("fieldOption", "source_node","items",nodeSelect);
-        $('#events').jsGrid("fieldOption", "dest_node","items",nodeSelect);
+        $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
+        $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
     }
 }
 
@@ -437,8 +461,8 @@ function cancelLink() {
     $('#cancelLink').hide();
 }
 
-function insertNode() {
-    socket.emit('insert_object', JSON.stringify({mission: mission, name:$('#propName').val(), address:$('#propAddress').val(), color:$('#propColor').val(), image:$('#propIcon').val(), type:'node'})); 
+function insertObject() {
+    socket.emit('insert_object', JSON.stringify({mission: mission, name:$('#propName').val(), address:$('#propAddress').val(), color:$('#propColor').val(), image:$('#propIcon').val(), type:$('#propType').val()})); 
 }
 
 function deleteObject() {
@@ -456,19 +480,18 @@ function unselectObjects() {
 }
 
 function updatePropName(name) {
-    if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
+    if (canvas.getActiveObject() !== null && (canvas.getActiveObject().type === 'node' || canvas.getActiveObject().type === 'shape')) {
         canvas.getActiveObject().name.text = name;
         canvas.renderAll();
         updateObject(canvas.getActiveObject());
-        $('#events').jsGrid("fieldOption", "source_node","items",nodeSelect)
-        $('#events').jsGrid("fieldOption", "dest_node","items",nodeSelect)
+        $('#events').jsGrid("fieldOption", "source_object","items",objectSelect)
+        $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect)
     }
 }
 
 function updatePropColor(color) {
-    if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
+    if (canvas.getActiveObject() !== null && (canvas.getActiveObject().type === 'node' || canvas.getActiveObject().type === 'shape')) {
         canvas.getActiveObject().color = color;
-
         updateObject(canvas.getActiveObject());
     }
 }
@@ -489,11 +512,8 @@ function updateObject(o) {
     tempObj.type = o.type;
     tempObj.color = o.color;
     tempObj.image = o.image;
-    if (o.type === 'node') {
-        tempObj.name = o.name.text;
-        tempObj.address = o.address.text;
-    }
-    console.log(tempObj);
+    tempObj.name = o.name.text;
+    tempObj.address = o.address.text;
     socket.emit('update_object', JSON.stringify(tempObj));
 }
 
@@ -501,34 +521,48 @@ function toggleProperties(type) {
     if ($('#properties').is(':hidden')) {
         openProperties(type);
     } else {
-        if ($('#' + type + 'sForm').is(':hidden'))
-            openProperties(type);
-        else
+        if ($('#propType').val() === type)
             closeProperties();
+        else
+            openProperties(type);
+
     }
 }
 
 function openProperties(type) {
     // edit
+    $('#propType').val(type);
     if (canvas.getActiveObject() !== undefined && canvas.getActiveObject() !== null) {
         if (type === 'node') {
             $('#propTitle').html('Edit Node');
-            $('#insertNodeButton').hide();
-            $('#deleteButton').show();
-            $('#nodesButton').css('border-right','0px');
-            $('#shapesForm').hide();
-            $('#linksForm').hide();
-            $('#nodesForm').show();
+            $('#propNameGroup').show();
+            $('#propAddressGroup').show();
+            $('#propShapeGroup').hide();
+            $('#propIconGroup').show();
+            $('#deleteNodeButton').hide();
+            $('#insertObjectButton').show();
+            $('#insertLinkButton').hide();
+            $('#nodesButton').css('background-color','lightgray');
+            $('#shapesButton').css('background-color','darkgray');
+            $('#linksButton').css('background-color','darkgray');
         } else if (type === 'shape') {
             $('#propTitle').html('Edit Shape');
-            $('#shapesForm').show();
-            $('#linksForm').hide();
-            $('#nodesForm').hide();
+            $('#propNameGroup').show();
+            $('#propAddressGroup').hide();
+            $('#propShapeGroup').show();
+            $('#propIconGroup').hide();
+            $('#deleteNodeButton').hide();
+            $('#insertObjectButton').show();
+            $('#insertLinkButton').hide();
+            $('#shapesButton').css('background-color','lightgray');
+            $('#nodesButton').css('background-color','darkgray');
+            $('#linksButton').css('background-color','darkgray');
         } else if (type === 'link') {
             $('#propTitle').html('Edit Link');
-            $('#nodesForm').hide();
-            $('#shapesForm').hide();
-            $('#linksForm').show();
+            $('#deleteLinkButton').show();
+            $('#linksButton').css('background-color','lightgray');
+            $('#shapesButton').css('background-color','darkgray');
+            $('#nodesButton').css('background-color','darkgray');
         } else {
             closeProperties();
             return;
@@ -537,33 +571,55 @@ function openProperties(type) {
     } else if (canvas.getActiveObject() === undefined || canvas.getActiveObject() === null) {
         if (type === 'node') {
             $('#propTitle').html('New Node');
-            $('#insertNodeButton').show();
             $('#propID').val('');
-            $('#propColor').val('#000000');
+            $('#propType').val('node');
+            $('#propNameGroup').show();
             $('#propName').val('');
+            $('#propAddressGroup').show();
             $('#propAddress').val('');
+            $('#propColor').val('#000000');
+            $('#propShapeGroup').hide();
+            $('#propIconGroup').show();
             $('#propIcon').val('00-000-hub.png');
             $('#propIcon').data('picker').sync_picker_with_select();
-            $('#deleteButton').hide();
-            $('#nodesButton').css('border-right','0px');
-            $('#shapesForm').hide();
-            $('#linksForm').hide();
-            $('#nodesForm').show();
+            $('#deleteNodeButton').hide();
+            $('#insertObjectButton').show();
+            $('#insertLinkButton').hide();
+            $('#nodesButton').css('background-color','lightgray');
+            $('#shapesButton').css('background-color','darkgray');
+            $('#linksButton').css('background-color','darkgray');
         } else if (type === 'shape') {
             $('#propTitle').html('New Shape');
-            $('#insertShapeButton').show();
             $('#propID').val('');
+            $('#propType').val('shape');
+            $('#propNameGroup').show();
             $('#propName').val('');
-            $('#deleteButton').hide();
-            $('#shapesButton').css('border-right','0px');
-            $('#shapesForm').show();
-            $('#linksForm').hide();
-            $('#nodesForm').hide();
+            $('#propAddressGroup').hide();
+            $('#propColor').val('#000000');
+            $('#propShapeGroup').show();
+            $('#propIconGroup').hide();
+            $('#insertObjectButton').show();
+            $('#insertLinkButton').hide();
+            $('#shapesButton').css('background-color','lightgray');
+            $('#nodesButton').css('background-color','darkgray');
+            $('#linksButton').css('background-color','darkgray');
         } else if (type === 'link') {
             $('#propTitle').html('New Link');
-            $('#shapesForm').hide();
-            $('#linksForm').show();
-            $('#nodesForm').hide();
+            $('#propID').val('');
+            $('#propType').val('link');
+            $('#propNameGroup').hide();
+            $('#propAddressGroup').hide();
+            $('#propColor').val('#000000');
+            $('#propShapeGroup').hide();
+            $('#propIconGroup').hide();
+            $('#insertShapeButton').show();
+            $('#deleteLinkButton').hide();
+            $('#deleteButton').hide();
+            $('#insertObjectButton').hide();
+            $('#insertLinkButton').show();
+            $('#linksButton').css('background-color','lightgray');
+            $('#nodesButton').css('background-color','darkgray');
+            $('#shapesButton').css('background-color','darkgray');
         }
     } else {
         return;
@@ -578,19 +634,14 @@ function openProperties(type) {
 function closeProperties() {
     $('#properties').hide();
     $('#diagram').width('100%');
-    $('#nodesButton').css('border-right','1px black solid');
-    $('#linksButton').css('border-right','1px black solid');
-    $('#shapesButton').css('border-right','1px black solid');
-    $('#nodesForm').show();
-    $('#linksForm').show();
-    $('#shapesForm').show();
+    $('#shapesButton').css('background-color','darkgray');
+    $('#nodesButton').css('background-color','darkgray');
+    $('#linksButton').css('background-color','darkgray');
     resize();
 }
 
 $(document).ready(function() {
     mission = getParameterByName('mission');
-    socket.emit('get_objects', mission);
-    socket.emit('get_events', mission);
     resize();
     $('#propIcon').imagepicker({
         hide_select : true,
@@ -598,6 +649,37 @@ $(document).ready(function() {
             if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
                 canvas.getActiveObject().image = $(this).val();
                 fabric.loadSVGFromURL('images/icons/' + $(this).val(), function(objects, options) {
+                    canvas.getActiveObject().removeWithUpdate(canvas.getActiveObject().item(2));
+                    colorSet = canvas.getActiveObject().color;
+                    var shape = fabric.util.groupSVGElements(objects, options);
+                    shape.set({
+                        originX: 'center',
+                        originY: 'bottom',
+                        left: canvas.getActiveObject().getCenterPoint().x,
+                        top: canvas.getActiveObject().top
+                    });
+                    if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
+                        shape.setFill(colorSet);
+                    } else if (shape.paths) {
+                        for (var j = 0; j < shape.paths.length; j++) {
+                      //      if (shape.paths[j].fill !== 'rgba(255,255,255,1)')
+                        //        shape.paths[j].setFill(colorSet);
+                        }
+                    }
+                    canvas.getActiveObject().addWithUpdate(shape);
+                    canvas.renderAll();
+                });
+                updateObject(canvas.getActiveObject());
+                setTimeout(function () { canvas.renderAll(); }, 100);
+            }
+        }
+    });
+    $('#propShape').imagepicker({
+        hide_select : true,
+        selected : function() {
+            if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'shape') {
+                canvas.getActiveObject().image = $(this).val();
+                fabric.loadSVGFromURL('images/shapes/' + $(this).val(), function(objects, options) {
                     canvas.getActiveObject().removeWithUpdate(canvas.getActiveObject().item(2));
                     colorSet = canvas.getActiveObject().color;
                     var shape = fabric.util.groupSVGElements(objects, options);
@@ -657,12 +739,12 @@ $(document).ready(function() {
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
             { name: 'event_time', title: 'Event Time', type : 'date', width: 65},
-            { name: 'source_node', title: 'Source Node', type: 'select', items: nodeSelect, valueField: 'id', textField: 'name', width: 65, filterValue: function() {
+            { name: 'source_object', title: 'Source Node', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
             { name: 'source_port', title: 'SPort', type: 'number', width: 25},
-            { name: 'dest_node', title: 'Destination Node', type: 'select', items: nodeSelect, valueField: 'id', textField: 'name', width: 65, filterValue: function() {
+            { name: 'dest_object', title: 'Destination Node', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
@@ -720,14 +802,14 @@ $(document).ready(function() {
 });
 
 $(function() {
-  $('.tabs nav a').on('click', function() {
-    show_content($(this).index());
-  });
-  show_content(0);
-  function show_content(index) {
-    $('.tabs .content.visible').removeClass('visible');
-    $('.tabs .content:nth-of-type(' + (index + 1) + ')').addClass('visible');
-    $('.tabs nav a.selected').removeClass('selected');
-    $('.tabs nav a:nth-of-type(' + (index + 1) + ')').addClass('selected');
-  }
+    $('.tabs nav a').on('click', function() {
+        show_content($(this).index());
+    });
+    show_content(0);
+    function show_content(index) {
+        $('.tabs .content.visible').removeClass('visible');
+        $('.tabs .content:nth-of-type(' + (index + 1) + ')').addClass('visible');
+        $('.tabs nav a.selected').removeClass('selected');
+        $('.tabs nav a:nth-of-type(' + (index + 1) + ')').addClass('selected');
+    }
 });
