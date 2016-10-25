@@ -31,28 +31,21 @@ html
           button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
         div.sidebar
           div.properties-nav#properties-nav
-            div.nav-button#nodesButton(onclick='toggleProperties("node")') N<br>o<br>d<br>e<br>s
-            div.nav-button#shapesButton(onclick='toggleProperties("shape")') S<br>h<br>a<br>p<br>e
+            div.nav-button#objectsButton(onclick='toggleProperties("object")') N<br>o<br>d<br>e<br>s
             div.nav-button#linksButton(onclick='toggleProperties("link")') L<br>i<br>n<br>k<br>s
           div.properties#properties
-            span.propTitle#propTitle Edit Node
+            span.propTitle#propTitle Edit Object
             form#propForm
               input(type="hidden", name="id")#propID
               input(type="hidden", name="type")#propType
               div.form-group#propNameGroup
                 label Name
-                input(type="text", name="name" onchange="updatePropName(this.value)").form-control#propName
-              div.form-group#propAddressGroup
-                label Address
-                input(type="text", name="address" onchange="updatePropAddress(this.value)").form-control#propAddress
+                textarea(name="name" onchange="updatePropName(this.value)").form-control#propName
               div.form-group#propColorGroup
                 label Color
-                input(type="color", name="color" onchange="updatePropColor(this.value)" value="#017bbb").form-control.propColor#propColor
-              div.form-group#propShapeGroup
-                label Shape
-                select.image-picker#propShape
-                  each shape in shapes
-                    option(data-img-src="/images/shapes/" + shape, data-img-class="first", value=shape) shape
+                div.colors
+                    input(type="color", name="fillcolor" onchange="updatePropFillColor(this.value)" value="#017bbb").form-control.propColor#propFillColor
+                    input(type="color", name="strokecolor" onchange="updatePropStrokeColor(this.value)" value="#017bbb").form-control.propColor#propStrokeColor
               div.form-group#propIconGroup
                 label Icon
                 select.image-picker#propIcon
@@ -61,13 +54,12 @@ html
               div.form-group#makeObject
                   button.propButton#insertObjectButton(type='button' onclick="insertObject()") Insert
                   button.propButton#insertLinkButton(type='button' onclick="insertLink()") Insert
-                  button.propButton#deleteNodeButton(type='button' onclick="deleteObject()") Delete Node
+                  button.propButton#deleteObjectButton(type='button' onclick="deleteObject()") Delete
                   button(type='button' onclick="closeProperties()") Cancel
       div.jumbotron
         div#slider
       div.jumbotron
         div#events
-      button.btn.btn-info(data-toggle='modal' data-target='#modal' type='button') Open
 script(src='/js/jquery.js')
 script(src='/js/jsgrid.min.js')
 script(src='/socket.io/socket.io.js')

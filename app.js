@@ -53,7 +53,8 @@ io.on('connection', function(socket) {
             connection.query('SELECT * FROM objects WHERE mission = ?', [mission], function(err, rows, fields) {
                 if (!err) {
                     socket.emit('all_objects',rows);
-                }
+                } else
+                    console.log(err);
             });
         });
         socket.on('get_links', function(msg) {
@@ -64,7 +65,8 @@ io.on('connection', function(socket) {
                         rows[i].type = 'link';
                     }
                     socket.emit('all_links',rows);
-                }
+                } else
+                    console.log(err);
             });
         });
         socket.on('get_events', function(msg) {
@@ -72,60 +74,92 @@ io.on('connection', function(socket) {
             connection.query('SELECT id, uuid, event_time, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
                 if (!err) {
                     socket.emit('all_events',rows);
-                }
+                } else
+                    console.log(err);
             });
         });
-        socket.on('update_object', function(msg) {
+        socket.on('change_object', function(msg) {
             var o = JSON.parse(msg);
-            console.log(o);
-            if (o.type !== undefined && (o.type === 'node' || o.type === 'shape')) {
-                connection.query('UPDATE objects SET type = ?, name = ?, address = ?, color = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.type, o.name, o.address, o.color, o.image, o.x, o.y, o.uuid], function (err, results) {
+            if (o.type !== undefined && o.type === 'object') {
+                connection.query('UPDATE objects SET type = ?, name = ?, fill_color = ?, stroke_color = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.type, o.name, o.fill_color, o.stroke_color, o.image, o.x, o.y, o.uuid], function (err, results) {
                     if (!err) {
-                        socket.broadcast.emit('update_object', msg);
-                    }
+                        socket.broadcast.emit('change_object', msg);
+                    } else
+                        console.log(err);
                 });
             }
         });
-        socket.on('update_object_pos', function(msg) {
+        socket.on('move_object', function(msg) {
             var o = JSON.parse(msg);
-            if (o.type !== undefined && (o.type === 'node' || o.type === 'shape')) {
-                connection.query('UPDATE objects SET x = ?, y = ? WHERE uuid = ?', [o.x, o.y, o.uuid], function (err, results) {
+            if (o.type !== undefined && o.type === 'object') {
+                connection.query('UPDATE objects SET x = ?, y = ?, z = ?, scale_x = ?, scale_y = ? WHERE uuid = ?', [o.x, o.y, o.z, o.scale_x, o.scale_y, o.uuid], function (err, results) {
                     if (!err) {
-                        socket.broadcast.emit('update_object_pos', msg);
-                    }
+                        socket.broadcast.emit('move_object', msg);
+                    } else
+                        console.log(err);
                 });
             }
         });
         socket.on('update_event', function(msg) {
             var evt = JSON.parse(msg);
+            evt.analyst = socket.request.session.user_id;
             connection.query('UPDATE events SET event_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst, evt.id], function (err, results) {
                 if (!err) {
                     socket.broadcast.emit('update_event', msg);
-                }
+                } else
+                    console.log(err);
             });
         });
         socket.on('insert_event', function(msg) {
             var evt = JSON.parse(msg);
-            connection.query('INSERT INTO events (mission, event_time, source_object, source_port, dest_object, dest_port, analyst) values (?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.analyst], function (err, results) {
+            console.log(evt);
+            evt.analyst = socket.request.session.user_id;
+            connection.query('INSERT INTO events (mission, event_time, source_object, source_port, dest_object, dest_port, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst], function (err, results) {
                 if (!err) {
                     evt.id = results.insertId;
                     io.emit('insert_event', JSON.stringify(evt));
-                }
+                } else
+                    console.log(err);
+            });
+        });
+        socket.on('delete_event', function(msg) {
+            var evt = JSON.parse(msg);
+            connection.query('DELETE FROM events WHERE id = ?', [evt.id], function (err, results) {
+                if (!err) {
+                    socket.broadcast.emit('delete_event', JSON.stringify(evt));
+                } else
+                    console.log(err);
+            });
+        });
+        socket.on('insert_link', function(msg) {
+            var link = JSON.parse(msg);
+            connection.query('INSERT INTO links (mission, node_a, node_b) values (?, ?, ?)', [link.mission, link.node_a, link.node_b], function (err, results) {
+                if (!err) {
+                    link.id = results.insertId;
+                    connection.query('SELECT * FROM links WHERE id = ?', [link.id], function(err, rows, fields) {
+                        if (!err) {
+                                io.emit('insert_link', JSON.stringify(rows[0]));
+                            } else
+                                console.log(err);
+                        });
+                } else
+                    console.log(err);
             });
         });
         socket.on('insert_object', function(msg) {
             var o = JSON.parse(msg);
-            console.log(o);
-            if (o.type === 'node' || o.type === 'shape') {
-                connection.query('INSERT INTO objects (mission, type, name, address, color, image, x, y, width, height) values (?, ?, ?, ?, ?, ?, 64, 64, 64, 64)', [o.mission, o.type, o.name, o.address, o.color, o.image], function (err, results) {
+            if (o.type === 'object') {
+                connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, x, y, width, height) values (?, ?, ?, ?, ?, ?, 64, 64, 64, 64)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image], function (err, results) {
                     if (!err) {
                         o.id = results.insertId;
                         connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
                             if (!err) {
-                                socket.emit('insert_object',JSON.stringify(rows[0]));
-                            }
+                                io.emit('insert_object',JSON.stringify(rows[0]));
+                            } else
+                                console.log(err);
                         });
-                    }
+                    } else
+                        console.log(err);
                 });
             } else if (o.type === 'link') {
                 connection.query('INSERT INTO links (mission, node_a, node_b) values (?, ?, ?)', [o.mission, o.node_a, o.node_b], function (err, results) {
@@ -135,20 +169,43 @@ io.on('connection', function(socket) {
                             if (!err) {
                                 rows[0].type = 'link';
                                 io.emit('insert_object', JSON.stringify(rows[0]));
-                            }
+                            } else
+                                console.log(err);
                         });
-                    }
+                    } else
+                        console.log(err);
                 });
             }
         });
         socket.on('delete_object', function(msg) {
             var o = JSON.parse(msg);
-            if (o.type !== undefined && o.type === 'node') {
-                connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
-                    if (!err) {
-                        io.emit('delete_object', JSON.stringify(o.uuid));
-                    }
-                });
+            if (o.type !== undefined) {
+                if (o.type === 'object') {
+                    connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
+                        if (!err) {
+                            io.emit('delete_object', JSON.stringify(o.uuid));
+                            connection.query('SELECT uuid FROM links WHERE node_a = ? OR node_b = ?', [o.uuid, o.uuid], function(err, rows, results) {
+                                if (!err) {
+                                    for (var r = 0; r < rows.length; r++) {
+                                        console.log(rows[r]);
+                                        io.emit('delete_object', JSON.stringify(rows[r].uuid));
+                                        connection.query('DELETE FROM links WHERE uuid = ?', [rows[r].uuid], function(err, results) {
+                                        });
+                                    }
+                                } else
+                                    console.log(err);
+                            });
+                        } else
+                            console.log(err);
+                    });
+                } else if (o.type === 'link') {
+                    connection.query('DELETE FROM links WHERE uuid = ?', [o.uuid], function (err, results) {
+                        if (!err) {
+                            io.emit('delete_object', JSON.stringify(o.uuid));
+                        } else
+                            console.log(err);
+                    });
+                }
             }
         });
     }
@@ -174,28 +231,42 @@ app.post('/api', function (req, res) {
             connection.query("SELECT id, name, start_date, (SELECT username FROM users WHERE users.id = id) as analyst FROM missions", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
-                }
+                } else
+                    console.log(err);
             });
         } else if (req.body.action !== undefined && req.body.action === 'update' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             connection.query('UPDATE missions SET name = ?, start_date = ?, analyst = ? WHERE id = ?', [row.name, row.start_date, row.analyst, row.id], function (err, results) {
                 if (!err) {
                     res.end(JSON.stringify('OK'));
-                }
+                } else
+                    console.log(err);
             });
         } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             connection.query('INSERT INTO missions (name, start_date, analyst) values (?, ?, ?)', [row.name, row.start_date, row.analyst], function (err, results) {
                 if (!err) {
                     res.end(JSON.stringify('OK'));
-                }
+                } else
+                    console.log(err);
             });
         } else if (req.body.action !== undefined && req.body.action === 'delete' && req.body.id !== undefined) {
             var id = JSON.parse(req.body.id);
             connection.query('DELETE FROM missions WHERE id = ?', [id], function (err, results) {
                 if (!err) {
-                    res.end(JSON.stringify('OK'));
-                }
+                    connection.query('DELETE FROM objects WHERE id = ?', [id], function (err, results) {
+                        if (!err) {
+                            connection.query('DELETE FROM links WHERE id = ?', [id], function (err, results) {
+                                if (!err) {
+                                    res.end(JSON.stringify('OK'));
+                                } else
+                                    console.log(err);
+                            });
+                        } else
+                            console.log(err);
+                    });
+                } else
+                    console.log(err);
             });
         }
     } else if (req.body.table !== undefined && req.body.table === 'users') {
@@ -203,28 +274,32 @@ app.post('/api', function (req, res) {
             connection.query("SELECT id, username, access_level FROM users", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
-                }
+                } else
+                    console.log(err);
             });
         } else if (req.body.action !== undefined && req.body.action === 'update' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             connection.query('UPDATE missions SET name = ?, start_date = ?, analyst = ? WHERE id = ?', [row.name, row.start_date, row.analyst, row.id], function (err, results) {
                 if (!err) {
                     res.end(JSON.stringify('OK'));
-                }
+                } else
+                    console.log(err);
             });
         } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             connection.query('INSERT INTO missions (name, start_date, analyst) values (?, ?, ?)', [row.name, row.start_date, row.analyst], function (err, results) {
                 if (!err) {
                     res.end(JSON.stringify('OK'));
-                }
+                } else
+                    console.log(err);
             });
         } else if (req.body.action !== undefined && req.body.action === 'delete' && req.body.id !== undefined) {
             var id = JSON.parse(req.body.id);
             connection.query('DELETE FROM missions WHERE id = ?', [id], function (err, results) {
                 if (!err) {
                     res.end(JSON.stringify('OK'));
-                }
+                } else
+                    console.log(err);
             });
         }
     }
@@ -250,11 +325,12 @@ app.get('/cop', function (req, res) {
 
 app.post('/login', function (req, res) {
     if (req.body.username !== undefined && req.body.username !== '' && req.body.password !== undefined && req.body.password !== '') {
-        connection.query('SELECT password FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
+        connection.query('SELECT id, password FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
             if (!err) {
                 if (rows.length === 1) {
                     bcrypt.compare(req.body.password, rows[0].password, function(err, bres) {
                         if (bres) {
+                            req.session.user_id = rows[0].id;
                             req.session.loggedin = true;
                             res.redirect('/login');
                         } else

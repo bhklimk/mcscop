@@ -1,8 +1,10 @@
-var canvas = new fabric.Canvas('canvas');
-canvas.selection = false;
+var canvas = new fabric.Canvas('canvas', {
+    selection: false,
+    preserveObjectStacking: true
+});
 
 var creatingLink = false;
-var firstNode = null;
+var firstObject = null;
 var startX = 0;
 var startY = 0;
 var scale = 1;
@@ -16,12 +18,14 @@ var images = {};
 var tableData = [];
 var eventTimes = [];
 var objectsLoaded = null;
+var updatingObject = false;
 var socket = io();
 var fps = 10;
 var now;
 var then = Date.now();
 var interval = 1000/fps;
 var delta;
+var firstNode = null;
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -30,7 +34,7 @@ var CustomDirectLoadStrategy = function(grid) {
 CustomDirectLoadStrategy.prototype = new jsGrid.loadStrategies.DirectLoadingStrategy();
 CustomDirectLoadStrategy.prototype.finishInsert = function(loadedData) {
     var grid = this._grid;
-    if (loadedData['id'] != 0) {
+    if (loadedData.id != 0) {
         grid.option("data").push(loadedData);
         grid.refresh();
     }
@@ -114,33 +118,8 @@ socket.on('disconnect', function() {
 
 socket.on('all_links', function (msg) {
     links = []
-    console.log('link');
     for (var link in msg) {
-        var fromObject = null;
-        var toObject = null;
-        for (var i = 0; i < canvas.getObjects().length; i++) {
-            if (canvas.item(i).uuid == msg[link].node_a) {
-                fromObject = canvas.item(i);
-            }
-            if (canvas.item(i).uuid == msg[link].node_b) {
-                toObject = canvas.item(i);
-            }
-        }
-        if (fromObject !== null && toObject !== null) {
-            var from = fromObject.getCenterPoint();
-            var to = toObject.getCenterPoint();
-            var line = new fabric.Line([from.x, from.y, to.x, to.y], {
-                uuid: msg[link].uuid,
-                type: 'link',
-                from: msg[link].node_a,
-                to: msg[link].node_b,
-                fill: 'black',
-                stroke: 'black',
-                strokeWidth: 2,
-                selectable: false
-            });
-            canvas.add(line).sendToBack(line);
-        }
+        addLinkToCanvas(msg[link]);
     }
 });
 
@@ -163,40 +142,23 @@ socket.on('all_events', function (msg) {
     $('#events').jsGrid('sort', 1, 'asc');
 });
 
-socket.on('update_object', function(msg) {
+socket.on('change_object', function(msg) {
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
-            if (o.type === 'node' || o.type === 'shape') {
-                canvas.item(i).name.text = o.name;
-                canvas.item(i).name.address = o.address;
-                if (canvas.item(i).image !== o.image) {
-                    canvas.item(i).image = o.image;
-                    canvas.item(i).color = o.color;
-                    var path = 'images/icons/';
-                    if (o.type === 'shape')
-                        path = 'images/shapes/';
-                    fabric.loadSVGFromURL(path + o.image, function(objects, options) {
-                        colorSet = o.color;
-                        var shape = fabric.util.groupSVGElements(objects, options);
-                        shape.set({
-                            originX: 'center',
-                            originY: 'bottom'
-                        });
-                        if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
-                            shape.setFill(colorSet);
-                        } else if (shape.paths) {
-                            for (var j = 0; j < shape.paths.length; j++) {
-                                if (shape.paths[j].fill !== 'rgba(255,255,255,1)')
-                                    shape.paths[j].setFill(colorSet);
-                            }
-                        }
-                        canvas.item(i).shape.set('paths', shape.paths);
-                        canvas.renderAll();
-                    });
-                }
-                if (canvas.item(i).color !== o.color) {
-
+            var to = canvas.item(i);
+            if (o.type === 'object') {
+                if (to.image !== o.image || to.fillColor !== o.fillColor) {
+                    var children = to.children.length;
+                    for (var k = 0; k < children; k++)
+                        canvas.remove(to.children[k]);
+                    canvas.remove(to);
+                    addObjectToCanvas(o);
+                } else {
+                    for (var k = 0; k < canvas.item(i).children.length;k ++) {
+                        if (canvas.item(i).children[k].objType === 'name')
+                            canvas.item(i).children[k].text = o.name;
+                    }
                 }
                 canvas.renderAll();
             }
@@ -207,16 +169,21 @@ socket.on('update_object', function(msg) {
     $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect)
 });
 
-socket.on('update_object_pos', function (msg) {
+socket.on('move_object', function (msg) {
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
             canvas.item(i).animate({left: o.x, top: o.y}, {
                 duration: 100,
                 onChange: function() {
+                    for (var j = 0; j < canvas.item(i).children.length; j++) {
+                        canvas.item(i).children[j].setTop(canvas.item(i).getTop() + (canvas.item(i).getHeight()/2));
+                        canvas.item(i).children[j].setLeft(canvas.item(i).getLeft());
+                    }
                     canvas.renderAll();;
                 }
             });
+            break;
         }
     }
 });
@@ -224,7 +191,7 @@ socket.on('update_object_pos', function (msg) {
 socket.on('update_event', function(msg) {
     var evt = JSON.parse(msg);
     for (var i = 0; i < tableData.length; i++) {
-        if (tableData[i].uuid === evt.uuid) {
+        if (tableData[i].id === evt.id) {
             tableData[i] = evt;
         }
     }
@@ -234,8 +201,20 @@ socket.on('update_event', function(msg) {
 
 socket.on('insert_event', function(msg) {
     var evt = JSON.parse(msg);
-    tableData[evt['id']] = evt;
+    tableData.push(evt);
     $('#events').jsGrid('insertItem', evt);
+});
+
+socket.on('delete_event', function(msg) {
+    var evt = JSON.parse(msg);
+    for (var i = 0; i < tableData.length; i++) {
+        if (tableData[i].id === evt.id) {
+            tableData.splice(i, 1);
+            break;
+        }
+    }
+    $('#events').jsGrid('loadData');
+    $('#events').jsGrid('sort', 1, 'asc');
 });
 
 socket.on('insert_object', function(msg) {
@@ -243,13 +222,26 @@ socket.on('insert_object', function(msg) {
     addObjectToCanvas(o);
 });
 
+socket.on('insert_link', function(msg) {
+    var o = JSON.parse(msg);
+    addLinkToCanvas(o);
+});
+
 socket.on('delete_object', function(msg) {
     var uuid = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == uuid) {
-            canvas.remove(canvas.item(i)); 
+            var object = canvas.item(i);
+            if (canvas.item(i).children !== undefined) {
+                for (var k = 0; k < object.children.length; k++) {
+                    canvas.remove(object.children[k]);
+                }
+            }
+            canvas.remove(object);
+            break;
         }
     }
+    canvas.renderAll();
 });
 
 function startPan(event) {
@@ -276,15 +268,30 @@ function startPan(event) {
 
 $('#diagram').mousedown(startPan);
 
+canvas.on('object:moving', function(options) {
+    for (var j = 0; j < options.target.children.length; j++) {
+        options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
+        options.target.children[j].setLeft(options.target.getLeft());
+    }
+});
+
+canvas.on('object:scaling', function(options) {
+    for (var j = 0; j < options.target.children.length; j++) {
+        options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
+        options.target.children[j].setLeft(options.target.getLeft());
+    }
+});
+
 canvas.on('object:modified', function(options) {
     if (options.target) {
         if (canvas.getActiveObject() !== null) {
-            socket.emit('update_object_pos', JSON.stringify({uuid: options.target.uuid, type: options.target.type, x: options.target.left, y: options.target.top}));
+            var z = canvas.getObjects().indexOf(options.target);
+            socket.emit('move_object', JSON.stringify({uuid: options.target.uuid, type: options.target.objType, x: options.target.left, y: options.target.top, z: z, scale_x: options.target.scaleX, scale_y: options.target.scaleY}));
         } else if (canvas.getActiveGroup() !== null) {
             for (var i = 0; i < options.target.getObjects().length; i++) {
                 var left = options.target.getCenterPoint().x + options.target.item(i).left;
                 var top = options.target.getCenterPoint().y + options.target.item(i).top;
-                socket.emit('update_object_pos', JSON.stringify({uuid: options.target.item(i).uuid, type: options.target.item(i).type, x: left, y: top}));
+                socket.emit('move_object', JSON.stringify({uuid: options.target.item(i).uuid, type: options.target.item(i).objType, x: left, y: top, z: z, scale_x: options.target.scaleX, scale_y: options.target.scaleY}));
             }
         }
     }
@@ -293,19 +300,36 @@ canvas.on('object:modified', function(options) {
 canvas.on('object:selected', function(options) {
     if (options.target) {
         if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null) {
-            if (options.target.type !== undefined && (options.target.type === 'node' || options.target.type === 'shape')) {
-                $('#propID').val(options.target.uuid);
-                $('#propName').val(options.target.name.text);
-                $('#propAddress').val(options.target.address.text);
-                $('#propColor').val(options.target.color);
-                if (options.target.type === 'node') {
-                    $('#propIcon').val(options.target.image);
-                    $('#propIcon').data('picker').sync_picker_with_select();
-                } else if (options.target.type === 'shape') {
-                    $('#propShape').val(options.target.image);
-                    $('#propShape').data('picker').sync_picker_with_select();
+            if (options.target.objType !== undefined) {
+                if (creatingLink) {
+                    if (options.target.objType === 'object') {
+                        if (firstNode === null) {
+                            firstNode = options.target;
+                            showMessage('Click on a second node to complete the link.');
+                        } else {
+                            showMessage('Link created.', 5);
+                            socket.emit('insert_link', JSON.stringify({mission: mission, node_a: firstNode.uuid, node_b: options.target.uuid}));
+                            firstNode = null;
+                            creatingLink = false;
+                        }
+                    }
+                } else {
+                    $('#propID').val(options.target.uuid);
+                    $('#propFillColor').val(options.target.fillColor);
+                    $('#propStrokeColor').val(options.target.strokeColor);
+                    $('#propName').val('');
+                    if (options.target.children !== undefined) {
+                        for (var i = 0; i < options.target.children.length; i++) {
+                            if (options.target.children[i].objType === 'name')
+                                $('#propName').val(options.target.children[i].text);
+                        }
+                    }
+                    if (options.target.objType === 'object') {
+                        $('#propIcon').val(options.target.image);
+                        $('#propIcon').data('picker').sync_picker_with_select();
+                    }
+                    openProperties(options.target.objType);
                 }
-                openProperties(options.target.type);
             }
         } else {
             closeProperties();
@@ -314,12 +338,13 @@ canvas.on('object:selected', function(options) {
 });
 
 canvas.on('before:selection:cleared', function(options) {
-    closeProperties();
+    if (!updatingObject)
+        closeProperties();
 });
 
 canvas.on('before:render', function(e) {
     for (var i = 0; i < canvas.getObjects().length; i++) {
-        if (canvas.item(i).type !== undefined && canvas.item(i).type === 'link') {
+        if (canvas.item(i).objType !== undefined && canvas.item(i).objType === 'link') {
             var from = canvas.item(i).from;
             var to = canvas.item(i).to;
             var fromObj = null;
@@ -333,14 +358,8 @@ canvas.on('before:render', function(e) {
                 }
             }
             if (fromObj !== null && toObj !== null) {
-                if (fromObj.group !== undefined && fromObj.group !== null)
-                    canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x + fromObj.group.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y + fromObj.group.getCenterPoint().y });
-                else
-                    canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y + toObj.item(2).getCenterPoint().y });
-                if (toObj.group !== undefined && toObj.group !== null)
-                        canvas.item(i).set({ 'x2': toObj.getCenterPoint().x + toObj.group.getCenterPoint().x, 'y2': toObj.getCenterPoint().y + toObj.group.getCenterPoint().y });
-                else
-                    canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y + toObj.item(2).getCenterPoint().y });
+                canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
+                canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
             }
         }
     }
@@ -358,61 +377,93 @@ function addZero(i) {
     return i;
 }
 
+function addLinkToCanvas(o) {
+    var fromObject = null;
+    var toObject = null;
+    for (var i = 0; i < canvas.getObjects().length; i++) {
+        if (canvas.item(i).uuid == o.node_a) {
+            fromObject = canvas.item(i);
+        }
+        if (canvas.item(i).uuid == o.node_b) {
+            toObject = canvas.item(i);
+        }
+    }
+    if (fromObject !== null && toObject !== null) {
+        var from = fromObject.getCenterPoint();
+        var to = toObject.getCenterPoint();
+        var line = new fabric.Line([from.x, from.y, to.x, to.y], {
+            uuid: o.uuid,
+            objType: 'link',
+            from: o.node_a,
+            to: o.node_b,
+            fill: 'black',
+            stroke: 'black',
+            strokeWidth: 2,
+            hasControls: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockScalingX: true,
+            lockScalingY: true,
+            lockRotation: true
+        });
+        canvas.add(line).moveTo(line, 1);
+    }
+}
+
 function addObjectToCanvas(o) {
     if (o.image !== undefined && o.image !== null) {
         var path = 'images/icons/';
         if (o.type === 'shape')
             path = 'images/shapes/';
         fabric.loadSVGFromURL(path + o.image, function(objects, options) {
-            colorSet = o.color;
+            var name;
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
-                originX: 'center',
-                originY: 'bottom',
-            });
-            if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
-                shape.setFill(colorSet);
-            } else if (shape.paths) {
-                for (var i = 0; i < shape.paths.length; i++) {
-                //    if (shape.paths[i].fill !== 'rgba(255,255,255,1)')
-                //        shape.paths[i].setFill(colorSet);
-                }
-            }
-            var name = new fabric.Text(o.name, {
-                textAlign: 'center',
-                fontSize: 14,
-                originX: 'center',
-                originY: 'top',
-                scaleX : 1,
-                scaleY: 1
-            });
-            var address = new fabric.Text(o.address, {
-                top: 16,
-                textAlign: 'center',
-                fontSize: 14,
-                originX: 'center',
-                originY: 'top'
-            });
-            canvas.add(new fabric.Group([name, address, shape], {
                 uuid: o.uuid,
-                type: o.type,
-                color: o.color,
-                shape: shape,
+                objType: o.type,
+                fillColor: o.fill_color,
+                strokeColor: o.stroke_color,
                 image: o.image,
                 name: name,
-                address: address,
+                originX: 'center',
+                originY: 'center',
                 left: o.x,
                 top: o.y,
-                lockRotation: true
-            }));
-            canvas.renderAll();
+                scaleX: o.scale_x,
+                scaleY: o.scale_y
+            });
+            if (shape.paths) {
+                for (var i = 0; i < shape.paths.length; i++) {
+                    if (shape.paths[i].fill !== 'rgba(254,254,254,1)' && shape.paths[i].fill !== '') {
+                        shape.paths[i].setFill(o.fill_color);
+                    }
+                    if (shape.paths[i].stroke !== 'rgba(254,254,254,1)') {
+                        shape.paths[i].setStroke(o.stroke_color);
+                    }
+                }
+            }
+            name = new fabric.Text(o.name, {
+                parent_uuid: o.uuid,
+                objType: 'name',
+                selectable: false,
+                originX: 'center',
+                textAlign: 'center',
+                fontSize: 14,
+                left: o.x,
+                top: o.y + (shape.getHeight()/2)
+            });
+            shape.children = [name];
             objectsLoaded.pop();
+            canvas.add(shape);
+            canvas.add(name);
+            shape.moveTo(0);
+            name.moveTo(0);
+            canvas.renderAll();
         });
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
     }
 }
-
 
 function getParameterByName(name, url) {
     if (!url) url = window.location.href;
@@ -441,33 +492,27 @@ function resize() {
     }
 }
 
-function newLink() {
-    unselectObjects();
+function insertLink() {
     closeProperties();
     creatingLink = true;
     showMessage('Click on a node to start a new link.');
-    $('#newNode').hide();
-    $('#newLink').hide();
     $('#cancelLink').show();
 }
 
 function cancelLink() {
-    unselectObjects();
-    firstNode = null;
+    firstObject = null;
     creatingLink = false;
     showMessage('Link cancelled.',5);
-    $('#newNode').show();
-    $('#newLink').show();
     $('#cancelLink').hide();
 }
 
 function insertObject() {
-    socket.emit('insert_object', JSON.stringify({mission: mission, name:$('#propName').val(), address:$('#propAddress').val(), color:$('#propColor').val(), image:$('#propIcon').val(), type:$('#propType').val()})); 
+    socket.emit('insert_object', JSON.stringify({mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#propIcon').val(), type:$('#propType').val()})); 
 }
 
 function deleteObject() {
     if (canvas.getActiveObject().uuid) {
-        socket.emit('delete_object', JSON.stringify({uuid:canvas.getActiveObject().uuid, type:canvas.getActiveObject().type}));
+        socket.emit('delete_object', JSON.stringify({uuid:canvas.getActiveObject().uuid, type:canvas.getActiveObject().objType}));
     }
 }
 
@@ -475,49 +520,69 @@ function showMessage(msg, timeout) {
     $('#message').html(msg);
 }
 
-function unselectObjects() {
-    selectedObjects = {};
-}
-
 function updatePropName(name) {
-    if (canvas.getActiveObject() !== null && (canvas.getActiveObject().type === 'node' || canvas.getActiveObject().type === 'shape')) {
-        canvas.getActiveObject().name.text = name;
+    if (canvas.getActiveObject() !== null && canvas.getActiveObject().objType === 'object') {
+        for (var i = 0; i < canvas.getActiveObject().children.length; i++) {
+            if (canvas.getActiveObject().children[i].objType === 'name')
+                canvas.getActiveObject().children[i].text = name;
+        }
         canvas.renderAll();
-        updateObject(canvas.getActiveObject());
+        changeObject(canvas.getActiveObject());
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect)
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect)
     }
 }
 
-function updatePropColor(color) {
-    if (canvas.getActiveObject() !== null && (canvas.getActiveObject().type === 'node' || canvas.getActiveObject().type === 'shape')) {
-        canvas.getActiveObject().color = color;
-        updateObject(canvas.getActiveObject());
-    }
-}
-
-function updatePropAddress(address) {
-    if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
-        canvas.getActiveObject().address.text = address;
+function updatePropFillColor(color) {
+    if (canvas.getActiveObject() !== null && canvas.getActiveObject().objType === 'object') {
+        canvas.getActiveObject().fillColor = color;
+        if (canvas.getActiveObject().paths) {
+            for (var j = 0; j < canvas.getActiveObject().paths.length; j++) {
+                if (canvas.getActiveObject().paths[j].fill !== 'rgba(254,254,254,1)')
+                    canvas.getActiveObject().paths[j].setFill(canvas.getActiveObject().fillColor);
+            }
+        }
         canvas.renderAll();
-        updateObject(canvas.getActiveObject());
+        changeObject(canvas.getActiveObject());
     }
 }
 
-function updateObject(o) {
+function updatePropStrokeColor(color) {
+    if (canvas.getActiveObject() !== null && canvas.getActiveObject().objType === 'object') {
+        canvas.getActiveObject().strokeColor = color;
+        if (canvas.getActiveObject().paths) {
+            for (var j = 0; j < canvas.getActiveObject().paths.length; j++) {
+                if (canvas.getActiveObject().paths[j].stroke !== 'rgba(254,254,254,1)')
+                    canvas.getActiveObject().paths[j].setStroke(canvas.getActiveObject().strokeColor);
+            }
+        }
+        canvas.renderAll();
+        changeObject(canvas.getActiveObject());
+    }
+}
+
+function changeObject(o) {
     var tempObj = {};
     tempObj.uuid = o.uuid;
     tempObj.x = o.left;
     tempObj.y = o.top;
-    tempObj.type = o.type;
-    tempObj.color = o.color;
+    tempObj.scale_x = o.scaleX;
+    tempObj.scale_y = o.scaleY;
+    tempObj.type = o.objType;
+    tempObj.fill_color = o.fillColor;
+    tempObj.stroke_color = o.strokeColor;
     tempObj.image = o.image;
-    tempObj.name = o.name.text;
-    tempObj.address = o.address.text;
-    socket.emit('update_object', JSON.stringify(tempObj));
+    tempObj.name = '';
+    for (var i=0; i < o.children.length; i++) {
+        if (o.children[i].objType === 'name') {
+            tempObj.name = o.children[i].text;
+        }
+    }
+    socket.emit('change_object', JSON.stringify(tempObj));
 }
 
 function toggleProperties(type) {
+    canvas.deactivateAll().renderAll();
     if ($('#properties').is(':hidden')) {
         openProperties(type);
     } else {
@@ -525,7 +590,6 @@ function toggleProperties(type) {
             closeProperties();
         else
             openProperties(type);
-
     }
 }
 
@@ -533,93 +597,61 @@ function openProperties(type) {
     // edit
     $('#propType').val(type);
     if (canvas.getActiveObject() !== undefined && canvas.getActiveObject() !== null) {
-        if (type === 'node') {
-            $('#propTitle').html('Edit Node');
+        if (type === 'object') {
+            $('#propTitle').html('Edit Object');
             $('#propNameGroup').show();
-            $('#propAddressGroup').show();
             $('#propShapeGroup').hide();
             $('#propIconGroup').show();
-            $('#deleteNodeButton').hide();
-            $('#insertObjectButton').show();
+            $('#deleteObjectButton').show();
+            $('#insertObjectButton').hide();
             $('#insertLinkButton').hide();
-            $('#nodesButton').css('background-color','lightgray');
-            $('#shapesButton').css('background-color','darkgray');
-            $('#linksButton').css('background-color','darkgray');
-        } else if (type === 'shape') {
-            $('#propTitle').html('Edit Shape');
-            $('#propNameGroup').show();
-            $('#propAddressGroup').hide();
-            $('#propShapeGroup').show();
-            $('#propIconGroup').hide();
-            $('#deleteNodeButton').hide();
-            $('#insertObjectButton').show();
-            $('#insertLinkButton').hide();
-            $('#shapesButton').css('background-color','lightgray');
-            $('#nodesButton').css('background-color','darkgray');
+            $('#objectsButton').css('background-color','lightgray');
             $('#linksButton').css('background-color','darkgray');
         } else if (type === 'link') {
             $('#propTitle').html('Edit Link');
+            $('#propNameGroup').hide();
+            $('#propIconGroup').hide();
             $('#deleteLinkButton').show();
+            $('#insertObjectButton').hide();
+            $('#insertLinkButton').hide();
             $('#linksButton').css('background-color','lightgray');
-            $('#shapesButton').css('background-color','darkgray');
-            $('#nodesButton').css('background-color','darkgray');
+            $('#objectsButton').css('background-color','darkgray');
         } else {
             closeProperties();
             return;
         }
     // new
     } else if (canvas.getActiveObject() === undefined || canvas.getActiveObject() === null) {
-        if (type === 'node') {
-            $('#propTitle').html('New Node');
+        if (type === 'object') {
+            $('#propTitle').html('New Object');
             $('#propID').val('');
-            $('#propType').val('node');
+            $('#propType').val('object');
             $('#propNameGroup').show();
             $('#propName').val('');
-            $('#propAddressGroup').show();
-            $('#propAddress').val('');
-            $('#propColor').val('#000000');
+            $('#propFillColor').val('#000000');
+            $('#propStrokeColor').val('#ffffff');
             $('#propShapeGroup').hide();
             $('#propIconGroup').show();
             $('#propIcon').val('00-000-hub.png');
             $('#propIcon').data('picker').sync_picker_with_select();
-            $('#deleteNodeButton').hide();
+            $('#deleteObjectButton').hide();
             $('#insertObjectButton').show();
             $('#insertLinkButton').hide();
-            $('#nodesButton').css('background-color','lightgray');
-            $('#shapesButton').css('background-color','darkgray');
-            $('#linksButton').css('background-color','darkgray');
-        } else if (type === 'shape') {
-            $('#propTitle').html('New Shape');
-            $('#propID').val('');
-            $('#propType').val('shape');
-            $('#propNameGroup').show();
-            $('#propName').val('');
-            $('#propAddressGroup').hide();
-            $('#propColor').val('#000000');
-            $('#propShapeGroup').show();
-            $('#propIconGroup').hide();
-            $('#insertObjectButton').show();
-            $('#insertLinkButton').hide();
-            $('#shapesButton').css('background-color','lightgray');
-            $('#nodesButton').css('background-color','darkgray');
+            $('#objectsButton').css('background-color','lightgray');
             $('#linksButton').css('background-color','darkgray');
         } else if (type === 'link') {
             $('#propTitle').html('New Link');
             $('#propID').val('');
             $('#propType').val('link');
             $('#propNameGroup').hide();
-            $('#propAddressGroup').hide();
-            $('#propColor').val('#000000');
+            $('#propFillColor').val('#000000');
             $('#propShapeGroup').hide();
             $('#propIconGroup').hide();
-            $('#insertShapeButton').show();
-            $('#deleteLinkButton').hide();
-            $('#deleteButton').hide();
+            $('#deleteObjectButton').hide();
             $('#insertObjectButton').hide();
             $('#insertLinkButton').show();
             $('#linksButton').css('background-color','lightgray');
-            $('#nodesButton').css('background-color','darkgray');
-            $('#shapesButton').css('background-color','darkgray');
+            $('#objectsButton').css('background-color','darkgray');
         }
     } else {
         return;
@@ -634,8 +666,7 @@ function openProperties(type) {
 function closeProperties() {
     $('#properties').hide();
     $('#diagram').width('100%');
-    $('#shapesButton').css('background-color','darkgray');
-    $('#nodesButton').css('background-color','darkgray');
+    $('#objectsButton').css('background-color','darkgray');
     $('#linksButton').css('background-color','darkgray');
     resize();
 }
@@ -646,62 +677,38 @@ $(document).ready(function() {
     $('#propIcon').imagepicker({
         hide_select : true,
         selected : function() {
-            if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'node') {
+            if (canvas.getActiveObject() !== null && canvas.getActiveObject().objType === 'object') {
                 canvas.getActiveObject().image = $(this).val();
                 fabric.loadSVGFromURL('images/icons/' + $(this).val(), function(objects, options) {
-                    canvas.getActiveObject().removeWithUpdate(canvas.getActiveObject().item(2));
-                    colorSet = canvas.getActiveObject().color;
                     var shape = fabric.util.groupSVGElements(objects, options);
                     shape.set({
+                        uuid: canvas.getActiveObject().uuid,
                         originX: 'center',
-                        originY: 'bottom',
+                        originY: 'center',
+                        fillColor: canvas.getActiveObject().fillColor,
+                        strokeColor: canvas.getActiveObject().strokeColor,
+                        objType: canvas.getActiveObject().objType,
+                        image: canvas.getActiveObject().image,
                         left: canvas.getActiveObject().getCenterPoint().x,
-                        top: canvas.getActiveObject().top
+                        top: canvas.getActiveObject().getCenterPoint().y,
+                        children: canvas.getActiveObject().children
                     });
-                    if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
-                        shape.setFill(colorSet);
-                    } else if (shape.paths) {
+                    if (shape.paths) {
                         for (var j = 0; j < shape.paths.length; j++) {
-                      //      if (shape.paths[j].fill !== 'rgba(255,255,255,1)')
-                        //        shape.paths[j].setFill(colorSet);
+                            if (shape.paths[j].fill !== 'rgba(254,254,254,1)')
+                                shape.paths[j].setFill(shape.fillColor);
+                            if (shape.paths[j].stroke !== 'rgba(254,254,254,1)')
+                                shape.paths[j].setStroke(shape.strokeColor);
                         }
                     }
-                    canvas.getActiveObject().addWithUpdate(shape);
+                    canvas.remove(canvas.getActiveObject());
+                    canvas.add(shape);
+                    updatingObject = true;
+                    canvas.setActiveObject(canvas.item(canvas.getObjects().length-1));
+                    updatingObject = false;
                     canvas.renderAll();
                 });
-                updateObject(canvas.getActiveObject());
-                setTimeout(function () { canvas.renderAll(); }, 100);
-            }
-        }
-    });
-    $('#propShape').imagepicker({
-        hide_select : true,
-        selected : function() {
-            if (canvas.getActiveObject() !== null && canvas.getActiveObject().type === 'shape') {
-                canvas.getActiveObject().image = $(this).val();
-                fabric.loadSVGFromURL('images/shapes/' + $(this).val(), function(objects, options) {
-                    canvas.getActiveObject().removeWithUpdate(canvas.getActiveObject().item(2));
-                    colorSet = canvas.getActiveObject().color;
-                    var shape = fabric.util.groupSVGElements(objects, options);
-                    shape.set({
-                        originX: 'center',
-                        originY: 'bottom',
-                        left: canvas.getActiveObject().getCenterPoint().x,
-                        top: canvas.getActiveObject().top
-                    });
-                    if (shape.isSameColor && shape.isSameColor() || !shape.paths) {
-                        shape.setFill(colorSet);
-                    } else if (shape.paths) {
-                        for (var j = 0; j < shape.paths.length; j++) {
-                            if (shape.paths[j].fill !== 'rgba(255,255,255,1)')
-                                shape.paths[j].setFill(colorSet);
-                        }
-                    }
-                    canvas.getActiveObject().addWithUpdate(shape);
-                    canvas.renderAll();
-                });
-                updateObject(canvas.getActiveObject());
-                setTimeout(function () { canvas.renderAll(); }, 100);
+                changeObject(canvas.getActiveObject());
             }
         }
     });
@@ -739,18 +746,18 @@ $(document).ready(function() {
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
             { name: 'event_time', title: 'Event Time', type : 'date', width: 65},
-            { name: 'source_object', title: 'Source Node', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
+            { name: 'source_object', title: 'Source Object', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
             { name: 'source_port', title: 'SPort', type: 'number', width: 25},
-            { name: 'dest_object', title: 'Destination Node', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
+            { name: 'dest_object', title: 'Destination Object', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
             { name: 'dest_port', title: 'DPort', type: 'number', width: 25},
             { name: 'short_desc', title: 'Event Text', type: 'text'},
-            { name: 'analyst', title: 'Analyst', type: 'text', width: 50},
+            { name: 'analyst', title: 'Analyst', type: 'text', width: 50, readOnly: true},
             { 
                 type: "control",
                 editButton: false,
@@ -774,7 +781,7 @@ $(document).ready(function() {
                 return Object.keys(tableData).map(function (key) { return tableData[key]; });
             },
             insertItem: function(item) {
-                if (item.id === '0') {
+                if (item.id === 0) {
                     item.mission = mission;
                     socket.emit('insert_event', JSON.stringify(item));
                 }
@@ -783,6 +790,9 @@ $(document).ready(function() {
             updateItem: function(item) {
                 socket.emit('update_event', JSON.stringify(item));
                 tableData[item['id']] = item;
+            },
+            deleteItem: function(item) {
+                socket.emit('delete_event', JSON.stringify(item));
             }
         },
         loadStrategy: function() {
