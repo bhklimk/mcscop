@@ -19,6 +19,16 @@ canvas {
     background-color: darkgray;
 }
 
+.object-details {
+    width: 100%;
+    height: 600px;
+    font-family: courier;
+}
+
+.modal-dialog {
+    width: 800px;
+}
+
 .jumbotron {
     padding: 20px !important;
     overflow: hidden;
@@ -89,6 +99,20 @@ input[type="password"] {
     left: 6px;
     bottom: 30px;
     display: none;
+}
+
+.zoomIn {
+    position: relative;
+    left: 6px;
+    bottom: 30px;
+    margin-right: 3px;
+}
+
+.zoomOut {
+    position: relative;
+    left: 6px;
+    bottom: 30px;
+    margin-right: 3px;
 }
 
 .message {

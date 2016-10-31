@@ -19,15 +19,15 @@ html
           div.modal-content
             div.modal-header
               button.close(type='button' data-dismiss='modal') &times;
-              h4.modal-title Attention
-            div.modal-body
-              p Connection lost.
-            div.modal-footer
-              button.btn.btn-default(type='button' data-dismiss='modal') Close
-      div.jumbotron.resizable.diagram_jumbotron(style='height:500px')
+              h4.modal-title#modal-title
+            div.modal-body#modal-body
+            div.modal-footer#modal-footer
+      div.jumbotron.resizable.diagram_jumbotron#diagram_jumbotron(style='height:500px')
         div.canvas#diagram
           span.message#message
           canvas#canvas
+          button.zoomIn#zoomIn(onclick='zoomIn()') +
+          button.zoomOut#zoomOut(onclick='zoomOut()') -
           button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
         div.sidebar
           div.properties-nav#properties-nav
@@ -52,21 +52,25 @@ html
                   each icon in icons
                     option(data-img-src="/images/icons/" + icon, data-img-class="first", value=icon) icon
               div.form-group#makeObject
-                  button.propButton#insertObjectButton(type='button' onclick="insertObject()") Insert
-                  button.propButton#insertLinkButton(type='button' onclick="insertLink()") Insert
-                  button.propButton#deleteObjectButton(type='button' onclick="deleteObject()") Delete
-                  button(type='button' onclick="closeProperties()") Cancel
+                  button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()") Insert
+                  button.propButton.btn.btn-primary#insertLinkButton(type='button' onclick="insertLink()") Insert
+                  button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
+                  button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()") Delete
+                  button.btn.btn-default(type='button' onclick="closeProperties()") Cancel
       div.jumbotron
         div#slider
       div.jumbotron
         div#events
-script(src='/js/jquery.js')
-script(src='/js/jsgrid.min.js')
-script(src='/socket.io/socket.io.js')
-script(src='/js/bootstrap.min.js')
-script(src='/js/image-picker.min.js')
-script(src='/js/fabric.min.js')
-script(src='/js/jquery-ui.min.js')
-script(src='/js/jquery-ui-timepicker-addon.min.js')
-script(src='/js/nouislider.min.js')
-script(src='/js/cop.js')
+  script(src='/js/jquery.js')
+  script(src='/js/jsgrid.min.js')
+  script(src='/socket.io/socket.io.js')
+  script(src='/js/bootstrap.min.js')
+  script(src='/js/image-picker.min.js')
+  script(src='/js/fabric.min.js')
+  script(src='/js/jquery-ui.min.js')
+  script(src='/js/jquery-ui-timepicker-addon.min.js')
+  script(src='/js/nouislider.min.js')
+  script(src='/js/ResizeSensor.js')
+  script(src='/js/ElementQueries.js')
+  script(src='/js/cop.js')
+  c2#c2

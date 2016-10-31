@@ -1,7 +1,11 @@
 var canvas = new fabric.Canvas('canvas', {
     selection: false,
-    preserveObjectStacking: true,
-    renderOnAddRemove: false
+    preserveObjectStacking: true
+});
+
+var c2 = new fabric.Canvas('c2', {
+    selection: false,
+    preserveObjectStacking: true
 });
 
 var creatingLink = false;
@@ -28,8 +32,6 @@ var interval = 1000/fps;
 var delta;
 var firstNode = null;
 var zoom = 1.0;
-var panning = false;
-var shapeCache = {};
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -91,64 +93,19 @@ socket.on('all_objects', function (msg) {
     objectsLoaded = [];
     for (var o in msg) {
         objectSelect.push({uuid:msg[o].uuid, name:msg[o].name});
-        if (shapeCache[msg[o].image] === undefined) {
-            var shape = msg[o].image;
-            shapeCache[msg[o].image] = null;
-            objectsLoaded.push(false);
-            getShape(msg[o].image);
-        }
+        objectsLoaded.push(false);
+        addObjectToCanvas(msg[o]);
     }
-    checkIfShapesCached(msg);
+    checkIfObjectsLoaded();    
 });
-
-function getShape(shape) {
-    var path = 'images/icons/';
-    $.get(path + shape, function(data) {
-        shapeCache[shape] = data;
-        objectsLoaded.pop();
-    }, 'text');
-}
-
-
-function checkIfShapesCached(msg) {
-    if (objectsLoaded.length == 0) {
-        console.log('cached');
-        for (var o in msg) {
-            objectsLoaded.push(false);
-            addObjectToCanvas(msg[o]);
-        }
-        checkIfObjectsLoaded();
-    } else {
-        setTimeout(function() {
-            checkIfShapesCached(msg);
-        }, 50);
-    }
-}
 
 function checkIfObjectsLoaded() {
     if (objectsLoaded.length == 0) {
         socket.emit('get_links', mission);
         console.log('loaded');
-        canvas.renderOnAddRemove = true;
     } else {
-        setTimeout(checkIfObjectsLoaded, 50);
+        setTimeout(checkIfObjectsLoaded, 100);
     }
-}
-
-function editDetails(uuid) {
-    if (canvas.getActiveObject() !== null && canvas.getActiveObject().uuid !== undefined) {
-        socket.emit('get_details', canvas.getActiveObject().uuid, function(data) {
-            $('#modal-title').text('Edit Object');
-            $('#modal-body').html('<input type="hidden" id="object_details_uuid" name="object_details_uuid" value="' + canvas.getActiveObject().uuid + '"><textarea id="object_details" class="object-details">' + data + '</textarea>');
-            $('#modal-footer').html('<button type="button" class="button btn btn-primary" onclick="updateDetails()">Save</button><button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
-            $('#modal').modal('show');
-        });
-    }
-}
-
-function updateDetails() {
-    socket.emit('update_details', JSON.stringify({'uuid': $('#object_details_uuid').val(), 'details': $('#object_details').val()}));
-    $('#modal').modal('hide');
 }
 
 socket.on('connect', function() {
@@ -159,16 +116,10 @@ socket.on('connect', function() {
 });
 
 socket.on('disco', function (msg) {
-    $('#modal-title').text('Attention!');
-    $('#modal-body').html('<p>Connection lost!</p>');
-    $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
     $('#modal').modal('show');
 });
 
 socket.on('disconnect', function() {
-    $('#modal-title').text('Attention!');
-    $('#modal-body').html('<p>Connection lost!</p>');
-    $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
     $('#modal').modal('show')
 });
 
@@ -230,7 +181,6 @@ socket.on('change_object', function(msg) {
 });
 
 socket.on('move_object', function (msg) {
-    console.log('move');
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
@@ -324,12 +274,9 @@ function startPan(event) {
     function continuePan(event) {
         var x = event.screenX,
             y = event.screenY;
-        if (x - x0 != 0 && y - y0 != 0)
-        {
-           canvas.relativePan({ x: x - x0, y: y - y0 });
-           x0 = x;
-           y0 = y;
-        }
+        canvas.relativePan({ x: x - x0, y: y - y0 });
+        x0 = x;
+        y0 = y;
     }
     function stopPan(event) {
         $(window).off('mousemove', continuePan);
@@ -509,23 +456,27 @@ function addLinkToCanvas(o) {
 
 function addObjectToCanvas(o) {
     if (o.image !== undefined && o.image !== null) {
-        fabric.loadSVGFromString(shapeCache[o.image], function(objects, options) {
+        var path = 'images/icons/';
+        if (o.type === 'shape')
+            path = 'images/shapes/';
+        console.log('start');
+        fabric.loadSVGFromURL(path + o.image, function(objects, options) {
             var name;
             var shape = fabric.util.groupSVGElements(objects, options);
+//            var shape2 = fabric.util.groupSVGElements(objects, options);
             shape.set({
+                uuid: o.uuid,
+                objType: o.type,
                 fillColor: o.fill_color,
                 strokeColor: o.stroke_color,
+                image: o.image,
+                name: name,
+                originX: 'center',
+                originY: 'center',
+                left: o.x,
+                top: o.y,
                 scaleX: o.scale_x,
-                scaleY: o.scale_y,
-                  uuid: o.uuid,
-                    objType: o.type,
-                    image: o.image,
-                    name: name,
-                    originX: 'center',
-                    originY: 'center',
-                    left: o.x,
-                    top: o.y,
-
+                scaleY: o.scale_y
             });
             if (shape.paths) {
                 for (var i = 0; i < shape.paths.length; i++) {
@@ -547,63 +498,26 @@ function addObjectToCanvas(o) {
                 left: o.x,
                 top: o.y + (shape.getHeight()/2)
             });
-/*            c2.clear();
-            c2.setWidth(Math.ceil(shape.width+1));
-            c2.setHeight(Math.ceil(shape.height+1));
-            c2.add(shape);
-            var img = new Image();
-            img.onload = function() {
-                var img2 = new fabric.Image(img);
-                img2.set({
-                    uuid: o.uuid,
-                    objType: o.type,
-                    image: o.image,
-                    name: name,
-                    originX: 'center',
-                    originY: 'center',
-                    left: o.x,
-                    top: o.y,
-                });
-                console.log(img2);*/
-                shape.children = [name];
-                objectsLoaded.pop();
-                canvas.add(shape);
-                canvas.add(name);
-                shape.moveTo(0);
-                name.moveTo(0);
-         //       canvas.renderAll();
-/*            }
-            img.src = c2.toDataURL({
-                format: 'png',
-                multiplier: 0.5,
-            });*/
+//            c2.clear();
+//            c2.setWidth(Math.ceil(shape2.width+1));
+//            c2.setHeight(Math.ceil(shape2.height+1));
+//            c2.add(shape2);
+//            console.log(c2.toDataURL('image/png'));
+            shape.children = [name];
+            objectsLoaded.pop();
+            canvas.add(shape);
+            canvas.add(name);
+            shape.moveTo(0);
+            name.moveTo(0);
+            canvas.renderAll();
         });
+        console.log('finish');
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
     } else {
         objectsLoaded.pop();
     }
 }
-
-  function cache() {
-    canvas.forEachObject(function(obj, i) {
-      var scaleX = obj.scaleX;
-      var scaleY = obj.scaleY;
-
-      console.log(obj);
-      canvas.remove(obj);
-
-      obj.scale(1).cloneAsImage(function(clone) {
-        clone.set({
-          left: obj.left,
-          top: obj.top,
-          scaleX: scaleX,
-          scaleY: scaleY
-        });
-        canvas.insertAt(clone, i);
-      });
-    });
-  }
 
 function getParameterByName(name, url) {
     if (!url) url = window.location.href;
@@ -765,7 +679,6 @@ function openProperties(type) {
             $('#propShapeGroup').hide();
             $('#propIconGroup').show();
             $('#propFillColor').show();
-            $('#editDetailsButton').show();
             $('#deleteObjectButton').show();
             $('#insertObjectButton').hide();
             $('#insertLinkButton').hide();
@@ -776,7 +689,6 @@ function openProperties(type) {
             $('#propNameGroup').show();
             $('#propIconGroup').hide();
             $('#propFillColor').hide();
-            $('#deleteObjectButton').show();
             $('#deleteLinkButton').show();
             $('#insertObjectButton').hide();
             $('#insertLinkButton').hide();
@@ -801,7 +713,6 @@ function openProperties(type) {
             $('#propIconGroup').show();
             $('#propIcon').val('00-000-hub.svg');
             $('#propIcon').data('picker').sync_picker_with_select();
-            $('#editDetailsButton').hide();
             $('#deleteObjectButton').hide();
             $('#insertObjectButton').show();
             $('#insertLinkButton').hide();
@@ -818,7 +729,6 @@ function openProperties(type) {
             $('#propFillColor').val('#000000');
             $('#propShapeGroup').hide();
             $('#propIconGroup').hide();
-            $('#editDetailsButton').hide();
             $('#deleteObjectButton').hide();
             $('#insertObjectButton').hide();
             $('#insertLinkButton').show();

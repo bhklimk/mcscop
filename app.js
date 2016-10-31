@@ -48,6 +48,10 @@ io.on('connection', function(socket) {
         socket.disconnect();
     }
     else {
+        socket.on('join', function (msg) {
+            socket.room = msg;
+            socket.join(msg);
+        });
         socket.on('get_objects', function(msg) {
             var mission = JSON.parse(msg);
             connection.query('SELECT * FROM objects WHERE mission = ?', [mission], function(err, rows, fields) {
@@ -78,15 +82,38 @@ io.on('connection', function(socket) {
                     console.log(err);
             });
         });
+        socket.on('get_details', function(msg, fn) {
+            var uuid = msg;
+            connection.query('SELECT details FROM objects WHERE uuid = ?', [uuid], function(err, rows, fields) {
+                if (!err) {
+                    fn(rows[0].details);
+                } else
+                    console.log(err);
+            });
+        });
         socket.on('change_object', function(msg) {
             var o = JSON.parse(msg);
-            if (o.type !== undefined && o.type === 'object') {
-                connection.query('UPDATE objects SET type = ?, name = ?, fill_color = ?, stroke_color = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.type, o.name, o.fill_color, o.stroke_color, o.image, o.x, o.y, o.uuid], function (err, results) {
-                    if (!err) {
-                        socket.broadcast.emit('change_object', msg);
-                    } else
-                        console.log(err);
-                });
+            if (o.type !== undefined) {
+                if (o.type === 'object') {
+                    connection.query('UPDATE objects SET type = ?, name = ?, fill_color = ?, stroke_color = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.type, o.name, o.fill_color, o.stroke_color, o.image, o.x, o.y, o.uuid], function (err, results) {
+                        if (!err) {
+                            socket.broadcast.in(socket.room).emit('change_object', msg);
+                        } else
+                            console.log(err);
+                    });
+                } else if (o.type === 'link') {
+                    connection.query('UPDATE links SET name = ?, stroke_color = ? WHERE uuid = ?', [o.name, o.stroke_color, o.uuid], function (err, results) {
+                        if (!err) {
+                            socket.broadcast.in(socket.room).emit('change_object', msg);
+                        } else
+                            console.log(err);
+                    });
+                }
+            }
+        });
+        socket.on('change_link', function(msg) {
+            var o = JSON.parse(msg);
+            if (o.type !== undefined && o.type === 'link') {
             }
         });
         socket.on('move_object', function(msg) {
@@ -94,7 +121,7 @@ io.on('connection', function(socket) {
             if (o.type !== undefined && o.type === 'object') {
                 connection.query('UPDATE objects SET x = ?, y = ?, z = ?, scale_x = ?, scale_y = ? WHERE uuid = ?', [o.x, o.y, o.z, o.scale_x, o.scale_y, o.uuid], function (err, results) {
                     if (!err) {
-                        socket.broadcast.emit('move_object', msg);
+                        socket.broadcast.in(socket.room).emit('move_object', msg);
                     } else
                         console.log(err);
                 });
@@ -105,19 +132,26 @@ io.on('connection', function(socket) {
             evt.analyst = socket.request.session.user_id;
             connection.query('UPDATE events SET event_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst, evt.id], function (err, results) {
                 if (!err) {
-                    socket.broadcast.emit('update_event', msg);
+                    socket.broadcast.in(socket.room).emit('update_event', msg);
+                } else
+                    console.log(err);
+            });
+        });
+        socket.on('update_details', function(msg) {
+            var o = JSON.parse(msg);
+            connection.query('UPDATE objects SET details = ? WHERE uuid = ?', [o.details, o.uuid], function (err, results) {
+                if (!err) {
                 } else
                     console.log(err);
             });
         });
         socket.on('insert_event', function(msg) {
             var evt = JSON.parse(msg);
-            console.log(evt);
             evt.analyst = socket.request.session.user_id;
             connection.query('INSERT INTO events (mission, event_time, source_object, source_port, dest_object, dest_port, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst], function (err, results) {
                 if (!err) {
                     evt.id = results.insertId;
-                    io.emit('insert_event', JSON.stringify(evt));
+                    io.in(socket.room).emit('insert_event', JSON.stringify(evt));
                 } else
                     console.log(err);
             });
@@ -126,19 +160,19 @@ io.on('connection', function(socket) {
             var evt = JSON.parse(msg);
             connection.query('DELETE FROM events WHERE id = ?', [evt.id], function (err, results) {
                 if (!err) {
-                    socket.broadcast.emit('delete_event', JSON.stringify(evt));
+                    socket.broadcast.in(socket.room).emit('delete_event', JSON.stringify(evt));
                 } else
                     console.log(err);
             });
         });
         socket.on('insert_link', function(msg) {
             var link = JSON.parse(msg);
-            connection.query('INSERT INTO links (mission, node_a, node_b) values (?, ?, ?)', [link.mission, link.node_a, link.node_b], function (err, results) {
+            connection.query('INSERT INTO links (mission, name, stroke_color, node_a, node_b) values (?, ?, ?, ?, ?)', [link.mission, link.name, link.stroke_color, link.node_a, link.node_b], function (err, results) {
                 if (!err) {
                     link.id = results.insertId;
                     connection.query('SELECT * FROM links WHERE id = ?', [link.id], function(err, rows, fields) {
                         if (!err) {
-                                io.emit('insert_link', JSON.stringify(rows[0]));
+                                io.in(socket.room).emit('insert_link', JSON.stringify(rows[0]));
                             } else
                                 console.log(err);
                         });
@@ -154,7 +188,7 @@ io.on('connection', function(socket) {
                         o.id = results.insertId;
                         connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
                             if (!err) {
-                                io.emit('insert_object',JSON.stringify(rows[0]));
+                                io.in(socket.room).emit('insert_object',JSON.stringify(rows[0]));
                             } else
                                 console.log(err);
                         });
@@ -168,7 +202,7 @@ io.on('connection', function(socket) {
                         connection.query('SELECT * FROM links WHERE id = ?', [o.id], function(err, rows, fields) {
                             if (!err) {
                                 rows[0].type = 'link';
-                                io.emit('insert_object', JSON.stringify(rows[0]));
+                                io.in(socket.room).emit('insert_object', JSON.stringify(rows[0]));
                             } else
                                 console.log(err);
                         });
@@ -183,12 +217,12 @@ io.on('connection', function(socket) {
                 if (o.type === 'object') {
                     connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
                         if (!err) {
-                            io.emit('delete_object', JSON.stringify(o.uuid));
+                            io.in(socket.room).emit('delete_object', JSON.stringify(o.uuid));
                             connection.query('SELECT uuid FROM links WHERE node_a = ? OR node_b = ?', [o.uuid, o.uuid], function(err, rows, results) {
                                 if (!err) {
                                     for (var r = 0; r < rows.length; r++) {
                                         console.log(rows[r]);
-                                        io.emit('delete_object', JSON.stringify(rows[r].uuid));
+                                        io.in(socket.room).emit('delete_object', JSON.stringify(rows[r].uuid));
                                         connection.query('DELETE FROM links WHERE uuid = ?', [rows[r].uuid], function(err, results) {
                                         });
                                     }
@@ -201,7 +235,7 @@ io.on('connection', function(socket) {
                 } else if (o.type === 'link') {
                     connection.query('DELETE FROM links WHERE uuid = ?', [o.uuid], function (err, results) {
                         if (!err) {
-                            io.emit('delete_object', JSON.stringify(o.uuid));
+                            io.in(socket.room).emit('delete_object', JSON.stringify(o.uuid));
                         } else
                             console.log(err);
                     });
@@ -305,6 +339,25 @@ app.post('/api', function (req, res) {
     }
 });
 
+app.get('/copview', function (req, res) {
+    if (req.session.loggedin) {
+        if (req.query.mission !== undefined && req.query.mission > 0) {
+            fs.readdir('./public/images/icons', function(err, items) {
+                fs.readdir('./public/images/shapes', function(err, shapes) {
+                    res.render('copview', { title: 'CS-COP', icons: items, shapes: shapes});
+
+                });
+            });
+
+        } else {
+            res.redirect('/');
+        }
+    } else {
+       res.redirect('/login');
+    }
+});
+
+
 app.get('/cop', function (req, res) {
     if (req.session.loggedin) {
         if (req.query.mission !== undefined && req.query.mission > 0) {
@@ -353,6 +406,6 @@ app.get('/login', function (req, res) {
         res.render('login', { title: 'CS-COP Login' });
 });
 
-http.listen(3000, function () {
+http.listen(3001, function () {
     console.log('Server listening on port 3000!');
 });
