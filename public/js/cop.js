@@ -29,6 +29,7 @@ var delta;
 var firstNode = null;
 var zoom = 1.0;
 var panning = false;
+var dirty = false;
 var shapeCache = {};
 
 var CustomDirectLoadStrategy = function(grid) {
@@ -230,7 +231,7 @@ socket.on('change_object', function(msg) {
 });
 
 socket.on('move_object', function (msg) {
-    console.log('move');
+    dirty = true;
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
@@ -324,11 +325,11 @@ function startPan(event) {
     function continuePan(event) {
         var x = event.screenX,
             y = event.screenY;
-        if (x - x0 != 0 && y - y0 != 0)
+        if (x - x0 != 0 || y - y0 != 0)
         {
-           canvas.relativePan({ x: x - x0, y: y - y0 });
-           x0 = x;
-           y0 = y;
+            canvas.relativePan({ x: x - x0, y: y - y0 });
+            x0 = x;
+            y0 = y;
         }
     }
     function stopPan(event) {
@@ -342,7 +343,31 @@ function startPan(event) {
 
 $('#diagram').mousedown(startPan);
 
+document.onkeydown = checkKey;
+function checkKey(e) {
+    e = e || window.event;
+    if (e.keyCode == '38') {
+        // up arrow
+    }
+    else if (e.keyCode == '40') {
+        // down arrow
+    }
+    else if (e.keyCode == '37') {
+       canvas.relativePan({ x: -5, y: 0 });
+    }
+    else if (e.keyCode == '39') {
+       // right arrow
+    }
+}
+
+function panit() {
+    canvas.relativePan({ x: -1, y: 0 });
+    setTimeout(function() { panit(); }, 10);
+}
+    
+
 canvas.on('object:moving', function(options) {
+    dirty = true;
     for (var j = 0; j < options.target.children.length; j++) {
         options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
         options.target.children[j].setLeft(options.target.getLeft());
@@ -350,6 +375,7 @@ canvas.on('object:moving', function(options) {
 });
 
 canvas.on('object:scaling', function(options) {
+    dirty = true;
     for (var j = 0; j < options.target.children.length; j++) {
         options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
         options.target.children[j].setLeft(options.target.getLeft());
@@ -418,32 +444,35 @@ canvas.on('before:selection:cleared', function(options) {
 });
 
 canvas.on('before:render', function(e) {
-    for (var i = 0; i < canvas.getObjects().length; i++) {
-        if (canvas.item(i).objType !== undefined && canvas.item(i).objType === 'link') {
-            var from = canvas.item(i).from;
-            var to = canvas.item(i).to;
-            var fromObj = null;
-            var toObj = null;
-            for (var j = 0; j < canvas.getObjects().length; j++) {
-                if (canvas.item(j).uuid === from) {
-                    fromObj = canvas.item(j);
+    if (dirty) {
+        for (var i = 0; i < canvas.getObjects().length; i++) {
+            if (canvas.item(i).objType !== undefined && canvas.item(i).objType === 'link') {
+                var from = canvas.item(i).from;
+                var to = canvas.item(i).to;
+                var fromObj = null;
+                var toObj = null;
+                for (var j = 0; j < canvas.getObjects().length; j++) {
+                    if (canvas.item(j).uuid === from) {
+                        fromObj = canvas.item(j);
+                    }
+                    if (canvas.item(j).uuid === to) {
+                        toObj = canvas.item(j);
+                    }
                 }
-                if (canvas.item(j).uuid === to) {
-                    toObj = canvas.item(j);
-                }
-            }
-            if (fromObj !== null && toObj !== null) {
-                canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
-                canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
-                for (var j = 0; j < canvas.item(i).children.length; j++) {
-                    canvas.item(i).children[j].set({'left': canvas.item(i).getCenterPoint().x, 'top': canvas.item(i).getCenterPoint().y });
-                    var angle = (Math.atan2((canvas.item(i).y1 - canvas.item(i).y2), (canvas.item(i).x1 - canvas.item(i).x2))) * (180/Math.PI);
-                    if(Math.abs(angle) > 90)
-                        angle += 180;
-                    canvas.item(i).children[j].set({'angle': angle});
+                if (fromObj !== null && toObj !== null) {
+                    canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
+                    canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
+                    for (var j = 0; j < canvas.item(i).children.length; j++) {
+                        canvas.item(i).children[j].set({'left': canvas.item(i).getCenterPoint().x, 'top': canvas.item(i).getCenterPoint().y });
+                        var angle = (Math.atan2((canvas.item(i).y1 - canvas.item(i).y2), (canvas.item(i).x1 - canvas.item(i).x2))) * (180/Math.PI);
+                        if(Math.abs(angle) > 90)
+                            angle += 180;
+                        canvas.item(i).children[j].set({'angle': angle});
+                    }
                 }
             }
         }
+        dirty = false;
     }
 });
 
@@ -489,6 +518,9 @@ function addLinkToCanvas(o) {
             lockScalingY: true,
             lockRotation: true,
         });
+        var angle = (Math.atan2((line.y1 - line.y2), (line.x1 - line.x2))) * (180/Math.PI);
+            if(Math.abs(angle) > 90)
+                angle += 180;
         var name = new fabric.Text(o.name, {
             parent_uuid: o.uuid,
             objType: 'name',
@@ -496,7 +528,7 @@ function addLinkToCanvas(o) {
             originX: 'center',
             textAlign: 'center',
             fill: o.stroke_color,
-            angle: (Math.atan2((line.y1 - line.y2), (line.x1 - line.x2)) * (180/Math.PI)),
+            angle: angle,
             fontSize: 10,
             left: line.getCenterPoint().x,
             top: line.getCenterPoint().y
@@ -511,6 +543,7 @@ function addObjectToCanvas(o) {
     if (o.image !== undefined && o.image !== null) {
         fabric.loadSVGFromString(shapeCache[o.image], function(objects, options) {
             var name;
+            console.log(options);
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
                 fillColor: o.fill_color,
@@ -537,46 +570,47 @@ function addObjectToCanvas(o) {
                     }
                 }
             }
+            shape.setCoords();
             name = new fabric.Text(o.name, {
                 parent_uuid: o.uuid,
-                objType: 'name',
-                selectable: false,
                 originX: 'center',
                 textAlign: 'center',
-                fontSize: 14,
-                left: o.x,
-                top: o.y + (shape.getHeight()/2)
+                fontSize: 14
             });
-/*            c2.clear();
-            c2.setWidth(Math.ceil(shape.width+1));
-            c2.setHeight(Math.ceil(shape.height+1));
-            c2.add(shape);
-            var img = new Image();
-            img.onload = function() {
-                var img2 = new fabric.Image(img);
-                img2.set({
-                    uuid: o.uuid,
-                    objType: o.type,
-                    image: o.image,
-                    name: name,
+            name.scale(1).cloneAsImage(function(name_clone) {
+                name_clone.set({
+                    parent_uuid: o.uuid,
+                    objType: 'name',
+                    selectable: false,
                     originX: 'center',
-                    originY: 'center',
                     left: o.x,
-                    top: o.y,
+                    top: o.y + (shape.getHeight()/2)
                 });
-                console.log(img2);*/
-                shape.children = [name];
-                objectsLoaded.pop();
-                canvas.add(shape);
-                canvas.add(name);
-                shape.moveTo(0);
-                name.moveTo(0);
-         //       canvas.renderAll();
-/*            }
-            img.src = c2.toDataURL({
-                format: 'png',
-                multiplier: 0.5,
-            });*/
+                shape.cloneAsImage(function(clone) {
+                    clone.set({
+                        uuid: o.uuid,
+                        objType: o.type,
+                        image: o.image,
+                        name: name,
+                        scaleX: o.scale_x,
+                        scaleY: o.scale_y,
+                        originX: 'center',
+                        originY: 'center',
+                        left: o.x,
+                        top: o.y
+                    });
+                    clone.resizeFilters.push(new fabric.Image.filters.Resize({
+                        resizeType: 'lanczos', // typo fixed
+                    }));
+                    clone.applyFilters();
+                    clone.children = [name_clone];
+                    objectsLoaded.pop();
+                    canvas.add(clone);
+                    canvas.add(name_clone);
+                    clone.moveTo(0);
+                    name_clone.moveTo(0);
+                }, { enableRetinaScaling: true });
+            }, { enableRetinaScaling: true });
         });
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
@@ -584,26 +618,6 @@ function addObjectToCanvas(o) {
         objectsLoaded.pop();
     }
 }
-
-  function cache() {
-    canvas.forEachObject(function(obj, i) {
-      var scaleX = obj.scaleX;
-      var scaleY = obj.scaleY;
-
-      console.log(obj);
-      canvas.remove(obj);
-
-      obj.scale(1).cloneAsImage(function(clone) {
-        clone.set({
-          left: obj.left,
-          top: obj.top,
-          scaleX: scaleX,
-          scaleY: scaleY
-        });
-        canvas.insertAt(clone, i);
-      });
-    });
-  }
 
 function getParameterByName(name, url) {
     if (!url) url = window.location.href;

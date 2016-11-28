@@ -406,6 +406,6 @@ app.get('/login', function (req, res) {
         res.render('login', { title: 'CS-COP Login' });
 });
 
-http.listen(3001, function () {
+http.listen(3000, function () {
     console.log('Server listening on port 3000!');
 });
