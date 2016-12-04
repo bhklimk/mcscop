@@ -1,8 +1,11 @@
 var canvas = new fabric.Canvas('canvas', {
     selection: false,
     preserveObjectStacking: true,
-    renderOnAddRemove: false
+    renderOnAddRemove: false,
+    enableRetinaScaling: false
 });
+
+canvas.setZoom(1.0);
 
 var creatingLink = false;
 var firstObject = null;
@@ -30,7 +33,8 @@ var firstNode = null;
 var zoom = 1.0;
 var panning = false;
 var dirty = false;
-var shapeCache = {};
+var SVGCache = {};
+var objectCache = {};
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -92,9 +96,9 @@ socket.on('all_objects', function (msg) {
     objectsLoaded = [];
     for (var o in msg) {
         objectSelect.push({uuid:msg[o].uuid, name:msg[o].name});
-        if (shapeCache[msg[o].image] === undefined) {
+        if (SVGCache[msg[o].image] === undefined) {
             var shape = msg[o].image;
-            shapeCache[msg[o].image] = null;
+            SVGCache[msg[o].image] = null;
             objectsLoaded.push(false);
             getShape(msg[o].image);
         }
@@ -105,7 +109,7 @@ socket.on('all_objects', function (msg) {
 function getShape(shape) {
     var path = 'images/icons/';
     $.get(path + shape, function(data) {
-        shapeCache[shape] = data;
+        SVGCache[shape] = data;
         objectsLoaded.pop();
     }, 'text');
 }
@@ -200,9 +204,15 @@ socket.on('all_events', function (msg) {
 });
 
 socket.on('change_object', function(msg) {
+    var selected = false;
+    var selectedUUID = null;
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
+            if (canvas.getActiveObject().uuid === o.uuid) {
+                selected = true;
+                selectedUUID = canvas.getActiveObject().uuid;
+            }
             var to = canvas.item(i);
             if (o.type === 'object') {
                 if (to.image !== o.image || to.fillColor !== o.fillColor) {
@@ -210,7 +220,7 @@ socket.on('change_object', function(msg) {
                     for (var k = 0; k < children; k++)
                         canvas.remove(to.children[k]);
                     canvas.remove(to);
-                    addObjectToCanvas(o);
+                    addObjectToCanvas(o, true);
                 } else {
                     for (var k = 0; k < canvas.item(i).children.length;k ++) {
                         if (canvas.item(i).children[k].objType === 'name')
@@ -235,9 +245,12 @@ socket.on('move_object', function (msg) {
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
+            canvas.item(i).scaleX = o.scale_x / canvas.item(i).scaleXOffset;
+            canvas.item(i).scaleY = o.scale_y / canvas.item(i).scaleYOffset;
             canvas.item(i).animate({left: o.x, top: o.y}, {
                 duration: 100,
                 onChange: function() {
+                    dirty = true;
                     for (var j = 0; j < canvas.item(i).children.length; j++) {
                         canvas.item(i).children[j].setTop(canvas.item(i).getTop() + (canvas.item(i).getHeight()/2));
                         canvas.item(i).children[j].setLeft(canvas.item(i).getLeft());
@@ -281,12 +294,12 @@ socket.on('delete_event', function(msg) {
 
 socket.on('insert_object', function(msg) {
     var o = JSON.parse(msg);
-    addObjectToCanvas(o);
+    addObjectToCanvas(o, false);
 });
 
 socket.on('insert_link', function(msg) {
     var o = JSON.parse(msg);
-    addLinkToCanvas(o);
+    addLinkToCanvas(o, false);
 });
 
 socket.on('delete_object', function(msg) {
@@ -364,7 +377,14 @@ function panit() {
     canvas.relativePan({ x: -1, y: 0 });
     setTimeout(function() { panit(); }, 10);
 }
-    
+
+function updateLinks() {
+    dirty = true;
+    for (var j = 0; j < options.target.children.length; j++) {
+        options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
+        options.target.children[j].setLeft(options.target.getLeft());
+    }
+}
 
 canvas.on('object:moving', function(options) {
     dirty = true;
@@ -386,12 +406,12 @@ canvas.on('object:modified', function(options) {
     if (options.target) {
         if (canvas.getActiveObject() !== null) {
             var z = canvas.getObjects().indexOf(options.target);
-            socket.emit('move_object', JSON.stringify({uuid: options.target.uuid, type: options.target.objType, x: options.target.left, y: options.target.top, z: z, scale_x: options.target.scaleX, scale_y: options.target.scaleY}));
+            socket.emit('move_object', JSON.stringify({uuid: options.target.uuid, type: options.target.objType, x: options.target.left, y: options.target.top, z: z, scale_x: options.target.scaleX * options.target.scaleXOffset, scale_y: options.target.scaleY * options.target.scaleYOffset}));
         } else if (canvas.getActiveGroup() !== null) {
             for (var i = 0; i < options.target.getObjects().length; i++) {
                 var left = options.target.getCenterPoint().x + options.target.item(i).left;
                 var top = options.target.getCenterPoint().y + options.target.item(i).top;
-                socket.emit('move_object', JSON.stringify({uuid: options.target.item(i).uuid, type: options.target.item(i).objType, x: left, y: top, z: z, scale_x: options.target.scaleX, scale_y: options.target.scaleY}));
+                socket.emit('move_object', JSON.stringify({uuid: options.target.item(i).uuid, type: options.target.item(i).objType, x: left, y: top, z: z, scale_x: options.target.scaleX * options.target.scaleXOffset, scale_y: options.target.scaleY * options.target.scaleYOffset}));
             }
         }
     }
@@ -489,6 +509,7 @@ function addZero(i) {
 }
 
 function addLinkToCanvas(o) {
+    console.log(o);
     var fromObject = null;
     var toObject = null;
     for (var i = 0; i < canvas.getObjects().length; i++) {
@@ -539,26 +560,16 @@ function addLinkToCanvas(o) {
     }
 }
 
-function addObjectToCanvas(o) {
+function addObjectToCanvas(o, select) {
     if (o.image !== undefined && o.image !== null) {
-        fabric.loadSVGFromString(shapeCache[o.image], function(objects, options) {
+        fabric.loadSVGFromString(SVGCache[o.image], function(objects, options) {
             var name;
-            console.log(options);
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
-                fillColor: o.fill_color,
-                strokeColor: o.stroke_color,
-                scaleX: o.scale_x,
-                scaleY: o.scale_y,
-                  uuid: o.uuid,
-                    objType: o.type,
-                    image: o.image,
-                    name: name,
-                    originX: 'center',
-                    originY: 'center',
-                    left: o.x,
-                    top: o.y,
-
+                scaleX: o.scale_x * 2.0,
+                scaleY: o.scale_y * 2.0,
+                originX: 'center',
+                originY: 'center'
             });
             if (shape.paths) {
                 for (var i = 0; i < shape.paths.length; i++) {
@@ -572,45 +583,56 @@ function addObjectToCanvas(o) {
             }
             shape.setCoords();
             name = new fabric.Text(o.name, {
-                parent_uuid: o.uuid,
-                originX: 'center',
-                textAlign: 'center',
-                fontSize: 14
+                fontSize: 16
             });
-            name.scale(1).cloneAsImage(function(name_clone) {
+            name.cloneAsImage(function(name_clone) {
                 name_clone.set({
                     parent_uuid: o.uuid,
+                    text: o.name,
                     objType: 'name',
                     selectable: false,
+                    scaleX: 0.5,
+                    scaleY: 0.5,
                     originX: 'center',
+                    originY: 'top',
                     left: o.x,
-                    top: o.y + (shape.getHeight()/2)
                 });
+                name_clone.resizeFilters.push(new fabric.Image.filters.Resize({
+                    resizeType: 'lanczos', lanczosLobes: 3,
+                }));
                 shape.cloneAsImage(function(clone) {
                     clone.set({
                         uuid: o.uuid,
                         objType: o.type,
                         image: o.image,
-                        name: name,
-                        scaleX: o.scale_x,
-                        scaleY: o.scale_y,
+                        name: name_clone,
+                        fillColor: o.fill_color,
+                        strokeColor: o.stroke_color,
+                        scaleX: 0.5,
+                        scaleY: 0.5,
+                        scaleXOffset: o.scale_x / 0.5,
+                        scaleYOffset: o.scale_y / 0.5,
                         originX: 'center',
                         originY: 'center',
                         left: o.x,
                         top: o.y
                     });
+                    name_clone.set({
+                        top: o.y + (clone.getHeight()/2)
+                    });
                     clone.resizeFilters.push(new fabric.Image.filters.Resize({
-                        resizeType: 'lanczos', // typo fixed
+                        resizeType: 'sliceHack'
                     }));
-                    clone.applyFilters();
                     clone.children = [name_clone];
                     objectsLoaded.pop();
                     canvas.add(clone);
                     canvas.add(name_clone);
-                    clone.moveTo(0);
-                    name_clone.moveTo(0);
-                }, { enableRetinaScaling: true });
-            }, { enableRetinaScaling: true });
+                    name_clone.bringToFront();
+                    clone.bringToFront();
+                    if (select)
+                        canvas.setActiveObject(canvas.item(0));
+                }, {multiplier: 1, enableRetinaScaling: false});
+            }, {multiplier: 2, enableRetinaScaling: false});
         });
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
@@ -727,12 +749,11 @@ function updatePropStrokeColor(color) {
 function changeObject(o) {
     var tempObj = {};
     if (o.objType === 'object') {
-
         tempObj.uuid = o.uuid;
         tempObj.x = o.left;
         tempObj.y = o.top;
-        tempObj.scale_x = o.scaleX;
-        tempObj.scale_y = o.scaleY;
+        tempObj.scale_x = o.scaleX * o.scaleXOffset;
+        tempObj.scale_y = o.scaleY * o.scaleYOffset;
         tempObj.type = o.objType;
         tempObj.fill_color = o.fillColor;
         tempObj.stroke_color = o.strokeColor;
@@ -918,10 +939,17 @@ $(document).ready(function() {
         for (var i = 0; i < tableData.length; i++) {
             if (tableData[i].event_time === filter) {
                 $('#events').jsGrid("rowByItem",tableData[i]).addClass('highlight');
+                for (var j = 0; j < canvas.getObjects().length; j++) {
+                    if (canvas.item(j).uuid === tableData[i].source_object || canvas.item(j).uuid === tableData[i].dest_object) {
+                        canvas.item(j).setShadow("0px 0px 50px rgba(255, 0, 0, 1.0)");
+                    } else
+                        canvas.item(j).setShadow(null);
+                }
             } else {
                 $('#events').jsGrid("rowByItem",tableData[i]).removeClass('highlight');
             }
         }
+        canvas.renderAll();
     });
 
     var dj = document.getElementById('diagram_jumbotron');
@@ -949,6 +977,7 @@ $(document).ready(function() {
                 }
             },
             { name: 'dest_port', title: 'DPort', type: 'number', width: 25},
+            { name: 'event_type', title: 'Event Type', type: 'text'},
             { name: 'short_desc', title: 'Event Text', type: 'text'},
             { name: 'analyst', title: 'Analyst', type: 'text', width: 50, readOnly: true},
             { 
@@ -977,6 +1006,15 @@ $(document).ready(function() {
                 if (item.id === 0) {
                     item.mission = mission;
                     socket.emit('insert_event', JSON.stringify(item));
+                    eventTimes.push(item.event_time);
+                    dateSlider.noUiSlider.updateOptions({
+                        range: {
+                            min: 0,
+                            max: eventTimes.length-1
+                        },
+                        start: 0,
+                        handles: 1,
+                    });
                 }
                 return item;
             },

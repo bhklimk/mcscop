@@ -97,7 +97,7 @@ io.on('connection', function(socket) {
                 if (o.type === 'object') {
                     connection.query('UPDATE objects SET type = ?, name = ?, fill_color = ?, stroke_color = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.type, o.name, o.fill_color, o.stroke_color, o.image, o.x, o.y, o.uuid], function (err, results) {
                         if (!err) {
-                            socket.broadcast.in(socket.room).emit('change_object', msg);
+                            io.in(socket.room).emit('change_object', msg);
                         } else
                             console.log(err);
                     });
