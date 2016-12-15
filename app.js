@@ -247,7 +247,7 @@ io.on('connection', function(socket) {
 
 app.get('/', function (req, res) {
     if (req.session.loggedin) {
-            res.render('index', { title: 'CS-COP'});
+            res.render('index', { title: 'MCSCOP'});
     } else {
        res.redirect('/login');
     }
@@ -344,7 +344,7 @@ app.get('/copview', function (req, res) {
         if (req.query.mission !== undefined && req.query.mission > 0) {
             fs.readdir('./public/images/icons', function(err, items) {
                 fs.readdir('./public/images/shapes', function(err, shapes) {
-                    res.render('copview', { title: 'CS-COP', icons: items, shapes: shapes});
+                    res.render('copview', { title: 'MCSCOP', icons: items, shapes: shapes});
 
                 });
             });
@@ -363,7 +363,7 @@ app.get('/cop', function (req, res) {
         if (req.query.mission !== undefined && req.query.mission > 0) {
             fs.readdir('./public/images/icons', function(err, items) {
                 fs.readdir('./public/images/shapes', function(err, shapes) {
-                    res.render('cop', { title: 'CS-COP', icons: items, shapes: shapes});
+                    res.render('cop', { title: 'MCSCOP', icons: items, shapes: shapes});
 
                 });
             });
@@ -387,15 +387,15 @@ app.post('/login', function (req, res) {
                             req.session.loggedin = true;
                             res.redirect('/login');
                         } else
-                            res.render('login', { title: 'CS-COP', message: 'Invalid username or password.' });
+                            res.render('login', { title: 'MCSCOP', message: 'Invalid username or password.' });
                     });
                 } else {
-                    res.render('login', { title: 'CS-COP', message: 'Invalid username or password.' });
+                    res.render('login', { title: 'MCSCOP', message: 'Invalid username or password.' });
                 }
             }
         });
     } else {
-        res.render('login', { title: 'CS-COP', message: 'Invalid username or password.' });
+        res.render('login', { title: 'MCSCOP', message: 'Invalid username or password.' });
     }
 });
 
@@ -403,7 +403,7 @@ app.get('/login', function (req, res) {
     if (req.session.loggedin)
         res.redirect('/');
     else
-        res.render('login', { title: 'CS-COP Login' });
+        res.render('login', { title: 'MCSCOP Login' });
 });
 
 http.listen(3000, function () {

@@ -509,7 +509,6 @@ function addZero(i) {
 }
 
 function addLinkToCanvas(o) {
-    console.log(o);
     var fromObject = null;
     var toObject = null;
     for (var i = 0; i < canvas.getObjects().length; i++) {
@@ -562,7 +561,15 @@ function addLinkToCanvas(o) {
 
 function addObjectToCanvas(o, select) {
     if (o.image !== undefined && o.image !== null) {
-        fabric.loadSVGFromString(SVGCache[o.image], function(objects, options) {
+        var image, func;
+        if (SVGCache[o.image] === undefined) {
+            image = ('images/icons/' + o.image);
+            func = fabric.loadSVGFromURL;
+        } else {
+            image = SVGCache[o.image];
+            func = fabric.loadSVGFromString;
+        }
+        func(image, function(objects, options) {
             var name;
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
