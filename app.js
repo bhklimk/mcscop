@@ -14,9 +14,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 var mysql = require('mysql');
 var mysqlOptions = {
     host : 'localhost',
-    user : 'copper',
-    password : 'copper_password123',
-    database: 'copper',
+    user : 'mcscop',
+    password : 'mcscoppassword123',
+    database: 'mcscop',
 };
 var sessionStore = new MySQLStore(mysqlOptions);
 var sessionMiddleware = session({
