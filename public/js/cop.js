@@ -245,8 +245,8 @@ socket.on('move_object', function (msg) {
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
-            canvas.item(i).scaleX = o.scale_x / canvas.item(i).scaleXOffset;
-            canvas.item(i).scaleY = o.scale_y / canvas.item(i).scaleYOffset;
+            canvas.item(i).scaleX = o.scale_x;
+            canvas.item(i).scaleY = o.scale_y;
             canvas.item(i).animate({left: o.x, top: o.y}, {
                 duration: 100,
                 onChange: function() {
@@ -406,12 +406,12 @@ canvas.on('object:modified', function(options) {
     if (options.target) {
         if (canvas.getActiveObject() !== null) {
             var z = canvas.getObjects().indexOf(options.target);
-            socket.emit('move_object', JSON.stringify({uuid: options.target.uuid, type: options.target.objType, x: options.target.left, y: options.target.top, z: z, scale_x: options.target.scaleX * options.target.scaleXOffset, scale_y: options.target.scaleY * options.target.scaleYOffset}));
+            socket.emit('move_object', JSON.stringify({uuid: options.target.uuid, type: options.target.objType, x: options.target.left, y: options.target.top, z: z, scale_x: options.target.scaleX, scale_y: options.target.scaleY}));
         } else if (canvas.getActiveGroup() !== null) {
             for (var i = 0; i < options.target.getObjects().length; i++) {
                 var left = options.target.getCenterPoint().x + options.target.item(i).left;
                 var top = options.target.getCenterPoint().y + options.target.item(i).top;
-                socket.emit('move_object', JSON.stringify({uuid: options.target.item(i).uuid, type: options.target.item(i).objType, x: left, y: top, z: z, scale_x: options.target.scaleX * options.target.scaleXOffset, scale_y: options.target.scaleY * options.target.scaleYOffset}));
+                socket.emit('move_object', JSON.stringify({uuid: options.target.item(i).uuid, type: options.target.item(i).objType, x: left, y: top, z: z, scale_x: options.target.scaleX, scale_y: options.target.scaleY}));
             }
         }
     }
@@ -573,10 +573,18 @@ function addObjectToCanvas(o, select) {
             var name;
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
-                scaleX: o.scale_x * 2.0,
-                scaleY: o.scale_y * 2.0,
+                fillColor: o.fill_color,
+                strokeColor: o.stroke_color,
+                scaleX: o.scale_x,
+                scaleY: o.scale_y,
+                uuid: o.uuid,
+                objType: o.type,
+                image: o.image,
+                name: name,
                 originX: 'center',
-                originY: 'center'
+                originY: 'center',
+                left: o.x,
+                top: o.y,
             });
             if (shape.paths) {
                 for (var i = 0; i < shape.paths.length; i++) {
@@ -588,58 +596,22 @@ function addObjectToCanvas(o, select) {
                     }
                 }
             }
-            shape.setCoords();
             name = new fabric.Text(o.name, {
-                fontSize: 16
+                parent_uuid: o.uuid,
+                objType: 'name',
+                selectable: false,
+                originX: 'center',
+                textAlign: 'center',
+                fontSize: 14,
+                left: o.x,
+                top: o.y + (shape.getHeight()/2)
             });
-            name.cloneAsImage(function(name_clone) {
-                name_clone.set({
-                    parent_uuid: o.uuid,
-                    text: o.name,
-                    objType: 'name',
-                    selectable: false,
-                    scaleX: 0.5,
-                    scaleY: 0.5,
-                    originX: 'center',
-                    originY: 'top',
-                    left: o.x,
-                });
-                name_clone.resizeFilters.push(new fabric.Image.filters.Resize({
-                    resizeType: 'lanczos', lanczosLobes: 3,
-                }));
-                shape.cloneAsImage(function(clone) {
-                    clone.set({
-                        uuid: o.uuid,
-                        objType: o.type,
-                        image: o.image,
-                        name: name_clone,
-                        fillColor: o.fill_color,
-                        strokeColor: o.stroke_color,
-                        scaleX: 0.5,
-                        scaleY: 0.5,
-                        scaleXOffset: o.scale_x / 0.5,
-                        scaleYOffset: o.scale_y / 0.5,
-                        originX: 'center',
-                        originY: 'center',
-                        left: o.x,
-                        top: o.y
-                    });
-                    name_clone.set({
-                        top: o.y + (clone.getHeight()/2)
-                    });
-                    clone.resizeFilters.push(new fabric.Image.filters.Resize({
-                        resizeType: 'sliceHack'
-                    }));
-                    clone.children = [name_clone];
-                    objectsLoaded.pop();
-                    canvas.add(clone);
-                    canvas.add(name_clone);
-                    name_clone.bringToFront();
-                    clone.bringToFront();
-                    if (select)
-                        canvas.setActiveObject(canvas.item(0));
-                }, {multiplier: 1, enableRetinaScaling: false});
-            }, {multiplier: 2, enableRetinaScaling: false});
+            shape.children = [name];
+            objectsLoaded.pop();
+            canvas.add(shape);
+            canvas.add(name);
+            shape.moveTo(0);
+            name.moveTo(0);
         });
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
@@ -759,8 +731,8 @@ function changeObject(o) {
         tempObj.uuid = o.uuid;
         tempObj.x = o.left;
         tempObj.y = o.top;
-        tempObj.scale_x = o.scaleX * o.scaleXOffset;
-        tempObj.scale_y = o.scaleY * o.scaleYOffset;
+        tempObj.scale_x = o.scaleX;
+        tempObj.scale_y = o.scaleY;
         tempObj.type = o.objType;
         tempObj.fill_color = o.fillColor;
         tempObj.stroke_color = o.strokeColor;
