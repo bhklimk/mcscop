@@ -1,16 +1,16 @@
 html
   head
     title= title
-    link(rel='stylesheet', href='/css/bootstrap.min.css')
-    link(rel='stylesheet', href='/css/jquery.dataTables.min.css')
-    link(rel='stylesheet', href='/css/image-picker.css')
-    link(rel='stylesheet', href='/css/jsgrid.min.css')
-    link(rel='stylesheet', href='/css/jsgrid-theme.min.css')
-    link(rel='stylesheet', href='/css/jquery-ui.min.css')
-    link(rel='stylesheet', href='/css/jquery-ui.theme.min.css')
-    link(rel='stylesheet', href='/css/jquery-ui-timepicker-addon.min.css')
-    link(rel='stylesheet', href='/css/nouislider.min.css')
-    link(rel='stylesheet', href='/css/style.css')
+    link(rel='stylesheet', href='css/bootstrap.min.css')
+    link(rel='stylesheet', href='css/jquery.dataTables.min.css')
+    link(rel='stylesheet', href='css/image-picker.css')
+    link(rel='stylesheet', href='css/jsgrid.min.css')
+    link(rel='stylesheet', href='css/jsgrid-theme.min.css')
+    link(rel='stylesheet', href='css/jquery-ui.min.css')
+    link(rel='stylesheet', href='css/jquery-ui.theme.min.css')
+    link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
+    link(rel='stylesheet', href='css/nouislider.min.css')
+    link(rel='stylesheet', href='css/style.css')
   body
     div.container
       include nav.pug
@@ -50,7 +50,7 @@ html
                 label Icon
                 select.image-picker#propIcon
                   each icon in icons
-                    option(data-img-src="/images/icons/" + icon, data-img-class="first", value=icon) icon
+                    option(data-img-src="images/icons/" + icon, data-img-class="first", value=icon) icon
               div.form-group#makeObject
                   button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()") Insert
                   button.propButton.btn.btn-primary#insertLinkButton(type='button' onclick="insertLink()") Insert
@@ -61,16 +61,16 @@ html
         div#slider
       div.jumbotron
         div#events
-  script(src='/js/jquery.js')
-  script(src='/js/jsgrid.min.js')
-  script(src='/socket.io/socket.io.js')
-  script(src='/js/bootstrap.min.js')
-  script(src='/js/image-picker.min.js')
-  script(src='/js/fabric.min.js')
-  script(src='/js/jquery-ui.min.js')
-  script(src='/js/jquery-ui-timepicker-addon.min.js')
-  script(src='/js/nouislider.min.js')
-  script(src='/js/ResizeSensor.js')
-  script(src='/js/ElementQueries.js')
-  script(src='/js/cop.js')
+  script(src='js/jquery.js')
+  script(src='js/jsgrid.min.js')
+  script(src='socket.io/socket.io.js')
+  script(src='js/bootstrap.min.js')
+  script(src='js/image-picker.min.js')
+  script(src='js/fabric.min.js')
+  script(src='js/jquery-ui.min.js')
+  script(src='js/jquery-ui-timepicker-addon.min.js')
+  script(src='js/nouislider.min.js')
+  script(src='js/ResizeSensor.js')
+  script(src='js/ElementQueries.js')
+  script(src='js/cop.js')
   c2#c2

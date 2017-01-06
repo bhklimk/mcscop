@@ -57,7 +57,7 @@ $(document).ready(function() {
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
             { name: 'name', title: 'Mission Name', type : 'text', width: 65, itemTemplate: function(value, item) {
-                return ('<a href="/cop?mission=' + item.id + '">' + item.name + "</a>");
+                return ('<a href="cop?mission=' + item.id + '">' + item.name + "</a>");
                 }
             },
             { name: 'start_date', title: 'Start Date', type: 'date', width: 25},
@@ -87,7 +87,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'select',
                         table: 'missions'
@@ -101,7 +101,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'insert',
                         table: 'missions',
@@ -116,7 +116,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'update',
                         table: 'missions',
@@ -131,7 +131,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'delete',
                         table: 'missions',
@@ -180,7 +180,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'select',
                         table: 'users'
@@ -194,7 +194,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'insert',
                         table: 'users',
@@ -209,7 +209,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'update',
                         table: 'users',
@@ -224,7 +224,7 @@ $(document).ready(function() {
                 var d = $.Deferred();
                 $.ajax({
                     type: 'POST',
-                    url: '/api',
+                    url: 'api',
                     data: {
                         action: 'delete',
                         table: 'users',

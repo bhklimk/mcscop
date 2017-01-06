@@ -30,15 +30,17 @@ var sessionMiddleware = session({
 var connection = mysql.createConnection(mysqlOptions);
 connection.connect();
 
-var io = require('socket.io')(http);
-io.engine.ws = new (require('uws').Server)({
+var sio = require('socket.io')(http);
+sio.engine.ws = new (require('uws').Server)({
     noServer: true,
     perMessageDeflate: true
 });
 
-io.use(function(socket, next) {
+sio.use(function(socket, next) {
     sessionMiddleware(socket.request, socket.request.res, next);
 });
+
+var io = sio.of('/mcscop/');
 
 app.use(sessionMiddleware);
 
@@ -249,13 +251,13 @@ app.get('/', function (req, res) {
     if (req.session.loggedin) {
             res.render('index', { title: 'MCSCOP'});
     } else {
-       res.redirect('/login');
+       res.redirect('login');
     }
 });
 
 app.get('/logout', function (req, res) {
     req.session.destroy();
-    res.redirect('/login');
+    res.redirect('login');
 });
 
 app.post('/api', function (req, res) {
@@ -350,10 +352,10 @@ app.get('/copview', function (req, res) {
             });
 
         } else {
-            res.redirect('/');
+            res.redirect('../');
         }
     } else {
-       res.redirect('/login');
+       res.redirect('login');
     }
 });
 
@@ -369,10 +371,10 @@ app.get('/cop', function (req, res) {
             });
 
         } else {
-            res.redirect('/');
+            res.redirect('../');
         }
     } else {
-       res.redirect('/login');
+       res.redirect('login');
     }
 });
 
@@ -385,7 +387,7 @@ app.post('/login', function (req, res) {
                         if (bres) {
                             req.session.user_id = rows[0].id;
                             req.session.loggedin = true;
-                            res.redirect('/login');
+                            res.redirect('login');
                         } else
                             res.render('login', { title: 'MCSCOP', message: 'Invalid username or password.' });
                     });
@@ -401,7 +403,7 @@ app.post('/login', function (req, res) {
 
 app.get('/login', function (req, res) {
     if (req.session.loggedin)
-        res.redirect('/');
+        res.redirect('.');
     else
         res.render('login', { title: 'MCSCOP Login' });
 });

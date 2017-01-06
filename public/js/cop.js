@@ -4,9 +4,7 @@ var canvas = new fabric.Canvas('canvas', {
     renderOnAddRemove: false,
     enableRetinaScaling: false
 });
-
 canvas.setZoom(1.0);
-
 var creatingLink = false;
 var firstObject = null;
 var startX = 0;
@@ -23,7 +21,7 @@ var tableData = [];
 var eventTimes = [];
 var objectsLoaded = null;
 var updatingObject = false;
-var socket = io();
+var socket = io("https://www.ironrain.org/mcscop/",{path:'/mcscop/socket.io'});
 var fps = 10;
 var now;
 var then = Date.now();
