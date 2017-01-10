@@ -7,6 +7,7 @@ var MySQLStore = require('express-mysql-session')(session);
 var cookieParser = require('cookie-parser');
 var bcrypt = require('bcrypt-nodejs');
 var bodyParser = require('body-parser');
+var namespace = '/mcscop/';
 app.set('view engine', 'pug');
 app.use(express.static('public'));
 app.use(bodyParser.json());
@@ -40,7 +41,10 @@ sio.use(function(socket, next) {
     sessionMiddleware(socket.request, socket.request.res, next);
 });
 
-var io = sio.of('/mcscop/');
+var io = sio;
+
+if (namespace !== '') 
+    var io = sio.of(namespace);
 
 app.use(sessionMiddleware);
 

@@ -4,6 +4,8 @@ var canvas = new fabric.Canvas('canvas', {
     renderOnAddRemove: false,
     enableRetinaScaling: false
 });
+var namespace = '/mcscop/';
+var socketurl = 'https://www.ironrain.org/mcscop/';
 canvas.setZoom(1.0);
 var creatingLink = false;
 var firstObject = null;
@@ -21,7 +23,7 @@ var tableData = [];
 var eventTimes = [];
 var objectsLoaded = null;
 var updatingObject = false;
-var socket = io("https://www.ironrain.org/mcscop/",{path:'/mcscop/socket.io'});
+var socket = io(socketurl, {path: namespace + '/socket.io'});
 var fps = 10;
 var now;
 var then = Date.now();
@@ -32,6 +34,7 @@ var zoom = 1.0;
 var panning = false;
 var dirty = false;
 var SVGCache = {};
+var tempLink = null;
 var objectCache = {};
 
 var CustomDirectLoadStrategy = function(grid) {
@@ -130,8 +133,9 @@ function checkIfShapesCached(msg) {
 
 function checkIfObjectsLoaded() {
     if (objectsLoaded.length == 0) {
+        console.log('objects loaded');
+        console.log('get links');
         socket.emit('get_links', mission);
-        console.log('loaded');
         canvas.renderOnAddRemove = true;
     } else {
         setTimeout(checkIfObjectsLoaded, 50);
@@ -139,7 +143,7 @@ function checkIfObjectsLoaded() {
 }
 
 function editDetails(uuid) {
-    if (canvas.getActiveObject() !== null && canvas.getActiveObject().uuid !== undefined) {
+    if (canvas.getActiveObject()) {
         socket.emit('get_details', canvas.getActiveObject().uuid, function(data) {
             $('#modal-title').text('Edit Object');
             $('#modal-body').html('<input type="hidden" id="object_details_uuid" name="object_details_uuid" value="' + canvas.getActiveObject().uuid + '"><textarea id="object_details" class="object-details">' + data + '</textarea>');
@@ -155,9 +159,12 @@ function updateDetails() {
 }
 
 socket.on('connect', function() {
+    console.log('connect');
     socket.emit('join', mission);
     $('#modal').modal('hide');
+    console.log('get objects');
     socket.emit('get_objects', mission);
+    console.log('get events');
     socket.emit('get_events', mission);
 });
 
@@ -189,10 +196,13 @@ socket.on('all_events', function (msg) {
         tableData.push(msg[evt]);
         eventTimes.push(msg[evt].event_time);
     }
+    var end = eventTimes.length - 1;
+    if (end < 1)
+        end = 1;
     dateSlider.noUiSlider.updateOptions({
         range: {
             min: 0,
-            max: eventTimes.length-1
+            max: end
         },
         start: 0,
         handles: 1,
@@ -202,14 +212,12 @@ socket.on('all_events', function (msg) {
 });
 
 socket.on('change_object', function(msg) {
-    var selected = false;
-    var selectedUUID = null;
     var o = JSON.parse(msg);
+    var selected = false;
     for (var i = 0; i < canvas.getObjects().length; i++) {
-        if (canvas.item(i).uuid == o.uuid) {
-            if (canvas.getActiveObject().uuid === o.uuid) {
+        if (canvas.item(i).uuid === o.uuid) {
+            if (canvas.getActiveObject() && canvas.getActiveObject().uuid === o.uuid) {
                 selected = true;
-                selectedUUID = canvas.getActiveObject().uuid;
             }
             var to = canvas.item(i);
             if (o.type === 'object') {
@@ -218,7 +226,7 @@ socket.on('change_object', function(msg) {
                     for (var k = 0; k < children; k++)
                         canvas.remove(to.children[k]);
                     canvas.remove(to);
-                    addObjectToCanvas(o, true);
+                    addObjectToCanvas(o, selected);
                 } else {
                     for (var k = 0; k < canvas.item(i).children.length;k ++) {
                         if (canvas.item(i).children[k].objType === 'name')
@@ -243,12 +251,14 @@ socket.on('move_object', function (msg) {
     var o = JSON.parse(msg);
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.item(i).uuid == o.uuid) {
+            canvas.item(i).dirty = true;
             canvas.item(i).scaleX = o.scale_x;
             canvas.item(i).scaleY = o.scale_y;
             canvas.item(i).animate({left: o.x, top: o.y}, {
                 duration: 100,
                 onChange: function() {
                     dirty = true;
+                    canvas.item(i).dirty = true;
                     for (var j = 0; j < canvas.item(i).children.length; j++) {
                         canvas.item(i).children[j].setTop(canvas.item(i).getTop() + (canvas.item(i).getHeight()/2));
                         canvas.item(i).children[j].setLeft(canvas.item(i).getLeft());
@@ -376,16 +386,9 @@ function panit() {
     setTimeout(function() { panit(); }, 10);
 }
 
-function updateLinks() {
-    dirty = true;
-    for (var j = 0; j < options.target.children.length; j++) {
-        options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
-        options.target.children[j].setLeft(options.target.getLeft());
-    }
-}
-
 canvas.on('object:moving', function(options) {
     dirty = true;
+    options.target.dirty = true;
     for (var j = 0; j < options.target.children.length; j++) {
         options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
         options.target.children[j].setLeft(options.target.getLeft());
@@ -394,6 +397,7 @@ canvas.on('object:moving', function(options) {
 
 canvas.on('object:scaling', function(options) {
     dirty = true;
+    options.target.dirty = true;
     for (var j = 0; j < options.target.children.length; j++) {
         options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
         options.target.children[j].setLeft(options.target.getLeft());
@@ -464,7 +468,7 @@ canvas.on('before:selection:cleared', function(options) {
 canvas.on('before:render', function(e) {
     if (dirty) {
         for (var i = 0; i < canvas.getObjects().length; i++) {
-            if (canvas.item(i).objType !== undefined && canvas.item(i).objType === 'link') {
+            if (canvas.item(i).objType && canvas.item(i).objType === 'link') {
                 var from = canvas.item(i).from;
                 var to = canvas.item(i).to;
                 var fromObj = null;
@@ -477,7 +481,7 @@ canvas.on('before:render', function(e) {
                         toObj = canvas.item(j);
                     }
                 }
-                if (fromObj !== null && toObj !== null) {
+                if (fromObj && toObj && (fromObj.dirty || toObj.dirty)) {
                     canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
                     canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
                     for (var j = 0; j < canvas.item(i).children.length; j++) {
@@ -487,8 +491,14 @@ canvas.on('before:render', function(e) {
                             angle += 180;
                         canvas.item(i).children[j].set({'angle': angle});
                     }
+                    fromObj.dirty = false;
+                    toObj.dirty = false;
                 }
             }
+        }
+        if (tempLink) {
+            tempLink.set({ 'x1': tempLink.from.getCenterPoint().x, 'y1': tempLink.from.getCenterPoint().y });
+            tempLink.set({ 'x2': tempLink.to.getCenterPoint().x, 'y2': tempLink.to.getCenterPoint().y });
         }
         dirty = false;
     }
@@ -552,8 +562,10 @@ function addLinkToCanvas(o) {
             top: line.getCenterPoint().y
         });
         line.children = [name];
-        canvas.add(line).moveTo(line, 1);
-        canvas.add(name).moveTo(line, 1);
+        canvas.add(line);
+        canvas.add(name);
+        line.sendToBack();
+        name.sendToBack();
     }
 }
 
@@ -608,8 +620,10 @@ function addObjectToCanvas(o, select) {
             objectsLoaded.pop();
             canvas.add(shape);
             canvas.add(name);
-            shape.moveTo(0);
-            name.moveTo(0);
+            if (select)
+                canvas.setActiveObject(shape);
+            shape.bringToFront();
+            name.bringToFront();
         });
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
@@ -679,10 +693,16 @@ function showMessage(msg, timeout) {
 }
 
 function updatePropName(name) {
-    if (canvas.getActiveObject() !== null) {
+    if (canvas.getActiveObject()) {
         for (var i = 0; i < canvas.getActiveObject().children.length; i++) {
             if (canvas.getActiveObject().children[i].objType === 'name')
                 canvas.getActiveObject().children[i].text = name;
+        }
+        for (var i = 0; i < objectSelect.length; i++) {
+            if (objectSelect[i].uuid === canvas.getActiveObject().uuid) {
+                objectSelect[i].name = name;
+                break;
+            }
         }
         canvas.renderAll();
         changeObject(canvas.getActiveObject());
@@ -692,7 +712,7 @@ function updatePropName(name) {
 }
 
 function updatePropFillColor(color) {
-    if (canvas.getActiveObject() !== null && canvas.getActiveObject().objType === 'object') {
+    if (canvas.getActiveObject() && canvas.getActiveObject().objType === 'object') {
         canvas.getActiveObject().fillColor = color;
         if (canvas.getActiveObject().paths) {
             for (var j = 0; j < canvas.getActiveObject().paths.length; j++) {
@@ -706,7 +726,7 @@ function updatePropFillColor(color) {
 }
 
 function updatePropStrokeColor(color) {
-    if (canvas.getActiveObject() !== null) {
+    if (canvas.getActiveObject()) {
         canvas.getActiveObject().strokeColor = color;
         if (canvas.getActiveObject().objType === 'object') {
             if (canvas.getActiveObject().paths) {
@@ -770,7 +790,7 @@ function toggleProperties(type) {
 function openProperties(type) {
     // edit
     $('#propType').val(type);
-    if (canvas.getActiveObject() !== undefined && canvas.getActiveObject() !== null) {
+    if (canvas.getActiveObject()) {
         if (type === 'object') {
             $('#propTitle').html('Edit Object');
             $('#propNameGroup').show();
@@ -913,14 +933,46 @@ $(document).ready(function() {
 
     dateSlider.noUiSlider.on('update', function(values, handle) {
         var filter = eventTimes[parseInt(values[handle])];
+        if (tempLink) {
+            canvas.remove(tempLink);
+            tempLink = null;
+        }
+        for (var j = 0; j < canvas.getObjects().length; j++)
+            canvas.item(j).setShadow(null);
         for (var i = 0; i < tableData.length; i++) {
             if (tableData[i].event_time === filter) {
+                var from = null;
+                var to = null;
                 $('#events').jsGrid("rowByItem",tableData[i]).addClass('highlight');
                 for (var j = 0; j < canvas.getObjects().length; j++) {
                     if (canvas.item(j).uuid === tableData[i].source_object || canvas.item(j).uuid === tableData[i].dest_object) {
-                        canvas.item(j).setShadow("0px 0px 50px rgba(255, 0, 0, 1.0)");
-                    } else
-                        canvas.item(j).setShadow(null);
+                        if (canvas.item(j).uuid === tableData[i].source_object)
+                            from = canvas.item(j);
+                        else if (canvas.item(j).uuid === tableData[i].dest_object)
+                            to = canvas.item(j);
+                        //canvas.item(j).setShadow("0px 0px 50px rgba(255, 0, 0, 1.0)");
+                        canvas.item(j).setShadow({color: 'red', offsetX: 2, offsetY:2, blur: 5});
+                    }
+                    if (from && to) {
+                        var line = new fabric.Line([from.getCenterPoint().x, from.getCenterPoint().y, to.getCenterPoint().x, to.getCenterPoint().y], {
+                            from: from,
+                            to: to,
+                            stroke: 'red',
+                            strokeColor: 'red',
+                            strokeWidth: 5,
+                            hasControls: false,
+                            lockMovementX: true,
+                            lockMovementY: true,
+                            lockScalingX: true,
+                            lockScalingY: true,
+                            lockRotation: true,
+                        });
+                        tempLink = line;
+                        canvas.add(line);
+                        line.sendToBack();
+                        canvas.renderAll();
+                        break;
+                    }
                 }
             } else {
                 $('#events').jsGrid("rowByItem",tableData[i]).removeClass('highlight');
