@@ -173,18 +173,20 @@ io.on('connection', function(socket) {
         });
         socket.on('insert_link', function(msg) {
             var link = JSON.parse(msg);
-            connection.query('INSERT INTO links (mission, name, stroke_color, node_a, node_b) values (?, ?, ?, ?, ?)', [link.mission, link.name, link.stroke_color, link.node_a, link.node_b], function (err, results) {
-                if (!err) {
-                    link.id = results.insertId;
-                    connection.query('SELECT * FROM links WHERE id = ?', [link.id], function(err, rows, fields) {
-                        if (!err) {
-                                io.in(socket.room).emit('insert_link', JSON.stringify(rows[0]));
-                            } else
-                                console.log(err);
-                        });
-                } else
-                    console.log(err);
-            });
+            if(link.node_a !== link.node_b) {
+                connection.query('INSERT INTO links (mission, name, stroke_color, node_a, node_b) values (?, ?, ?, ?, ?)', [link.mission, link.name, link.stroke_color, link.node_a, link.node_b], function (err, results) {
+                    if (!err) {
+                        link.id = results.insertId;
+                        connection.query('SELECT * FROM links WHERE id = ?', [link.id], function(err, rows, fields) {
+                            if (!err) {
+                                    io.in(socket.room).emit('insert_link', JSON.stringify(rows[0]));
+                                } else
+                                    console.log(err);
+                            });
+                    } else
+                        console.log(err);
+                });
+            }
         });
         socket.on('insert_object', function(msg) {
             var o = JSON.parse(msg);

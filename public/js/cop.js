@@ -424,7 +424,7 @@ canvas.on('object:selected', function(options) {
         if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null) {
             if (options.target.objType !== undefined) {
                 if (creatingLink) {
-                    if (options.target.objType === 'object') {
+                    if (options.target.objType === 'object' && firstNode !== options.target) {
                         if (firstNode === null) {
                             firstNode = options.target;
                             showMessage('Click on a second node to complete the link.');
@@ -538,7 +538,7 @@ function addLinkToCanvas(o) {
             fill: 'black',
             stroke: o.stroke_color,
             strokeColor: o.stroke_color,
-            strokeWidth: 2,
+            strokeWidth: 3,
             hasControls: false,
             lockMovementX: true,
             lockMovementY: true,
