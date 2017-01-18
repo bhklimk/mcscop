@@ -491,9 +491,13 @@ canvas.on('before:render', function(e) {
                             angle += 180;
                         canvas.item(i).children[j].set({'angle': angle});
                     }
-                    fromObj.dirty = false;
-                    toObj.dirty = false;
                 }
+            }
+        }
+        for (var i = 0; i < canvas.getObjects().length; i++) {
+            if (canvas.item(i).objType && canvas.item(i).objType === 'link') {
+                fromObj.dirty = false;
+                toObj.dirty = false;
             }
         }
         if (tempLink) {
