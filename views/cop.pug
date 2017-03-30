@@ -22,7 +22,7 @@ html
               h4.modal-title#modal-title
             div.modal-body#modal-body
             div.modal-footer#modal-footer
-      div.jumbotron.resizable.diagram_jumbotron#diagram_jumbotron(style='height:500px')
+      div.jumbotron.resizable.diagram_jumbotron#diagram_jumbotron(style='height:700px')
         div.canvas#diagram
           span.message#message
           canvas#canvas
@@ -51,6 +51,11 @@ html
                 select.image-picker#propIcon
                   each icon in icons
                     option(data-img-src="images/icons/" + icon, data-img-class="first", value=icon) icon
+              div.form-group#moveObject
+                  button.btn.btn-default(type='button' onclick="moveUp()") Up
+                  button.btn.btn-default(type='button' onclick="moveDown()") Down
+                  button.btn.btn-default(type='button' onclick="moveToFront()") Front
+                  button.btn.btn-default(type='button' onclick="moveToBack()") Back
               div.form-group#makeObject
                   button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()") Insert
                   button.propButton.btn.btn-primary#insertLinkButton(type='button' onclick="insertLink()") Insert

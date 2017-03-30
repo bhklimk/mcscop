@@ -60,7 +60,7 @@ io.on('connection', function(socket) {
         });
         socket.on('get_objects', function(msg) {
             var mission = JSON.parse(msg);
-            connection.query('SELECT * FROM objects WHERE mission = ?', [mission], function(err, rows, fields) {
+            connection.query('SELECT * FROM objects WHERE mission = ? ORDER by z', [mission], function(err, rows, fields) {
                 if (!err) {
                     socket.emit('all_objects',rows);
                 } else
@@ -122,6 +122,28 @@ io.on('connection', function(socket) {
             if (o.type !== undefined && o.type === 'link') {
             }
         });
+        socket.on('update_layers', function(msg) {
+            var objs = JSON.parse(msg);
+            for (var i = 0; i < objs.length; i ++) {
+                var o = objs[i];
+                if (o.type !== undefined && o.type === 'object') {
+                    connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
+                        if (!err) {
+                            socket.broadcast.in(socket.room).emit('move_object', msg);
+                        } else
+                            console.log(err);
+                    });
+                } else if (o.type !== undefined && o.type === 'link') {
+                    connection.query('UPDATE links SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
+                        if (!err) {
+                            socket.broadcast.in(socket.room).emit('move_object', msg);
+                        } else
+                            console.log(err);
+                    });
+                }
+            }
+
+        });
         socket.on('move_object', function(msg) {
             var o = JSON.parse(msg);
             if (o.type !== undefined && o.type === 'object') {
@@ -174,7 +196,7 @@ io.on('connection', function(socket) {
         socket.on('insert_link', function(msg) {
             var link = JSON.parse(msg);
             if(link.node_a !== link.node_b) {
-                connection.query('INSERT INTO links (mission, name, stroke_color, node_a, node_b) values (?, ?, ?, ?, ?)', [link.mission, link.name, link.stroke_color, link.node_a, link.node_b], function (err, results) {
+                connection.query('INSERT INTO links (mission, name, stroke_color, node_a, node_b, z) values (?, ?, ?, ?, ?, ?)', [link.mission, link.name, link.stroke_color, link.node_a, link.node_b, link.z], function (err, results) {
                     if (!err) {
                         link.id = results.insertId;
                         connection.query('SELECT * FROM links WHERE id = ?', [link.id], function(err, rows, fields) {

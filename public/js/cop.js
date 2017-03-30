@@ -117,6 +117,7 @@ function getShape(shape) {
 
 
 function checkIfShapesCached(msg) {
+//    canvas.renderOnAddRemove = false;
     if (objectsLoaded.length == 0) {
         console.log('cached');
         for (var o in msg) {
@@ -133,6 +134,7 @@ function checkIfShapesCached(msg) {
 
 function checkIfObjectsLoaded() {
     if (objectsLoaded.length == 0) {
+//        canvas.renderOnAddRemove = true;
         console.log('objects loaded');
         console.log('get links');
         socket.emit('get_links', mission);
@@ -158,10 +160,23 @@ function updateDetails() {
     $('#modal').modal('hide');
 }
 
+function updateLayers() {
+    var objects = [];
+    for (var i = 0; i < canvas.getObjects().length; i++) {
+        if (canvas.getObjects()[i].uuid)
+            objects.push({uuid: canvas.getObjects()[i].uuid, type: canvas.getObjects()[i].objType, z: i});
+    }
+    socket.emit('update_layers', JSON.stringify(objects));
+} 
+
 socket.on('connect', function() {
+    $('#modal').modal('hide');
+    $('#modal-title').text('Please wait...!');
+    $('#modal-body').html('<p>Loading COP, please wait...</p><img src="images/loading.gif"/>');
+    $('#modal-footer').html('');
+    $('#modal').modal('show')
     console.log('connect');
     socket.emit('join', mission);
-    $('#modal').modal('hide');
     console.log('get objects');
     socket.emit('get_objects', mission);
     console.log('get events');
@@ -187,6 +202,9 @@ socket.on('all_links', function (msg) {
     for (var link in msg) {
         addLinkToCanvas(msg[link]);
     }
+    $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
+    $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
+    $('#modal').modal('hide');
 });
 
 socket.on('all_events', function (msg) {
@@ -266,6 +284,8 @@ socket.on('move_object', function (msg) {
                     canvas.renderAll();;
                 }
             });
+            console.log(o.z);
+            canvas.item(i).moveTo(o.z);
             break;
         }
     }
@@ -405,6 +425,7 @@ canvas.on('object:scaling', function(options) {
 });
 
 canvas.on('object:modified', function(options) {
+    console.log('modded');
     if (options.target) {
         if (canvas.getActiveObject() !== null) {
             var z = canvas.getObjects().indexOf(options.target);
@@ -431,12 +452,16 @@ canvas.on('object:selected', function(options) {
                         } else {
                             showMessage('Link created.', 5);
                             $('#cancelLink').hide();
-                            socket.emit('insert_link', JSON.stringify({mission: mission, name:$('#propName').val(), stroke_color:$('#propStrokeColor').val(), node_a: firstNode.uuid, node_b: options.target.uuid}));
+                            var z = canvas.getObjects().indexOf(firstNode) - 1;
+                            if (canvas.getObjects().indexOf(options.target) < z)
+                                z = canvas.getObjects().indexOf(options.target) - 1;
+                            socket.emit('insert_link', JSON.stringify({mission: mission, name:$('#propName').val(), stroke_color:$('#propStrokeColor').val(), node_a: firstNode.uuid, node_b: options.target.uuid, z: z}));
                             firstNode = null;
                             creatingLink = false;
                         }
                     }
                 } else {
+                    console.log(canvas.getObjects().indexOf(options.target));
                     $('#propID').val(options.target.uuid);
                     $('#propFillColor').val(options.target.fillColor);
                     $('#propStrokeColor').val(options.target.strokeColor);
@@ -535,6 +560,7 @@ function addLinkToCanvas(o) {
         var from = fromObject.getCenterPoint();
         var to = toObject.getCenterPoint();
         var line = new fabric.Line([from.x, from.y, to.x, to.y], {
+            isChild: false,
             uuid: o.uuid,
             objType: 'link',
             from: o.node_a,
@@ -554,6 +580,7 @@ function addLinkToCanvas(o) {
             if(Math.abs(angle) > 90)
                 angle += 180;
         var name = new fabric.Text(o.name, {
+            isChild: true,
             parent_uuid: o.uuid,
             objType: 'name',
             selectable: false,
@@ -568,12 +595,13 @@ function addLinkToCanvas(o) {
         line.children = [name];
         canvas.add(line);
         canvas.add(name);
-        line.sendToBack();
-        name.sendToBack();
+        line.moveTo(o.z);
+        name.moveTo(o.z+1);
     }
 }
 
 function addObjectToCanvas(o, select) {
+    console.log(o.name,o.z);
     if (o.image !== undefined && o.image !== null) {
         var image, func;
         if (SVGCache[o.image] === undefined) {
@@ -587,6 +615,7 @@ function addObjectToCanvas(o, select) {
             var name;
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
+                isChild: false,
                 fillColor: o.fill_color,
                 strokeColor: o.stroke_color,
                 scaleX: o.scale_x,
@@ -611,6 +640,7 @@ function addObjectToCanvas(o, select) {
                 }
             }
             name = new fabric.Text(o.name, {
+                isChild: true,
                 parent_uuid: o.uuid,
                 objType: 'name',
                 selectable: false,
@@ -626,8 +656,10 @@ function addObjectToCanvas(o, select) {
             canvas.add(name);
             if (select)
                 canvas.setActiveObject(shape);
-            shape.bringToFront();
-            name.bringToFront();
+            shape.moveTo(o.z);
+            name.moveTo(o.z+1);
+            //shape.bringToFront();
+            //name.bringToFront();
         });
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect);
         $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect);
@@ -684,6 +716,40 @@ function insertObject() {
 function deleteObject() {
     if (canvas.getActiveObject().uuid) {
         socket.emit('delete_object', JSON.stringify({uuid:canvas.getActiveObject().uuid, type:canvas.getActiveObject().objType}));
+    }
+}
+
+function moveToFront() {
+    if (canvas.getActiveObject().uuid) {
+        canvas.getActiveObject().bringToFront();
+        for (var i = 0; i < canvas.getActiveObject().children.length; i++) {
+            canvas.getActiveObject().children[i].bringToFront();
+        }
+        canvas.trigger('object:modified');
+    }
+}
+
+function moveToBack() {
+    if (canvas.getActiveObject().uuid) {
+        for (var i = 0; i < canvas.getActiveObject().children.length; i++) {
+            canvas.getActiveObject().children[i].sendToBack();
+        }
+        canvas.getActiveObject().sendToBack();
+        canvas.trigger('object:modified');
+    }
+}
+
+function moveUp() {
+    if (canvas.getActiveObject().uuid) {
+        canvas.getActiveObject().bringForward();
+        canvas.trigger('object:modified');
+    }
+}
+
+function moveDown() {
+    if (canvas.getActiveObject().uuid) {
+        canvas.getActiveObject().sendBackwards();
+        canvas.trigger('object:modified');
     }
 }
 
