@@ -13,6 +13,8 @@ html
     link(rel='stylesheet', href='css/style.css')
   body
     div.container
+        textarea
+    div.container
       include nav.pug
       div.modal.fade#modal(role='dialog')
         div.modal-dialog
@@ -25,13 +27,14 @@ html
       div.jumbotron.resizable.diagram_jumbotron#diagram_jumbotron(style='height:700px')
         div.canvas#diagram
           span.message#message
+          canvas#background
           canvas#canvas
           button.zoomIn#zoomIn(onclick='zoomIn()') +
           button.zoomOut#zoomOut(onclick='zoomOut()') -
           button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
         div.sidebar
           div.properties-nav#properties-nav
-            div.nav-button#objectsButton(onclick='toggleProperties("object")') N<br>o<br>d<br>e<br>s
+            div.nav-button#objectsButton(onclick='toggleProperties("icon")') N<br>o<br>d<br>e<br>s
             div.nav-button#linksButton(onclick='toggleProperties("link")') L<br>i<br>n<br>k<br>s
           div.properties#properties
             span.propTitle#propTitle Edit Object
@@ -52,10 +55,10 @@ html
                   each icon in icons
                     option(data-img-src="images/icons/" + icon, data-img-class="first", value=icon) icon
               div.form-group#moveObject
-                  button.btn.btn-default(type='button' onclick="moveUp()") Up
-                  button.btn.btn-default(type='button' onclick="moveDown()") Down
-                  button.btn.btn-default(type='button' onclick="moveToFront()") Front
-                  button.btn.btn-default(type='button' onclick="moveToBack()") Back
+                  button.propButton.btn.btn-default(type='button' onclick="moveUp()") Up
+                  button.propButton.btn.btn-default(type='button' onclick="moveDown()") Down
+                  button.propButton.btn.btn-default(type='button' onclick="moveToFront()") Front
+                  button.propButton.btn.btn-default(type='button' onclick="moveToBack()") Back
               div.form-group#makeObject
                   button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()") Insert
                   button.propButton.btn.btn-primary#insertLinkButton(type='button' onclick="insertLink()") Insert
@@ -66,9 +69,9 @@ html
         div#slider
       div.jumbotron
         div#events
+  c2#c2
   script(src='js/jquery.js')
   script(src='js/jsgrid.min.js')
-  script(src='socket.io/socket.io.js')
   script(src='js/bootstrap.min.js')
   script(src='js/image-picker.min.js')
   script(src='js/fabric.min.js')
@@ -77,5 +80,6 @@ html
   script(src='js/nouislider.min.js')
   script(src='js/ResizeSensor.js')
   script(src='js/ElementQueries.js')
+  script(src='js/json-patch-duplex.min.js')
+  script(src='js/client.js')
   script(src='js/cop.js')
-  c2#c2
