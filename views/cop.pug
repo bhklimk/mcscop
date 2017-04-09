@@ -13,31 +13,23 @@ html
     link(rel='stylesheet', href='css/style.css')
   body
     div.container
-        textarea
-    div.container
       include nav.pug
-      div.modal.fade#modal(role='dialog')
-        div.modal-dialog
-          div.modal-content
-            div.modal-header
-              button.close(type='button' data-dismiss='modal') &times;
-              h4.modal-title#modal-title
-            div.modal-body#modal-body
-            div.modal-footer#modal-footer
-      div.jumbotron.resizable.diagram_jumbotron#diagram_jumbotron(style='height:700px')
+      div.jumbotron.diagram_jumbotron#diagram_jumbotron(style='height:700px')
         div.canvas#diagram
           span.message#message
           canvas#background
           canvas#canvas
-          button.zoomIn#zoomIn(onclick='zoomIn()') +
-          button.zoomOut#zoomOut(onclick='zoomOut()') -
-          button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
+          div#zoom-buttons
+            button.zoomIn#zoomIn(onclick='zoomIn()') +
+            button.zoomOut#zoomOut(onclick='zoomOut()') -
+            button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
         div.sidebar
           div.properties-nav#properties-nav
-            div.nav-button#objectsButton(onclick='toggleProperties("icon")') N<br>o<br>d<br>e<br>s
-            div.nav-button#linksButton(onclick='toggleProperties("link")') L<br>i<br>n<br>k<br>s
+            div.nav-button#toolsButton(onclick='toggleToolbar("tools")') T<br>O<br>O<br>L<br>S
+            div.nav-button#tasksButton(onclick='toggleToolbar("tasks")') T<br>O<br>O<br>L<br>S
           div.properties#properties
             span.propTitle#propTitle Edit Object
+            button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()") New!
             form#propForm
               input(type="hidden", name="id")#propID
               input(type="hidden", name="type")#propType
@@ -49,11 +41,13 @@ html
                 div.colors
                     input(type="color", name="fillcolor" onchange="updatePropFillColor(this.value)" value="#017bbb").form-control.propColor#propFillColor
                     input(type="color", name="strokecolor" onchange="updatePropStrokeColor(this.value)" value="#017bbb").form-control.propColor#propStrokeColor
-              div.form-group#propIconGroup
+              div.form-group#propObjectGroup
                 label Icon
                 select.image-picker#propIcon
                   each icon in icons
                     option(data-img-src="images/icons/" + icon, data-img-class="first", value=icon) icon
+                  each shape in shapes
+                    option(data-img-src="images/shapes/" + shape, data-img-class="first", value=shape) shape
               div.form-group#moveObject
                   button.propButton.btn.btn-default(type='button' onclick="moveUp()") Up
                   button.propButton.btn.btn-default(type='button' onclick="moveDown()") Down
@@ -61,13 +55,11 @@ html
                   button.propButton.btn.btn-default(type='button' onclick="moveToBack()") Back
               div.form-group#makeObject
                   button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()") Insert
-                  button.propButton.btn.btn-primary#insertLinkButton(type='button' onclick="insertLink()") Insert
                   button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
                   button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()") Delete
                   button.btn.btn-default(type='button' onclick="closeProperties()") Cancel
       div.jumbotron
         div#slider
-      div.jumbotron
         div#events
   c2#c2
   script(src='js/jquery.js')
@@ -78,8 +70,7 @@ html
   script(src='js/jquery-ui.min.js')
   script(src='js/jquery-ui-timepicker-addon.min.js')
   script(src='js/nouislider.min.js')
-  script(src='js/ResizeSensor.js')
   script(src='js/ElementQueries.js')
   script(src='js/json-patch-duplex.min.js')
-  script(src='js/client.js')
+  script(src='js/sharedbclient.js')
   script(src='js/cop.js')

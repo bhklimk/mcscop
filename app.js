@@ -1,22 +1,14 @@
 var express = require('express');
+var fs = require('fs');
 var app = express();
-
-
 var ShareDB = require('sharedb');
 var WebSocketJSONStream = require('websocket-json-stream');
-
-
 var http = require('http').Server(app);
-var fs = require('fs');
 var session = require('express-session');
 var MySQLStore = require('express-mysql-session')(session);
 var cookieParser = require('cookie-parser');
 var bcrypt = require('bcrypt-nodejs');
 var bodyParser = require('body-parser');
-app.set('view engine', 'pug');
-app.use(express.static('public'));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 var mysql = require('mysql');
 var mysqlOptions = {
     host : 'localhost',
@@ -33,22 +25,22 @@ var sessionMiddleware = session({
     saveUninitialized: true,
     store: sessionStore
 });
+var rooms = new Map();
 var connection = mysql.createConnection(mysqlOptions);
-connection.connect();
+var ws = new require('ws').Server({server:http});
 
-var io = new require('ws').Server({server:http});
 
-/*io.use(function(socket, next) {
-    sessionMiddleware(socket.request, socket.request.res, next);
-});*/
-
-//var dio = io.of('/diagram');
-//var sio = io.of('/stream');
-
+app.set('view engine', 'pug');
+app.use(express.static('public'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
 
-/*
-var backend = new ShareDB();
+connection.connect();
+
+var sdb = require('./sharedb-mysql')(connection);
+var backend = new ShareDB({db: sdb});
+//var backend = new ShareDB();
 
 // Create initial document then fire callback
 var backconnection = backend.connect();
@@ -61,229 +53,236 @@ doc.fetch(function(err) {
     }
 });
 
-sio.on('connection', function(socket) {
-    console.log('connected');
-    var stream = new WebSocketJSONStream(sio);
-    backend.listen(stream);
-});
-*/
-
-
-
-
-
-
-
-
-
-
-io.on('connection', function(socket) {
-    if (!socket.request.session.loggedin) {
-        socket.emit('disco','no_session');
-        socket.disconnect();
+function sendToRoom(room, msg) {
+    if (rooms.get(room)) {
+        rooms.get(room).forEach((socket) => {
+            if (socket && socket.readyState === socket.OPEN)
+                socket.send(msg);
+        });
     }
-    else {
-        socket.on('join', function (msg) {
-            socket.room = msg;
-            socket.join(msg);
-        });
-        socket.on('get_objects', function(msg) {
-            var mission = JSON.parse(msg);
-            connection.query('SELECT * FROM objects WHERE mission = ? ORDER BY FIELD(type, "icon", "shape", "link"), z', [mission], function(err, rows, fields) {
-                if (!err) {
-                    socket.emit('all_objects',rows);
-                } else
-                    console.log(err);
-            });
-        });
-        socket.on('get_events', function(msg) {
-            var mission = JSON.parse(msg);
-            connection.query('SELECT id, uuid, event_time, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
-                if (!err) {
-                    socket.emit('all_events',rows);
-                } else
-                    console.log(err);
-            });
-        });
-        socket.on('get_details', function(msg, fn) {
-            var uuid = msg;
-            connection.query('SELECT details FROM objects WHERE uuid = ?', [uuid], function(err, rows, fields) {
-                if (!err) {
-                    console.log(uuid);
-                    fn(rows[0].details);
-                    socket.join(uuid);
-                } else
-                    console.log(err);
-            });
-        });
-        socket.on('change_object', function(msg) {
-            var o = JSON.parse(msg);
-            if (o.type !== undefined) {
-                if (o.type === 'icon' || o.type === 'shape') {
-                    connection.query('UPDATE objects SET type = ?, name = ?, fill_color = ?, stroke_color = ?, image = ?, x = ?, y = ? WHERE uuid = ?', [o.type, o.name, o.fill_color, o.stroke_color, o.image, o.x, o.y, o.uuid], function (err, results) {
-                        if (!err) {
-                            io.in(socket.room).emit('change_object', msg);
-                        } else
-                            console.log(err);
-                    });
-                } else if (o.type === 'link') {
-                    connection.query('UPDATE objects SET name = ?, stroke_color = ? WHERE uuid = ?', [o.name, o.stroke_color, o.uuid], function (err, results) {
-                        if (!err) {
-                            io.in(socket.room).emit('change_object', msg);
-                        } else
-                            console.log(err);
-                    });
-                }
-            }
-        });
-        socket.on('change_link', function(msg) {
-            var o = JSON.parse(msg);
-            if (o.type !== undefined && o.type === 'link') {
-            }
-        });
-        socket.on('update_layers', function(msg) {
-            var objs = JSON.parse(msg);
-            for (var i = 0; i < objs.length; i ++) {
-                var o = objs[i];
-                if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
-                    connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
-                        if (!err) {
-                        } else
-                            console.log(err);
-                    });
-                } else if (o.type !== undefined && o.type === 'link') {
-                    connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
-                        if (!err) {
-                        } else
-                            console.log(err);
-                    });
-                }
-            }
+}
 
+ws.on('connection', function(socket) {
+    socket.loggedin = false;
+    socket.session = '';
+    session = socket.upgradeReq.headers.cookie.split('session=s%3A')[1].split('.')[0];
+    if (session) {
+        socket.session = session;
+        connection.query('SELECT data FROM sessions WHERE session_id = ? LIMIT 1', [session], function(err, rows, fields) {
+            if (!err) {
+                try {
+                    data = JSON.parse(rows[0].data);
+                    socket.loggedin = data.loggedin;
+                    socket.user_id = data.user_id;
+                    socket.username = data.username;
+                } catch (e) {
+                }
+            } else
+                console.log(err);
         });
-        socket.on('move_object', function(msg) {
-            console.log(socket.room);
-            var o = JSON.parse(msg);
-            if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
-                connection.query('UPDATE objects SET x = ?, y = ?, z = ?, scale_x = ?, scale_y = ? WHERE uuid = ?', [o.x, o.y, o.z, o.scale_x, o.scale_y, o.uuid], function (err, results) {
-                    if (!err) {
-                        socket.broadcast.in(socket.room).emit('move_object', msg);
-                    } else
-                        console.log(err);
-                });
-            } else if (o.type !== undefined && o.type === 'link') {
-                connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
-                    if (!err) {
-                        socket.broadcast.in(socket.room).emit('move_object', msg);
-                    } else
-                        console.log(err);
-                });
-            }
-
-        });
-        socket.on('update_event', function(msg) {
-            var evt = JSON.parse(msg);
-            evt.analyst = socket.request.session.user_id;
-            connection.query('UPDATE events SET event_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst, evt.id], function (err, results) {
-                if (!err) {
-                    io.in(socket.room).emit('update_event', msg);
-                } else
-                    console.log(err);
-            });
-        });
-        socket.on('update_details', function(msg) {
-            var o = JSON.parse(msg);
-            socket.broadcast.in(o.uuid).emit('update_details', msg);
-/*            connection.query('UPDATE objects SET details = ? WHERE uuid = ?', [o.details, o.uuid], function (err, results) {
-                if (!err) {
-                    if (rooms[uuid] === undefined) {
-                        socket.join(uuid);
-                } else
-                    console.log(err);
-            });*/
-        });
-        socket.on('insert_event', function(msg) {
-            var evt = JSON.parse(msg);
-            evt.analyst = socket.request.session.user_id;
-            connection.query('INSERT INTO events (mission, event_time, source_object, source_port, dest_object, dest_port, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst], function (err, results) {
-                if (!err) {
-                    evt.id = results.insertId;
-                    io.in(socket.room).emit('insert_event', JSON.stringify(evt));
-                } else
-                    console.log(err);
-            });
-        });
-        socket.on('delete_event', function(msg) {
-            var evt = JSON.parse(msg);
-            connection.query('DELETE FROM events WHERE id = ?', [evt.id], function (err, results) {
-                if (!err) {
-                    socket.broadcast.in(socket.room).emit('delete_event', JSON.stringify(evt));
-                } else
-                    console.log(err);
-            });
-        });
-        socket.on('insert_object', function(msg) {
-            var o = JSON.parse(msg);
-            if (o.type === 'icon' || o.type === 'shape') {
-                connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, x, y, width, height) values (?, ?, ?, ?, ?, ?, 64, 64, 64, 64)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image], function (err, results) {
-                    if (!err) {
-                        o.id = results.insertId;
-                        connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
-                            if (!err) {
-                                io.in(socket.room).emit('insert_object',JSON.stringify(rows[0]));
-                            } else
-                                console.log(err);
-                        });
-                    } else
-                        console.log(err);
-                });
-            } else if (o.type === 'link') {
-                connection.query('INSERT INTO objects (mission, type, name, stroke_color, obj_a, obj_b, z) values (?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.obj_a, o.obj_b, o.z], function (err, results) {
-                    if (!err) {
-                        o.id = results.insertId;
-                        connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
-                            if (!err) {
-                                io.in(socket.room).emit('insert_object', JSON.stringify(rows[0]));
-                            } else
-                                console.log(err);
-                        });
-                    } else
-                        console.log(err);
-                });
-            }
-        });
-        socket.on('delete_object', function(msg) {
-            var o = JSON.parse(msg);
-            if (o.type !== undefined) {
-                if (o.type === 'icon' || o.type === 'shape') {
-                    connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
+    }
+    socket.on('message', function(msg, flags) {
+        try {
+            msg = JSON.parse(msg);
+        } catch (e) {
+            return;
+        }
+        if (socket.loggedin && msg.act) {
+            switch (msg.act) {
+                case 'stream':
+                    var stream = new WebSocketJSONStream(socket);
+                    backend.listen(stream);
+                    break;
+                case 'join':
+                    socket.room = msg.arg;
+                    if (!rooms.get(msg.arg))
+                        rooms.set(msg.arg, new Set());
+                    rooms.get(msg.arg).add(socket);
+                    break;
+                case 'get_objects':
+                    var mission = msg.arg;
+                    connection.query('SELECT * FROM objects WHERE mission = ? ORDER BY FIELD(type, "icon", "shape", "link"), z', [mission], function(err, rows, fields) {
                         if (!err) {
-                            io.in(socket.room).emit('delete_object', JSON.stringify(o.uuid));
-                            connection.query('SELECT uuid FROM objects WHERE obj_a = ? OR obj_b = ?', [o.uuid, o.uuid], function(err, rows, results) {
+                            socket.send(JSON.stringify({act:'all_objects', arg:rows}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'get_events':
+                    var mission = JSON.parse(msg.arg);
+                    connection.query('SELECT id, uuid, event_time, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
+                        if (!err) {
+                            socket.send(JSON.stringify({act:'all_events', arg:rows}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+/*                case 'get_details':           
+                    var uuid = msg.arg;
+                    connection.query('SELECT details FROM objects WHERE uuid = ?', [uuid], function(err, rows, fields) {
+                        if (!err) {
+                            console.log(uuid);
+                            fn(rows[0].details);
+                        } else
+                            console.log(err);
+                    });
+                    break;*/
+                case 'change_object':
+                    var o = msg.arg;
+                    if (o.type !== undefined) {
+                        if (o.type === 'icon' || o.type === 'shape') {
+                            connection.query('UPDATE objects SET name = ?, fill_color = ?, stroke_color = ?, image = ? WHERE uuid = ?', [o.name, o.fill_color, o.stroke_color, o.image, o.uuid], function (err, results) {
                                 if (!err) {
-                                    for (var r = 0; r < rows.length; r++) {
-                                        console.log(rows[r]);
-                                        io.in(socket.room).emit('delete_object', JSON.stringify(rows[r].uuid));
-                                        connection.query('DELETE FROM objects WHERE uuid = ?', [rows[r].uuid], function(err, results) {
-                                        });
-                                    }
+                                    sendToRoom(socket.room, JSON.stringify({act: 'change_object', arg: msg.arg}));
                                 } else
                                     console.log(err);
                             });
-                        } else
-                            console.log(err);
-                    });
-                } else if (o.type === 'link') {
-                    connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
+                        } else if (o.type === 'link') {
+                            connection.query('UPDATE objects SET name = ?, stroke_color = ? WHERE uuid = ?', [o.name, o.stroke_color, o.uuid], function (err, results) {
+                                if (!err) {
+                                    sendToRoom(socket.room, JSON.stringify({act: 'change_object', arg: msg.arg}));
+                                } else
+                                    console.log(err);
+                            });
+                        }
+                    }
+                    break;
+                case 'move_object':
+                    var o = msg.arg;
+                    if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
+                        connection.query('UPDATE objects SET x = ?, y = ?, z = ?, scale_x = ?, scale_y = ? WHERE uuid = ?', [o.x, o.y, o.z, o.scale_x, o.scale_y, o.uuid], function (err, results) {
+                            if (!err) {
+                                sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}));
+                            } else
+                                console.log(err);
+                        });
+                    } else if (o.type !== undefined && o.type === 'link') {
+                        connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
+                            if (!err) {
+                                sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}));
+                            } else
+                                console.log(err);
+                        });
+                    }
+                    break;
+                case 'change_link':
+                    var o = msg.arg;
+                    if (o.type !== undefined && o.type === 'link') {
+                    }
+                    break;
+                case 'update_layers':
+                    var objs = msg.arg;
+                    for (var i = 0; i < objs.length; i ++) {
+                        var o = objs[i];
+                        if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
+                            connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
+                                if (!err) {
+                                } else
+                                    console.log(err);
+                            });
+                        } else if (o.type !== undefined && o.type === 'link') {
+                            connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
+                                if (!err) {
+                                } else
+                                    console.log(err);
+                            });
+                        }
+                    }
+                    break;
+                case 'update_event':
+                    var evt = msg.arg;
+                    evt.analyst = socket.user_id;
+                    connection.query('UPDATE events SET event_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst, evt.id], function (err, results) {
                         if (!err) {
-                            io.in(socket.room).emit('delete_object', JSON.stringify(o.uuid));
+                            sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}));
                         } else
                             console.log(err);
                     });
-                }
+                    break;
+                case 'insert_event':
+                    var evt = msg.arg;
+                    evt.analyst = socket.user_id;
+                    connection.query('INSERT INTO events (mission, event_time, source_object, source_port, dest_object, dest_port, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst], function (err, results) {
+                        if (!err) {
+                            evt.id = results.insertId;
+                            evt.analyst = socket.username;
+                            sendToRoom(socket.room, JSON.stringify({act: 'insert_event', arg: evt}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'delete_event':
+                    var evt = msg.arg;
+                    connection.query('DELETE FROM events WHERE id = ?', [evt.id], function (err, results) {
+                        if (!err) {
+                            sendToRoom(socket.room, JSON.stringify({act: 'delete_event', arg: msg.arg}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'insert_object':
+                    var o = msg.arg;
+                    if (o.type === 'icon' || o.type === 'shape') {
+                        connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, x, y, z) values (?, ?, ?, ?, ?, ?, 64, 64, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, o.z], function (err, results) {
+                            if (!err) {
+                                o.id = results.insertId;
+                                connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
+                                    if (!err) {
+                                        sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
+                                    } else
+                                        console.log(err);
+                                });
+                            } else
+                                console.log(err);
+                        });
+                    } else if (o.type === 'link') {
+                        connection.query('INSERT INTO objects (mission, type, name, stroke_color, image, obj_a, obj_b, z) values (?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.image, o.obj_a, o.obj_b, o.z], function (err, results) {
+                            if (!err) {
+                                o.id = results.insertId;
+                                connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
+                                    if (!err) {
+                                        sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
+                                    } else
+                                        console.log(err);
+                                });
+                            } else
+                                console.log(err);
+                        });
+                    }
+                    break;
+                case 'delete_object':
+                    var o = msg.arg;
+                    if (o.type !== undefined) {
+                        if (o.type === 'icon' || o.type === 'shape') {
+                            connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
+                                if (!err) {
+                                    sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:o.uuid}));
+                                    connection.query('SELECT uuid FROM objects WHERE obj_a = ? OR obj_b = ?', [o.uuid, o.uuid], function(err, rows, results) {
+                                        if (!err) {
+                                            for (var r = 0; r < rows.length; r++) {
+                                                sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:rows[r].uuid}));
+                                                connection.query('DELETE FROM objects WHERE uuid = ?', [rows[r].uuid], function(err, results) {
+                                                });
+                                            }
+                                        } else
+                                            console.log(err);
+                                    });
+                                } else
+                                    console.log(err);
+                            });
+                        } else if (o.type === 'link') {
+                            connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
+                                if (!err) {
+                                    sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg: o.uuid}));
+                                } else
+                                    console.log(err);
+                            });
+                        }
+                    }
+                    break;
             }
-        });
-    }
+        }
+    });
 });
 
 app.get('/', function (req, res) {
@@ -303,27 +302,33 @@ app.post('/api', function (req, res) {
     res.writeHead(200, {"Content-Type": "application/json"});
     if (req.body.table !== undefined && req.body.table === 'missions') {
         if (req.body.action !== undefined && req.body.action === 'select') {
-            connection.query("SELECT id, name, start_date, (SELECT username FROM users WHERE users.id = id) as analyst FROM missions", function(err, rows, fields) {
+            connection.query("SELECT id, name, start_date, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM missions", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
-                } else
+                } else {
+                    res.end(JSON.stringify('[]'));
                     console.log(err);
+                }
             });
         } else if (req.body.action !== undefined && req.body.action === 'update' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             connection.query('UPDATE missions SET name = ?, start_date = ?, analyst = ? WHERE id = ?', [row.name, row.start_date, row.analyst, row.id], function (err, results) {
                 if (!err) {
                     res.end(JSON.stringify('OK'));
-                } else
+                } else {
                     console.log(err);
+                    res.end(JSON.stringify('ERR'));
+                }
             });
         } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             connection.query('INSERT INTO missions (name, start_date, analyst) values (?, ?, ?)', [row.name, row.start_date, row.analyst], function (err, results) {
                 if (!err) {
                     res.end(JSON.stringify('OK'));
-                } else
+                } else {
                     console.log(err);
+                    res.end(JSON.stringify('ERR'));
+                }
             });
         } else if (req.body.action !== undefined && req.body.action === 'delete' && req.body.id !== undefined) {
             var id = JSON.parse(req.body.id);
@@ -332,8 +337,10 @@ app.post('/api', function (req, res) {
                     connection.query('DELETE FROM objects WHERE id = ?', [id], function (err, results) {
                         if (!err) {
                             res.end(JSON.stringify('OK'));
-                        } else
+                        } else {
+                            res.end(JSON.stringify('ERR'));
                             console.log(err);
+                        }
                     });
                 } else
                     console.log(err);
@@ -341,47 +348,81 @@ app.post('/api', function (req, res) {
         }
     } else if (req.body.table !== undefined && req.body.table === 'users') {
         if (req.body.action !== undefined && req.body.action === 'select') {
-            connection.query("SELECT id, username, access_level FROM users", function(err, rows, fields) {
+            connection.query("SELECT id, username, name, '********' as password, access_level FROM users", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
-                } else
+                } else {
+                    res.end(JSON.stringify('[]'));
                     console.log(err);
+                }
             });
         } else if (req.body.action !== undefined && req.body.action === 'update' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
-            connection.query('UPDATE missions SET name = ?, start_date = ?, analyst = ? WHERE id = ?', [row.name, row.start_date, row.analyst, row.id], function (err, results) {
-                if (!err) {
-                    res.end(JSON.stringify('OK'));
-                } else
-                    console.log(err);
-            });
+            if (row.password !== '********') {
+                bcrypt.hash(row.password, null, null, function(err, hash) {
+                    connection.query('UPDATE users SET name = ?, password = ?, access_level = ? WHERE id = ?', [row.name, hash, row.access_level, row.id], function (err, results) {
+                        if (!err) {
+                            res.end(JSON.stringify('OK'));
+                        } else {
+                            res.end(JSON.stringify('ERR'));
+                            console.log(err);
+                        }
+                    });
+                });
+            } else {
+                var query = 'UPDATE users SET name = ? WHERE id = ?';
+                var args = [row.name, row.id];
+                connection.query(query, args, function (err, results) {
+                    if (!err) {
+                        res.end(JSON.stringify('OK'));
+                    } else {
+                        res.end(JSON.stringify('ERR'));
+                        console.log(err);
+                    }
+                });
+            }
         } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
-            connection.query('INSERT INTO missions (name, start_date, analyst) values (?, ?, ?)', [row.name, row.start_date, row.analyst], function (err, results) {
-                if (!err) {
-                    res.end(JSON.stringify('OK'));
-                } else
-                    console.log(err);
+            bcrypt.hash(row.password, null, null, function(err, hash) {
+                connection.query('INSERT INTO users (username, name, password, access_level) values (?, ?, ?, ?)', [row.username, row.name, hash, row.access_level], function (err, results) {
+                    if (!err) {
+                        res.end(JSON.stringify('OK'));
+                    } else {
+                        res.end(JSON.stringify('ERR'));
+                        console.log(err);
+                    }
+                });
             });
         } else if (req.body.action !== undefined && req.body.action === 'delete' && req.body.id !== undefined) {
             var id = JSON.parse(req.body.id);
-            connection.query('DELETE FROM missions WHERE id = ?', [id], function (err, results) {
-                if (!err) {
-                    res.end(JSON.stringify('OK'));
-                } else
-                    console.log(err);
-            });
+            if (id != 0) {
+                connection.query('DELETE FROM users WHERE id = ?', [id], function (err, results) {
+                    if (!err) {
+                        res.end(JSON.stringify('OK'));
+                    } else {
+                        console.log(err);
+                        res.end(JSON.stringify('ERR'));
+                    }
+                });
+            }
         }
+    }
+});
+
+app.get('/users', function (req, res) {
+    if (req.session.loggedin) {
+        res.render('users', { title: 'MCSCOP'});
+    } else {
+       res.redirect('login');
     }
 });
 
 app.get('/copview', function (req, res) {
     if (req.session.loggedin) {
         if (req.query.mission !== undefined && req.query.mission > 0) {
-            fs.readdir('./public/images/icons', function(err, items) {
+            fs.readdir('./public/images/icons', function(err, icons) {
                 fs.readdir('./public/images/shapes', function(err, shapes) {
-                    res.render('copview', { title: 'MCSCOP', icons: items, shapes: shapes});
-
+                    res.render('cop', { title: 'MCSCOP', icons: icons, shapes: shapes});
                 });
             });
 
@@ -393,14 +434,12 @@ app.get('/copview', function (req, res) {
     }
 });
 
-
 app.get('/cop', function (req, res) {
     if (req.session.loggedin) {
         if (req.query.mission !== undefined && req.query.mission > 0) {
             fs.readdir('./public/images/icons', function(err, items) {
                 fs.readdir('./public/images/shapes', function(err, shapes) {
                     res.render('cop', { title: 'MCSCOP', icons: items, shapes: shapes});
-
                 });
             });
 
@@ -414,12 +453,13 @@ app.get('/cop', function (req, res) {
 
 app.post('/login', function (req, res) {
     if (req.body.username !== undefined && req.body.username !== '' && req.body.password !== undefined && req.body.password !== '') {
-        connection.query('SELECT id, password FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
+        connection.query('SELECT id, username, password FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
             if (!err) {
                 if (rows.length === 1) {
                     bcrypt.compare(req.body.password, rows[0].password, function(err, bres) {
                         if (bres) {
                             req.session.user_id = rows[0].id;
+                            req.session.username = rows[0].username;
                             req.session.loggedin = true;
                             res.redirect('login');
                         } else

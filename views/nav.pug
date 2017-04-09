@@ -5,4 +5,15 @@ nav.navbar.navbar-inverse(role='navigation')
     li
       a(href=".") Missions
     li
+      a(href="users") Users
+    li
       a(href="logout") Logout
+div.modal.fade#modal(role='dialog')
+  div.modal-dialog
+    div.modal-content
+      div.modal-header
+        button.close(type='button' data-dismiss='modal') &times;
+        h4.modal-title#modal-title
+      div.modal-body#modal-body
+      div.modal-footer#modal-footer
+

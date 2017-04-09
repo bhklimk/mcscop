@@ -43,6 +43,28 @@ DateField.prototype = new jsGrid.Field({
 });
 jsGrid.fields.date = DateField;
 
+var origFinishInsert = jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishInsert;
+jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishInsert = function(insertedItem) {
+    if(insertedItem.insertFailed) {
+        return;
+    }
+    origFinishInsert.apply(this, arguments);
+}
+var origFinishUpdate = jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishUpdate;
+jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishUpdate = function(updatedItem) {
+    if(updatedItem.updateFailed) {
+        return;
+    }
+    origFinishUpdate.apply(this, arguments);
+}
+var origFinishDelete = jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishDelete;
+jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishDelete = function(deletedItem) {
+    if(deletedItem.deleteFailed) {
+        return;
+    }
+    origFinishDelete.apply(this, arguments);
+}
+
 $(document).ready(function() {
     $('#missions').jsGrid({
         autoload: false,
@@ -107,7 +129,14 @@ $(document).ready(function() {
                         table: 'missions',
                         row: JSON.stringify(item)
                     }
-                }).done(function() {
+                }).done(function(res) {
+                    if (res !== 'OK') {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to insert mission.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.insertFailed = true;
+                    }
                     d.resolve();
                 });
                 return d.promise();
@@ -122,7 +151,14 @@ $(document).ready(function() {
                         table: 'missions',
                         row: JSON.stringify(item)
                     }
-                }).done(function() {
+                }).done(function(res) {
+                    if (res !== 'OK') {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to update mission.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.updateFailed = true;
+                    }
                     d.resolve();
                 });
                 return d.promise();
@@ -137,7 +173,14 @@ $(document).ready(function() {
                         table: 'missions',
                         id: JSON.stringify(item.id)
                     }
-                }).done(function() {
+                }).done(function(res) {
+                    if (res !== 'OK') {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to delete mission.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.deleteFailed = true;
+                    }
                     d.resolve();
                 });
                 return d.promise();
@@ -157,6 +200,8 @@ $(document).ready(function() {
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
             { name: 'username', title: 'Username', type : 'text', width: 65},
+            { name: 'name', title: 'Name', type : 'text', width: 65},
+            { name: 'password', title: 'Password', type : 'text', width: 65},
             { name: 'access_level', title: 'Access Level', type: 'number', width: 45},
             {
                 type: "control",
@@ -200,7 +245,16 @@ $(document).ready(function() {
                         table: 'users',
                         row: JSON.stringify(item)
                     }
-                }).done(function() {
+                }).done(function(res) {
+                    if (res == 'OK') {
+                        item.password = '********';
+                    } else {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to insert user.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.insertFailed = true;
+                    }
                     d.resolve();
                 });
                 return d.promise();
@@ -215,7 +269,16 @@ $(document).ready(function() {
                         table: 'users',
                         row: JSON.stringify(item)
                     }
-                }).done(function() {
+                }).done(function(res) {
+                    if (res == 'OK') {
+                        item.password = '********';
+                    } else {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to update user.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.updateFailed = true;
+                    }
                     d.resolve();
                 });
                 return d.promise();
@@ -230,7 +293,14 @@ $(document).ready(function() {
                         table: 'users',
                         id: JSON.stringify(item.id)
                     }
-                }).done(function() {
+                }).done(function(res) {
+                    if (res !== 'OK') {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to delete user.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.deleteFailed = true;
+                    }
                     d.resolve();
                 });
                 return d.promise();
