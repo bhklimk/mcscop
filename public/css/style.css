@@ -31,6 +31,18 @@ canvas {
     margin: 10px;
 }
 
+#toolsButton {
+    background-color: #385a91;
+}
+
+#tasksButton {
+    background-color: #913851;
+}
+
+#notesButton {
+    background-color: #3b722c;
+}
+
 .canvas-container {
     width: 100% !important;
     height: 100% !important;;
@@ -75,14 +87,6 @@ canvas {
     margin-bottom: 10px;
 }
 
-.sidebar {
-    border-collapse: collapse;
-    display: table;
-    position: absolute;
-    right: 0px;
-    top: 0px;
-}
-
 .highlight td {
     background-color: lightblue !important;
 }
@@ -125,6 +129,22 @@ canvas {
     position: absolute;
     top: 10px;
     right: 5px;
+}
+
+#taskGroup {
+    width: 100%;
+    height: 100%;
+}
+
+.tasks {
+    width: 100%;
+    height: 33%;
+    margin-bottom: 3px;
+}
+
+#notes {
+    width: 100%;
+    height: 100%;
 }
 
 .btn-login {
@@ -181,7 +201,7 @@ input[type="password"] {
     top: 4px;
 };
 
-.propTitle {
+.toolbarTitle {
     font-size: 20px;
     font-weight: bold;
 }
@@ -233,22 +253,30 @@ input[type="password"] {
     text-align: center;
 }
 
-.properties-nav {
+.toolbar-nav {
     width: 40px;
     position: absolute;
     left: -40px;
     top: 0px;
 }
 
-.properties {
+.toolbar {
+    position: absolute;
+    right: 0px;
+    top: 0px;
+    height: 100%;
+}
+
+.toolbar-body[style]{
+  left:0 !important;
+}
+
+.toolbar-body {
     width: 310px;
-    height: 600px;
-    float: right;
+    height: 100%;
     padding: 10px;
     display: none;
-    border-radius: 0px 0px 0px 4px;
     border-left: 1px black solid;
-    border-bottom: 1px black solid;
     background-color: lightgray;
 }
 

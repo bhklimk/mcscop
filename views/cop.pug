@@ -23,14 +23,21 @@ html
             button.zoomIn#zoomIn(onclick='zoomIn()') +
             button.zoomOut#zoomOut(onclick='zoomOut()') -
             button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
-        div.sidebar
-          div.properties-nav#properties-nav
+        div.toolbar#toolbar
+          div.toolbar-nav#toolbar-nav
             div.nav-button#toolsButton(onclick='toggleToolbar("tools")') T<br>O<br>O<br>L<br>S
-            div.nav-button#tasksButton(onclick='toggleToolbar("tasks")') T<br>O<br>O<br>L<br>S
-          div.properties#properties
-            span.propTitle#propTitle Edit Object
-            button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()") New!
-            form#propForm
+            div.nav-button#tasksButton(onclick='toggleToolbar("tasks")') T<br>A<br>S<br>K<br>S
+            div.nav-button#notesButton(onclick='toggleToolbar("notes")') N<br>O<br>T<br>E<br>S
+          div.toolbar-body#toolbar-body
+            div#notesForm
+              textarea#notes
+            div#tasksForm
+              textarea.tasks#hostTasks
+              textarea.tasks#networkTasks
+              textarea.tasks#ccirs
+            form#toolsForm
+              span.toolbarTitle#toolbarTitle Edit Object
+              button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()") New!
               input(type="hidden", name="id")#propID
               input(type="hidden", name="type")#propType
               div.form-group#propNameGroup
@@ -57,7 +64,7 @@ html
                   button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()") Insert
                   button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
                   button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()") Delete
-                  button.btn.btn-default(type='button' onclick="closeProperties()") Cancel
+                  button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
       div.jumbotron
         div#slider
         div#events
