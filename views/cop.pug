@@ -28,7 +28,10 @@ html
             div.nav-button#toolsButton(onclick='toggleToolbar("tools")') T<br>O<br>O<br>L<br>S
             div.nav-button#tasksButton(onclick='toggleToolbar("tasks")') T<br>A<br>S<br>K<br>S
             div.nav-button#notesButton(onclick='toggleToolbar("notes")') N<br>O<br>T<br>E<br>S
+            div.nav-button#opsButton(onclick='toggleToolbar("ops")') O<br>P<br>S
           div.toolbar-body#toolbar-body
+            div#opsForm
+              div#ops
             div#notesForm
               textarea#notes
             div#tasksForm
@@ -78,6 +81,5 @@ html
   script(src='js/jquery-ui-timepicker-addon.min.js')
   script(src='js/nouislider.min.js')
   script(src='js/ElementQueries.js')
-  script(src='js/json-patch-duplex.min.js')
   script(src='js/sharedbclient.js')
   script(src='js/cop.js')

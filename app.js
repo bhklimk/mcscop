@@ -29,7 +29,6 @@ var rooms = new Map();
 var connection = mysql.createConnection(mysqlOptions);
 var ws = new require('ws').Server({server:http});
 
-
 app.set('view engine', 'pug');
 app.use(express.static('public'));
 app.use(bodyParser.json());
@@ -40,7 +39,6 @@ connection.connect();
 
 var sdb = require('./sharedb-mysql')(connection);
 var backend = new ShareDB({db: sdb});
-//var backend = new ShareDB();
 
 // Create initial document then fire callback
 var backconnection = backend.connect();
@@ -110,23 +108,23 @@ ws.on('connection', function(socket) {
                     break;
                 case 'get_events':
                     var mission = JSON.parse(msg.arg);
-                    connection.query('SELECT id, uuid, event_time, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
+                    connection.query('SELECT id, uuid, event_time, event_type, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
                         if (!err) {
                             socket.send(JSON.stringify({act:'all_events', arg:rows}));
                         } else
                             console.log(err);
                     });
                     break;
-/*                case 'get_details':           
-                    var uuid = msg.arg;
-                    connection.query('SELECT details FROM objects WHERE uuid = ?', [uuid], function(err, rows, fields) {
+                case 'get_opnotes':
+                    var mission = JSON.parse(msg.arg);
+                    var analyst = socket.user_id;
+                    connection.query('SELECT id, event_time, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC', [mission, analyst], function(err, rows, fields) {
                         if (!err) {
-                            console.log(uuid);
-                            fn(rows[0].details);
+                            socket.send(JSON.stringify({act:'all_opnotes', arg:rows}));
                         } else
                             console.log(err);
                     });
-                    break;*/
+                    break;
                 case 'change_object':
                     var o = msg.arg;
                     if (o.type !== undefined) {
@@ -192,7 +190,7 @@ ws.on('connection', function(socket) {
                 case 'update_event':
                     var evt = msg.arg;
                     evt.analyst = socket.user_id;
-                    connection.query('UPDATE events SET event_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst, evt.id], function (err, results) {
+                    connection.query('UPDATE events SET event_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst, evt.id], function (err, results) {
                         if (!err) {
                             sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}));
                         } else
@@ -202,7 +200,7 @@ ws.on('connection', function(socket) {
                 case 'insert_event':
                     var evt = msg.arg;
                     evt.analyst = socket.user_id;
-                    connection.query('INSERT INTO events (mission, event_time, source_object, source_port, dest_object, dest_port, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.short_desc, evt.analyst], function (err, results) {
+                    connection.query('INSERT INTO events (mission, event_time, source_object, source_port, dest_object, dest_port, event_type, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst], function (err, results) {
                         if (!err) {
                             evt.id = results.insertId;
                             evt.analyst = socket.username;
@@ -216,6 +214,37 @@ ws.on('connection', function(socket) {
                     connection.query('DELETE FROM events WHERE id = ?', [evt.id], function (err, results) {
                         if (!err) {
                             sendToRoom(socket.room, JSON.stringify({act: 'delete_event', arg: msg.arg}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'update_opnote':
+                    var evt = msg.arg;
+                    evt.analyst = socket.user_id;
+                    connection.query('UPDATE opnotes SET event_time = ?, source_object = ?, tool = ?, action = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst, evt.id], function (err, results) {
+                        if (!err) {
+                            sendToRoom(socket.room, JSON.stringify({act: 'update_opnote', arg: msg.arg}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'insert_opnote':
+                    var evt = msg.arg;
+                    evt.analyst = socket.user_id;
+                    connection.query('INSERT INTO opnotes (mission, event_time, source_object, tool, action, analyst) values (?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst], function (err, results) {
+                        if (!err) {
+                            evt.id = results.insertId;
+                            evt.analyst = socket.username;
+                            sendToRoom(socket.room, JSON.stringify({act: 'insert_opnote', arg: evt}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'delete_opnote':
+                    var evt = msg.arg;
+                    connection.query('DELETE FROM opnotes WHERE id = ?', [evt.id], function (err, results) {
+                        if (!err) {
+                            sendToRoom(socket.room, JSON.stringify({act: 'delete_opnote', arg: msg.arg}));
                         } else
                             console.log(err);
                     });

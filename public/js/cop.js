@@ -27,7 +27,8 @@ var mission = getParameterByName('mission');
 var objectSelect = [{id:0, name:'none/unknown'}];
 var dateSlider = null;
 var images = {};
-var tableData = [];
+var eventTableData = [];
+var opnoteTableData = [];
 var eventTimes = [];
 var objectsLoaded = null;
 var updatingObject = false;
@@ -39,6 +40,7 @@ var dirty = false;
 var SVGCache = {};
 var tempLinks = [];
 var objectCache = {};
+var doc;
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -203,17 +205,24 @@ $(document).ready(function() {
         diagram.send(JSON.stringify({act:'get_objects', arg: mission}));
         console.log('get events');
         diagram.send(JSON.stringify({act:'get_events', arg: mission}));
+        console.log('get opnotes');
+        diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
     };
 
     diagram.onmessage = function(msg) {
         msg = JSON.parse(msg.data);
         switch(msg.act) {
             case 'disco':
+                $('#modal').data('bs.modal',null);
                 $('#modal-title').text('Attention!');
                 $('#modal-body').html('<p>Connection lost!</p>');
                 $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
-                $('#modal').modal('show');
+                $('#modal').modal({
+                    backdrop: 'static',
+                    keyboard: false
+                });
                 canvas.clear();
+                canvas.renderAll();
                 break;
             case 'all_objects':
                 canvas.clear();
@@ -231,24 +240,31 @@ $(document).ready(function() {
                 checkIfShapesCached(msg.arg);
                 break;
             case 'all_events':
-                tableData = [];
+                eventTableData = [];
                 eventTimes = [0,9999999999999];
                 for (var evt in msg.arg) {
-                    tableData.push(msg.arg[evt]);
+                    eventTableData.push(msg.arg[evt]);
                     eventTimes.splice(eventTimes.length - 1, 0, msg.arg[evt].event_time);
                 }
-                var end = eventTimes.length - 1;
-                if (end < 1)
-                    end = 9999999999999;
+                var end = eventTimes.length + 1;
                 dateSlider.noUiSlider.updateOptions({
                     start: [0,end],
                     range: {
                         'min': 0,
                         'max': end
                     },
+                    step: 1
                 });
                 $('#events').jsGrid('loadData');
                 $('#events').jsGrid('sort', 1, 'asc');
+                break;
+            case 'all_opnotes':
+                opnoteTableData = [];
+                for (var evt in msg.arg) {
+                    opnoteTableData.push(msg.arg[evt]);
+                }
+                $('#ops').jsGrid('loadData');
+                $('#ops').jsGrid('sort', 1, 'asc');
                 break;
             case 'change_object':
                 console.log('change');
@@ -330,9 +346,9 @@ $(document).ready(function() {
                 break;
             case 'update_event':
                 var evt = msg.arg;
-                for (var i = 0; i < tableData.length; i++) {
-                    if (tableData[i].id === evt.id) {
-                        tableData[i] = evt;
+                for (var i = 0; i < eventTableData.length; i++) {
+                    if (eventTableData[i].id === evt.id) {
+                        eventTableData[i] = evt;
                     }
                 }
                 $('#events').jsGrid('loadData');
@@ -340,19 +356,59 @@ $(document).ready(function() {
                 break;
             case 'insert_event':
                 var evt = msg.arg;
-                tableData.push(evt);
+                eventTableData.push(evt);
                 $('#events').jsGrid('insertItem', evt);
                 break;
             case 'delete_event':
                 var evt = msg.arg;
-                for (var i = 0; i < tableData.length; i++) {
-                    if (tableData[i].id === evt.id) {
-                        tableData.splice(i, 1);
+                for (var i = 0; i < eventTableData.length; i++) {
+                    if (eventTableData[i].id === evt.id) {
+                        eventTableData.splice(i, 1);
                         break;
                     }
                 }
+                for (i = 0; i < eventTimes.length; i++) {
+                    if (eventTimes[i] === evt.event_time) {
+                        eventTimes.splice(i, 1);
+                        break;
+                    }
+                }
+                dateSlider.noUiSlider.updateOptions({
+                    start: [0,eventTimes.length+1],
+                    range: {
+                        'min': 0,
+                        'max': eventTimes.length+1
+                    },
+                    step: 1
+                });
                 $('#events').jsGrid('loadData');
                 $('#events').jsGrid('sort', 1, 'asc');
+                break;
+            case 'update_opnote':
+                var evt = msg.arg;
+                for (var i = 0; i < opnoteTableData.length; i++) {
+                    if (opnoteTableData[i].id === evt.id) {
+                        opnoteTableData[i] = evt;
+                    }
+                }
+                $('#ops').jsGrid('loadData');
+                $('#ops').jsGrid('sort', 1, 'asc');
+                break;
+            case 'insert_opnote':
+                var evt = msg.arg;
+                opnoteTableData.push(evt);
+                $('#ops').jsGrid('insertItem', evt);
+                break;
+            case 'delete_opnote':
+                var evt = msg.arg;
+                for (var i = 0; i < opnoteTableData.length; i++) {
+                    if (opnoteTableData[i].id === evt.id) {
+                        opnoteTableData.splice(i, 1);
+                        break;
+                    }
+                }
+                $('#ops').jsGrid('loadData');
+                $('#ops').jsGrid('sort', 1, 'asc');
                 break;
             case 'insert_object':
                 var o = msg.arg;
@@ -1068,14 +1124,22 @@ function openToolbar(mode) {
         $('#toolsForm').show();
         $('#tasksForm').hide();
         $('#notesForm').hide();
+        $('#opsForm').hide();
     } else if (mode === 'tasks') {
         $('#toolsForm').hide();
         $('#tasksForm').show();
         $('#notesForm').hide();
+        $('#opsForm').hide();
     } else if (mode === 'notes') {
         $('#toolsForm').hide();
         $('#tasksForm').hide();
         $('#notesForm').show();
+        $('#opsForm').hide();
+    } else if (mode === 'ops') {
+        $('#toolsForm').hide();
+        $('#tasksForm').hide();
+        $('#notesForm').hide();
+        $('#opsForm').show();
     }
     // edit
     if (canvas.getActiveObject()) {
@@ -1124,11 +1188,6 @@ function closeToolbar() {
 
 function timestamp(str){
     return new Date(str).getTime();   
-}
-
-function onDetailsChange(input) {
-    console.log(input);
-
 }
 
 function startTasks() {
@@ -1229,8 +1288,8 @@ $(document).ready(function() {
 
     dateSlider.noUiSlider.on('update', function(values, handle) {
         var filter = [];
-        if (parseInt(values[1]) === eventTimes.length - 1)
-            filter = [eventTimes[parseInt(values[handle])]];
+        if (parseInt(values[1]) > eventTimes.length)
+            filter = [eventTimes[parseInt(values[0])]];
         else {
             for (var i = parseInt(values[0]); i < parseInt(values[1]); i ++) {
                 filter.push(eventTimes[i]);
@@ -1244,17 +1303,17 @@ $(document).ready(function() {
         }
         for (var j = 0; j < canvas.getObjects().length; j++)
             canvas.item(j).setShadow(null);
-        for (var i = 0; i < tableData.length; i++) {
-            if (filter.indexOf(tableData[i].event_time) !== -1) {
+        for (var i = 0; i < eventTableData.length; i++) {
+            if (filter.indexOf(eventTableData[i].event_time) !== -1) {
                 var from = null;
                 var to = null;
                 var tempLink;
-                $('#events').jsGrid("rowByItem",tableData[i]).addClass('highlight');
+                $('#events').jsGrid("rowByItem",eventTableData[i]).addClass('highlight');
                 for (var j = 0; j < canvas.getObjects().length; j++) {
-                    if (canvas.item(j).uuid === tableData[i].source_object || canvas.item(j).uuid === tableData[i].dest_object) {
-                        if (canvas.item(j).uuid === tableData[i].source_object)
+                    if (canvas.item(j).uuid === eventTableData[i].source_object || canvas.item(j).uuid === eventTableData[i].dest_object) {
+                        if (canvas.item(j).uuid === eventTableData[i].source_object)
                             from = canvas.item(j);
-                        else if (canvas.item(j).uuid === tableData[i].dest_object)
+                        else if (canvas.item(j).uuid === eventTableData[i].dest_object)
                             to = canvas.item(j);
                         //canvas.item(j).setShadow("0px 0px 50px rgba(255, 0, 0, 1.0)");
                         canvas.item(j).setShadow({color: 'red', offsetX: 2, offsetY:2, blur: 5});
@@ -1281,7 +1340,7 @@ $(document).ready(function() {
                     }
                 }
             } else {
-                $('#events').jsGrid("rowByItem",tableData[i]).removeClass('highlight');
+                $('#events').jsGrid("rowByItem",eventTableData[i]).removeClass('highlight');
             }
         }
         background.renderAll();
@@ -1289,6 +1348,77 @@ $(document).ready(function() {
     });
 
     var dj = document.getElementById('diagram_jumbotron');
+
+    $('#ops').jsGrid({
+        autoload: false,
+        width: '100%',
+        height: '100%',
+        editing: true,
+        sorting: true,
+        paging: true,
+        fields: [
+            { name: 'id', type: 'number', css: 'hide', width: 0},
+            { name: 'event_time', title: 'Action Time', type : 'date', width: 65,
+                insertTemplate: function() {
+                    var input = this.__proto__.insertTemplate.call(this);
+                    var date = new Date();
+                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    return input;
+                }
+            },
+            { name: 'source_object', title: 'Host/Device', type: 'text', width: 65},
+            { name: 'tool', title: 'Tool', type: 'text'},
+            { name: 'action', title: 'Action', type: 'text'},
+            { name: 'analyst', title: 'Analyst', type: 'text', width: 50, readOnly: true},
+            { 
+                type: "control",
+                editButton: false,
+                headerTemplate: function() {
+                    var grid = this._grid;
+                    var isInserting = grid.inserting;
+                    var $button = $("<input>").attr("type", "button")
+                        .addClass([this.buttonClass, this.modeButtonClass, this.insertModeButtonClass].join(" "))
+                        .on("click", function() {
+                            isInserting = !isInserting;
+                            grid.option("inserting", isInserting);
+                        });
+                    return $button;
+                }
+            }
+        ],
+        controller: {
+            loadData: function () {
+                return Object.keys(opnoteTableData).map(function (key) { return opnoteTableData[key]; });
+            },
+            insertItem: function(item) {
+                if (item.id === 0 || item.id === undefined) {
+                    item.mission = mission;
+                    diagram.send(JSON.stringify({act: 'insert_opnote', arg: item}));
+                }
+                return;
+            },
+            updateItem: function(item) {
+                diagram.send(JSON.stringify({act: 'update_opnote', arg: item}));
+                opnoteTableData[item['id']] = item;
+            },
+            deleteItem: function(item) {
+                diagram.send(JSON.stringify({act: 'delete_opnote', arg: item}));
+            }
+        },
+        loadStrategy: function() {
+            return new CustomDirectLoadStrategy(this);
+        },
+        rowClick: function(args) {
+            var $row = $(args.event.target).closest("tr");
+            if(this._editingRow) {
+                this.updateItem().done($.proxy(function() {
+                    this.editing && this.editItem($row);
+                }, this));
+                return;
+            }
+            this.editing && this.editItem($row);
+        }
+    });
 
     $('#events').jsGrid({
         autoload: false,
@@ -1299,19 +1429,34 @@ $(document).ready(function() {
         paging: true,
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
-            { name: 'event_time', title: 'Event Time', type : 'date', width: 65},
-            { name: 'source_object', title: 'Source Object', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
+            { name: 'event_time', title: 'Event Time', type : 'date', width: 65,
+                insertTemplate: function() {
+                    var input = this.__proto__.insertTemplate.call(this);
+                    var date = new Date();
+                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    return input;
+                }
+            },
+            { name: 'discovery_time', title: 'Discovery Time', type : 'date', width: 65,
+                insertTemplate: function() {
+                    var input = this.__proto__.insertTemplate.call(this);
+                    var date = new Date();
+                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    return input;
+                }
+            },
+            { name: 'source_object', title: 'Source', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
             { name: 'source_port', title: 'SPort', type: 'number', width: 20},
-            { name: 'dest_object', title: 'Destination Object', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
+            { name: 'dest_object', title: 'Destination', type: 'select', items: objectSelect, valueField: 'uuid', textField: 'name', width: 65, filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }
             },
             { name: 'dest_port', title: 'DPort', type: 'number', width: 20},
             { name: 'event_type', title: 'Event Type', type: 'text'},
-            { name: 'short_desc', title: 'Event Text', type: 'text'},
+            { name: 'short_desc', title: 'Event Description', type: 'text'},
             { name: 'analyst', title: 'Analyst', type: 'text', width: 50, readOnly: true},
             { 
                 type: "control",
@@ -1333,7 +1478,7 @@ $(document).ready(function() {
         ],
         controller: {
             loadData: function () {
-                return Object.keys(tableData).map(function (key) { return tableData[key]; });
+                return Object.keys(eventTableData).map(function (key) { return eventTableData[key]; });
             },
             insertItem: function(item) {
                 if (item.id === 0 || item.id === undefined) {
@@ -1341,21 +1486,23 @@ $(document).ready(function() {
                     diagram.send(JSON.stringify({act: 'insert_event', arg: item}));
                     eventTimes.splice(eventTimes.length-1,0,item.event_time);
                     dateSlider.noUiSlider.updateOptions({
-                        start: [0,eventTimes.length],
+                        start: [0,eventTimes.length+1],
                         range: {
                             'min': 0,
-                            'max': 9999999999999
-                        }
+                            'max': eventTimes.length+1
+                        },
+                        step: 1
                     });
                 }
                 return;
             },
             updateItem: function(item) {
                 diagram.send(JSON.stringify({act: 'update_event', arg: item}));
-                tableData[item['id']] = item;
+                eventTableData[item['id']] = item;
             },
             deleteItem: function(item) {
                 diagram.send(JSON.stringify({act: 'delete_event', arg: item}));
+
             }
         },
         loadStrategy: function() {

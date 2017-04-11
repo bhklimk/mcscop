@@ -14,8 +14,16 @@ canvas {
     top: 0px;
 }
 
+.noUi-connect {
+    background: #385a91;
+}
+
 .jsgrid-header-cell, .jsgrid-cell {
     padding: 3px;
+}
+
+.jsgrid-grid-body {
+    border: none;
 }
 
 .navbar-nav > li > a {
@@ -169,7 +177,7 @@ input[type="password"] {
 }
 
 #propObjectGroup {
-    height:200px;
+    height:300px;
     overflow: scroll;
     overflow-x: hidden;
 }
@@ -216,8 +224,8 @@ input[type="password"] {
 .container {
     width: 100%;
     margin: 0px;
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
 .navbar {
@@ -272,7 +280,8 @@ input[type="password"] {
 }
 
 .toolbar-body {
-    width: 310px;
+    width: 450px;
+    min-width: 310px;
     height: 100%;
     padding: 10px;
     display: none;
