@@ -511,7 +511,7 @@ canvas.on('object:selected', function(options) {
                             var z = canvas.getObjects().indexOf(firstNode) - 1;
                             if (canvas.getObjects().indexOf(o) < z)
                                 z = canvas.getObjects().indexOf(o) - 1;
-                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
+                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#propIcon').val(), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
                             firstNode = null;
                             creatingLink = false;
                         }
@@ -1078,8 +1078,8 @@ function changeObject(o) {
         tempObj.scale_y = o.scaleY;
         tempObj.type = o.objType;
         if (o.objType === 'shape') {
-            tempObj.fill_color = o.fill;
-            tempObj.stroke_color = o.stroke;
+            tempObj.fill_color = o.getFill();
+            tempObj.stroke_color = o.getStroke();
         } else {
             tempObj.fill_color = o.fillColor;
             tempObj.stroke_color = o.strokeColor;
@@ -1094,7 +1094,7 @@ function changeObject(o) {
     } else if (o.objType === 'link') {
         tempObj.uuid = o.uuid;
         tempObj.type = o.objType;
-        tempObj.stroke_color = o.strokeColor;
+        tempObj.stroke_color = o.getStroke();
         tempObj.name = '';
         for (var i=0; i < o.children.length; i++) {
             if (o.children[i].objType === 'name') {
@@ -1151,7 +1151,6 @@ function openToolbar(mode) {
         $('#deleteObjectButton').show();
         $('#insertObjectButton').hide();
         $('#newObjectButton').show();
-        $('#objectsButton').css('background-color','lightgray');
     } else if (canvas.getActiveObject() === undefined || canvas.getActiveObject() === null) {
         $('#toolbarTitle').html('New Object');
         $('#propID').val('');
@@ -1169,7 +1168,6 @@ function openToolbar(mode) {
         $('#editDetailsButton').hide();
         $('#deleteObjectButton').hide();
         $('#insertObjectButton').show();
-        $('#objectsButton').css('background-color','lightgray');
     } else {
         return;
     }
@@ -1255,11 +1253,19 @@ $(document).ready(function() {
                 var obj = canvas.getActiveObject();
                 var oldZ = canvas.getObjects().indexOf(canvas.getActiveObject());
                 obj.image = $(this).val();
+                var type = $(this).val().split('-')[2];
+                if (obj.objType !== type)
+                    return;
                 updatingObject = true;
                 updatingObject = false;
                 changeObject(obj);
             } else {
                 var type = $(this).val().split('-')[2];
+                if (type === 'link') {
+                    $('#propFillColor').hide();
+                    $('#propStrokeColor').val('#1f1f1f1f');
+                } else
+                    $('#propFillColor').show();
                 $('#propType').val(type)
             }
         }
