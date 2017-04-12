@@ -10,6 +10,7 @@ var cookieParser = require('cookie-parser');
 var bcrypt = require('bcrypt-nodejs');
 var bodyParser = require('body-parser');
 var mysql = require('mysql');
+var wss = require('ws');
 var mysqlOptions = {
     host : 'localhost',
     user : 'mcscop',
@@ -27,7 +28,7 @@ var sessionMiddleware = session({
 });
 var rooms = new Map();
 var connection = mysql.createConnection(mysqlOptions);
-var ws = new require('ws').Server({server:http});
+var ws = new wss.Server({server:http});
 
 app.set('view engine', 'pug');
 app.use(express.static('public'));
