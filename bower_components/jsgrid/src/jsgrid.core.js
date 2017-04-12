@@ -901,20 +901,23 @@
         },
 
         _refreshWidth: function() {
-            var $headerGrid = this._headerGrid,
-                $bodyGrid = this._bodyGrid,
-                width = this.width;
+            var width = (this.width === "auto") ? this._getAutoWidth() : this.width;
 
-            if(width === "auto") {
-                $headerGrid.width("auto");
-                width = $headerGrid.outerWidth();
-            }
+            this._container.width(width);
+        },
+
+        _getAutoWidth: function() {
+            var $headerGrid = this._headerGrid,
+                $header = this._header;
+
+            $headerGrid.width("auto");
+
+            var contentWidth = $headerGrid.outerWidth();
+            var borderWidth = $header.outerWidth() - $header.innerWidth();
 
             $headerGrid.width("");
-            $bodyGrid.width("");
-            this._container.width(width);
-            width = $headerGrid.outerWidth();
-            $bodyGrid.width(width);
+
+            return contentWidth + borderWidth;
         },
 
         _scrollBarWidth: (function() {
@@ -1152,13 +1155,12 @@
             };
 
             this._eachField(function(field) {
-                if(!field.validate)
+                if(!field.validate ||
+                   ($row === this._insertRow && !field.inserting) ||
+                   ($row === this._getEditRow() && !field.editing))
                     return;
 
                 var fieldValue = this._getItemFieldValue(item, field);
-
-                if(fieldValue === undefined)
-                    return;
 
                 var errors = this._validation.validate($.extend({
                     value: fieldValue,
@@ -1246,7 +1248,7 @@
 
         _createEditRow: function(item) {
             if($.isFunction(this.editRowRenderer)) {
-                return $(this.renderTemplate(field.editRowRenderer, field, { item: item, itemIndex: this._itemIndex(item) }));
+                return $(this.renderTemplate(this.editRowRenderer, this, { item: item, itemIndex: this._itemIndex(item) }));
             }
 
             var $result = $("<tr>").addClass(this.editRowClass);
@@ -1284,19 +1286,19 @@
         _updateRow: function($updatingRow, editedItem) {
             var updatingItem = $updatingRow.data(JSGRID_ROW_DATA_KEY),
                 updatingItemIndex = this._itemIndex(updatingItem),
-                previousItem = $.extend(true, {}, updatingItem);
-
-            $.extend(true, updatingItem, editedItem);
+                updatedItem = $.extend(true, {}, updatingItem, editedItem);
 
             var args = this._callEventHandler(this.onItemUpdating, {
                 row: $updatingRow,
-                item: updatingItem,
+                item: updatedItem,
                 itemIndex: updatingItemIndex,
-                previousItem: previousItem
+                previousItem: updatingItem
             });
 
-            return this._controllerCall("updateItem", updatingItem, args.cancel, function(updatedItem) {
-                updatedItem = updatedItem || updatingItem;
+            return this._controllerCall("updateItem", updatedItem, args.cancel, function(loadedUpdatedItem) {
+                var previousItem = $.extend(true, {}, updatingItem);
+                updatedItem = loadedUpdatedItem || $.extend(true, updatingItem, editedItem);
+
                 var $updatedRow = this._finishUpdate($updatingRow, updatedItem, updatingItemIndex);
 
                 this._callEventHandler(this.onItemUpdated, {
@@ -1345,7 +1347,7 @@
         },
 
         _getEditRow: function() {
-            return this._editingRow.data(JSGRID_EDIT_ROW_DATA_KEY);
+            return this._editingRow && this._editingRow.data(JSGRID_EDIT_ROW_DATA_KEY);
         },
 
         deleteItem: function(item) {

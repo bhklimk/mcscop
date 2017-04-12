@@ -1,0 +1,23 @@
+html
+  head
+    title= title
+    link(rel='stylesheet', href='css/bootstrap.min.css')
+    link(rel='stylesheet', href='css/jquery.dataTables.min.css')
+    link(rel='stylesheet', href='css/jsgrid.min.css')
+    link(rel='stylesheet', href='css/jsgrid-theme.min.css')
+    link(rel='stylesheet', href='css/jquery-ui.min.css')
+    link(rel='stylesheet', href='css/jquery-ui.theme.min.css')
+    link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
+    link(rel='stylesheet', href='css/style.css')
+  body
+    div.container
+      include nav.pug
+      div.jumbotron
+        h2 Users
+        div#users
+script(src='js/jquery.js')
+script(src='js/jsgrid.min.js')
+script(src='js/bootstrap.min.js')
+script(src='js/jquery-ui.min.js')
+script(src='js/jquery-ui-timepicker-addon.min.js')
+script(src='js/main.js')

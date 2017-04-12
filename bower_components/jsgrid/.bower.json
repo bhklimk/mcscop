@@ -1,6 +1,6 @@
 {
   "name": "jsgrid",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "main": [
     "dist/jsgrid.js",
     "dist/jsgrid.css",
@@ -26,14 +26,13 @@
     "qunit": ">=1.10.0"
   },
   "homepage": "https://github.com/tabalinas/jsgrid",
-  "_release": "1.5.2",
+  "_release": "1.5.3",
   "_resolution": {
     "type": "version",
-    "tag": "v1.5.2",
-    "commit": "66bb128dc83a9a244a9c870bb2046e1f4a2ce355"
+    "tag": "v1.5.3",
+    "commit": "9daa1aac67d21f16306d10a2bb28778ed26e8915"
   },
   "_source": "https://github.com/tabalinas/jsgrid.git",
   "_target": "^1.5.2",
-  "_originalSource": "js-grid",
-  "_direct": true
+  "_originalSource": "js-grid"
 }
