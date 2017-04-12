@@ -41,17 +41,6 @@ connection.connect();
 var sdb = require('./sharedb-mysql')(connection);
 var backend = new ShareDB({db: sdb});
 
-// Create initial document then fire callback
-var backconnection = backend.connect();
-var doc = backconnection.get('examples', 'textarea');
-doc.fetch(function(err) {
-    if (err) throw err;
-    if (doc.type === null) {
-        doc.create('');
-        return;
-    }
-});
-
 function sendToRoom(room, msg) {
     if (rooms.get(room)) {
         rooms.get(room).forEach((socket) => {
@@ -193,6 +182,7 @@ ws.on('connection', function(socket) {
                     evt.analyst = socket.user_id;
                     connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst, evt.id], function (err, results) {
                         if (!err) {
+                            evt.analyst = socket.username;
                             sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}));
                         } else
                             console.log(err);
@@ -224,6 +214,7 @@ ws.on('connection', function(socket) {
                     evt.analyst = socket.user_id;
                     connection.query('UPDATE opnotes SET event_time = ?, source_object = ?, tool = ?, action = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst, evt.id], function (err, results) {
                         if (!err) {
+                            evt.analyst = socket.username;
                             sendToRoom(socket.room, JSON.stringify({act: 'update_opnote', arg: msg.arg}));
                         } else
                             console.log(err);

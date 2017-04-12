@@ -11,9 +11,9 @@ var background = new fabric.Canvas('background', {
     renderOnAddRemove: false,
     enableRetinaScaling: false
 });
+MAXWIDTH=4000;
+MAXHEIGHT=4000;
 
-MAXWIDTH = 4000;
-MAXHEIGHT = 4000;
 canvas.setZoom(1.0);
 var creatingLink = false;
 var firstObject = null;
@@ -41,6 +41,8 @@ var SVGCache = {};
 var tempLinks = [];
 var objectCache = {};
 var doc;
+var activeToolbar = null;
+var toolbarSizes = {'tools': 500, 'tasks': 500, 'notes': 500, 'opnotes': 1200};
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -167,6 +169,7 @@ DateField.prototype = new jsGrid.Field({
     },
     insertTemplate: function(value) {
         return this._insertPicker = $("<input>").datetimepicker({
+            dateFormat: "yy-mm-dd",
             timeFormat: "HH:mm:ss.l",
             controlType: 'select',
             showMillisec: true
@@ -175,6 +178,7 @@ DateField.prototype = new jsGrid.Field({
     editTemplate: function(value) {
         this._editPicker = $("<input>").datetimepicker({
             setDate: new Date(value),
+            dateFormat: "yy-mm-dd",
             timeFormat: "HH:mm:ss.l",
             controlType: 'select',
             showMillisec: true
@@ -208,21 +212,20 @@ $(document).ready(function() {
         console.log('get opnotes');
         diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
     };
-
     diagram.onmessage = function(msg) {
         msg = JSON.parse(msg.data);
         switch(msg.act) {
             case 'disco':
+                canvas.clear();
+                canvas.renderAll();
                 $('#modal').data('bs.modal',null);
                 $('#modal-title').text('Attention!');
-                $('#modal-body').html('<p>Connection lost!</p>');
+                $('#modal-body').html('<p>Connection lost! Please refresh the page to continue!</p>');
                 $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
                 $('#modal').modal({
                     backdrop: 'static',
                     keyboard: false
                 });
-                canvas.clear();
-                canvas.renderAll();
                 break;
             case 'all_objects':
                 canvas.clear();
@@ -434,10 +437,12 @@ $(document).ready(function() {
     };
 
     diagram.onclose = function() {
+        canvas.clear();
+        canvas.renderAll();
         $('#modal-title').text('Attention!');
-        $('#modal-body').html('<p>Connection lost!</p>');
-        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
-        $('#modal').modal('show')
+        $('#modal-body').html('<p>Connection lost! Please refesh the page to retry!</p>');
+        $('#modal-footer').html('');
+        $('#modal').removeData('bs.modal').modal({backdrop: 'static', keyboard: false});
     };
 });
 
@@ -1121,21 +1126,29 @@ function toggleToolbar(mode) {
 function openToolbar(mode) {
     toolbarMode = mode;
     if (mode === 'tools') {
+        activeToolbar = 'tools';
+        $('#toolbar-body').css('width',toolbarSizes['tools']);
         $('#toolsForm').show();
         $('#tasksForm').hide();
         $('#notesForm').hide();
         $('#opsForm').hide();
     } else if (mode === 'tasks') {
+        activeToolbar = 'tasks';
+        $('#toolbar-body').css('width',toolbarSizes['tasks']);
         $('#toolsForm').hide();
         $('#tasksForm').show();
         $('#notesForm').hide();
         $('#opsForm').hide();
     } else if (mode === 'notes') {
+        activeToolbar = 'notes';
+        $('#toolbar-body').css('width',toolbarSizes['notes']);
         $('#toolsForm').hide();
         $('#tasksForm').hide();
         $('#notesForm').show();
         $('#opsForm').hide();
     } else if (mode === 'ops') {
+        activeToolbar = 'opnotes';
+        $('#toolbar-body').css('width',toolbarSizes['opnotes']);
         $('#toolsForm').hide();
         $('#tasksForm').hide();
         $('#notesForm').hide();
@@ -1358,13 +1371,13 @@ $(document).ready(function() {
     $('#ops').jsGrid({
         autoload: false,
         width: '100%',
-        height: '100%',
+        height: 650,
         editing: true,
         sorting: true,
         paging: true,
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
-            { name: 'event_time', title: 'Action Time', type : 'date', width: 65,
+            { name: 'event_time', title: 'Action Time', type : 'date', width: 50,
                 insertTemplate: function() {
                     var input = this.__proto__.insertTemplate.call(this);
                     var date = new Date();
@@ -1372,8 +1385,8 @@ $(document).ready(function() {
                     return input;
                 }
             },
-            { name: 'source_object', title: 'Host/Device', type: 'text', width: 65},
-            { name: 'tool', title: 'Tool', type: 'text'},
+            { name: 'source_object', title: 'Host/Device', type: 'text', width: 50},
+            { name: 'tool', title: 'Tool', type: 'text', width: 50},
             { name: 'action', title: 'Action', type: 'text'},
             { name: 'analyst', title: 'Analyst', type: 'text', width: 50, readOnly: true},
             { 
@@ -1405,7 +1418,6 @@ $(document).ready(function() {
             },
             updateItem: function(item) {
                 diagram.send(JSON.stringify({act: 'update_opnote', arg: item}));
-                opnoteTableData[item['id']] = item;
             },
             deleteItem: function(item) {
                 diagram.send(JSON.stringify({act: 'delete_opnote', arg: item}));
@@ -1439,7 +1451,7 @@ $(document).ready(function() {
                 insertTemplate: function() {
                     var input = this.__proto__.insertTemplate.call(this);
                     var date = new Date();
-                    input.val((addZero(date.getMonth()+1) + '/' + addZero(date.getDate()) + '/' + date.getFullYear() + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
                     return input;
                 }
             },
@@ -1504,7 +1516,7 @@ $(document).ready(function() {
             },
             updateItem: function(item) {
                 diagram.send(JSON.stringify({act: 'update_event', arg: item}));
-                eventTableData[item['id']] = item;
+                //eventTableData[item['id']] = item;
             },
             deleteItem: function(item) {
                 diagram.send(JSON.stringify({act: 'delete_event', arg: item}));
@@ -1530,6 +1542,10 @@ $(document).ready(function() {
 $( function() {
     $("#diagram_jumbotron").resizable();
     $("#toolbar-body").resizable({ handles: 'w' });
+    $("#toolbar-body").on("resize", function( event, ui ) {
+        toolbarSizes[activeToolbar] = $('#toolbar-body').css('width');
+    });
+
 });
 
 $(function() {
