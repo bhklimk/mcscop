@@ -1433,7 +1433,7 @@ $(document).ready(function() {
                 insertTemplate: function() {
                     var input = this.__proto__.insertTemplate.call(this);
                     var date = new Date();
-                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    input.val((addZero(date.getMonth()+1) + '/' + addZero(date.getDate()) + '/' + date.getFullYear() + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
                     return input;
                 }
             },
@@ -1441,7 +1441,7 @@ $(document).ready(function() {
                 insertTemplate: function() {
                     var input = this.__proto__.insertTemplate.call(this);
                     var date = new Date();
-                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    input.val((addZero(date.getMonth()+1) + '/' + addZero(date.getDate()) + '/' + date.getFullYear() + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
                     return input;
                 }
             },
