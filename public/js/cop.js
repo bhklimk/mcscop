@@ -1251,7 +1251,7 @@ $(document).ready(function() {
     $('#propIcon').imagepicker({
         hide_select : true,
         selected : function() {
-            if (canvas.getActiveObject() !== null && (canvas.getActiveObject().objType === 'icon' || canvas.getActiveObject().objType === 'shape')) {
+            if (canvas.getActiveObject() !== null && canvas.getActiveObject() !== undefined && (canvas.getActiveObject().objType === 'icon' || canvas.getActiveObject().objType === 'shape')) {
                 var obj = canvas.getActiveObject();
                 var oldZ = canvas.getObjects().indexOf(canvas.getActiveObject());
                 obj.image = $(this).val();

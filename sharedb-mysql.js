@@ -20,7 +20,6 @@ MySQLDB.prototype.close = function(callback) {
 // Persists an op and snapshot if it is for the next version. Calls back with
 // callback(err, succeeded)
 MySQLDB.prototype.commit = function(collection, id, op, snapshot, options, callback) {
-    console.log(collection, id, op, snapshot, options, callback);
   /*
    * op: CreateOp {
    *   src: '24545654654646',
@@ -33,7 +32,6 @@ MySQLDB.prototype.commit = function(collection, id, op, snapshot, options, callb
    */
     var self = this;
     self.connection.query('SELECT max(version) AS max_version FROM ops WHERE collection = ? AND doc_id = ?', [collection, id], function(err, rows, fields) {
-        console.log(rows[0].max_version);
         var max_version = rows[0].max_version;
         if (max_version == null)
             max_version = 0;
