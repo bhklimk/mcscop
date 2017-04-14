@@ -1,4 +1,5 @@
 var users = [{id:0, name:'none'}];
+var roles = [{id:0, name:'none'}];
 
 var DateField = function(config) {
     jsGrid.Field.call(this, config);
@@ -42,6 +43,66 @@ DateField.prototype = new jsGrid.Field({
     }
 });
 jsGrid.fields.date = DateField;
+
+var MultiselectField = function(config) {
+    jsGrid.Field.call(this, config);
+};
+
+MultiselectField.prototype = new jsGrid.Field({
+    items: [],
+    valueField: 'id',
+    textField: 'name',
+    itemTemplate: function(value) {
+        if (!value)
+            return;
+        var newValue = [];
+        if (value && typeof value === 'string')
+            value = value.split(',');
+        for (var j = 0; j < value.length; j++) {
+            for (var i = 0; i < this.items.length; i++) {
+                if (this.items[i].id == value[j])
+                    newValue.push(this.items[i].name);
+            }
+        }
+        return newValue.join(", ");
+    },
+    _createSelect: function(selected) {
+        if (selected && typeof selected === 'string')
+            selected = selected.split(',');
+        var textField = this.textField;
+        var $result = $("<select>").prop("multiple", true);
+        $.each(this.items, function(_, item) {
+            var value = item[textField];
+            var $opt = $("<option>").text(value);
+            $opt[0].id = item['id'];
+            if($.inArray($opt[0].id, selected) > -1) {
+                $opt.attr("selected", "selected");
+            }
+            $result.append($opt);
+        });
+        return $result;
+    },
+    insertTemplate: function() {
+        var insertControl = this._insertControl = this._createSelect();
+        return insertControl;
+    },
+    editTemplate: function(value) {
+        var editControl = this._editControl = this._createSelect(value);
+        return editControl;
+    },
+    insertValue: function() {
+        return this._insertControl.find("option:selected").map(function() {
+            return this.selected ? this.id : null;
+        });
+    },
+    editValue: function() {
+        return this._editControl.find("option:selected").map(function() {    
+            return this.selected ? this.id : null;
+        });
+    }
+    
+});
+jsGrid.fields.multiselect = MultiselectField;
 
 var origFinishInsert = jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishInsert;
 jsGrid.loadStrategies.DirectLoadingStrategy.prototype.finishInsert = function(insertedItem) {
@@ -202,7 +263,7 @@ $(document).ready(function() {
             { name: 'username', title: 'Username', type : 'text', width: 65},
             { name: 'name', title: 'Name', type : 'text', width: 65},
             { name: 'password', title: 'Password', type : 'text', width: 65},
-            { name: 'access_level', title: 'Access Level', type: 'number', width: 45},
+            { name: 'role', title: 'Role', type: 'select', items: roles, valueField: 'id', textField: 'name', width: 45},
             {
                 type: "control",
                 editButton: true,
@@ -297,6 +358,130 @@ $(document).ready(function() {
                     if (res !== 'OK') {
                         $('#modal-title').html('Error!');
                         $('#modal-body').html('<p>Unable to delete user.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.deleteFailed = true;
+                    }
+                    d.resolve();
+                });
+                return d.promise();
+            }
+        }
+    });
+
+    $('#roles').jsGrid({
+        autoload: false,
+        width: '100%',
+        editing: true,
+        sorting: true,
+        paging: true,
+        autoload: true,
+        rowClick: function(args) {
+            return false;
+        },
+        fields: [
+            { name: 'id', type: 'number', css: 'hide', width: 0},
+            { name: 'name', title: 'Role', type : 'text', width: 65},
+            { name: 'sub_roles', title: 'Subordinate Roles', type: 'multiselect', items: roles, textField: 'name'},
+            {
+                type: "control",
+                editButton: true,
+                headerTemplate: function() {
+                    var grid = this._grid;
+                    var isInserting = grid.inserting;
+                    var $button = $("<input>").attr("type", "button")
+                        .addClass([this.buttonClass, this.modeButtonClass, this.insertModeButtonClass].join(" "))
+                        .on("click", function() {
+                            isInserting = !isInserting;
+                            grid.option("inserting", isInserting);
+                        });
+
+                    return $button;
+                }
+            }
+        ],
+        controller: {
+            loadData: function () {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: 'api',
+                    data: {
+                        action: 'select',
+                        table: 'roles'
+                    }
+                }).done(function(response) {
+                    if (response.length > 0) {
+                        roles = [];
+                        for (var i = 0; i < response.length; i++)
+                            roles.push(response[i]);
+                    }
+                    $('#roles').jsGrid("fieldOption", "sub_roles", "items", roles)
+                    $('#users').jsGrid("fieldOption", "role", "items", roles)
+                    d.resolve(response);
+                });
+                return d.promise();
+            },
+            insertItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: 'api',
+                    data: {
+                        action: 'insert',
+                        table: 'roles',
+                        row: JSON.stringify(item)
+                    }
+                }).done(function(res) {
+                    if (res == 'OK') {
+                    } else {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to insert role.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.insertFailed = true;
+                    }
+                    d.resolve();
+                });
+                return d.promise();
+            },
+            updateItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: 'api',
+                    data: {
+                        action: 'update',
+                        table: 'roles',
+                        row: JSON.stringify(item)
+                    }
+                }).done(function(res) {
+                    if (res == 'OK') {
+                    } else {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to update role.</p>');
+                        $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                        $('#modal').modal('show')
+                        item.updateFailed = true;
+                    }
+                    d.resolve();
+                });
+                return d.promise();
+            },
+            deleteItem: function(item) {
+                var d = $.Deferred();
+                $.ajax({
+                    type: 'POST',
+                    url: 'api',
+                    data: {
+                        action: 'delete',
+                        table: 'roles',
+                        id: JSON.stringify(item.id)
+                    }
+                }).done(function(res) {
+                    if (res !== 'OK') {
+                        $('#modal-title').html('Error!');
+                        $('#modal-body').html('<p>Unable to delete role.</p>');
                         $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
                         $('#modal').modal('show')
                         item.deleteFailed = true;

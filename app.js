@@ -38,14 +38,22 @@ app.use(sessionMiddleware);
 
 connection.connect();
 
-var sdb = require('./sharedb-mysql')(connection);
-var backend = new ShareDB({db: sdb});
+//var sdb = require('./sharedb-mysql')(connection);
+var db = require('sharedb-mongo')('mongodb://localhost:27017/mcscop');
+var backend = new ShareDB({db: db});
 
-function sendToRoom(room, msg) {
+function sendToRoom(room, msg, sender, roleFilter) {
     if (rooms.get(room)) {
         rooms.get(room).forEach((socket) => {
             if (socket && socket.readyState === socket.OPEN)
-                socket.send(msg);
+                if (sender && roleFilter) {
+                   if (socket.sub_roles.indexOf(roleFilter) !== -1 || sender === socket)
+                        socket.send(msg); 
+                } else if (sender) {
+                    if (sender === socket)
+                        socket.send(msg);
+                } else
+                    socket.send(msg);
         });
     }
 }
@@ -63,6 +71,8 @@ ws.on('connection', function(socket) {
                     socket.loggedin = data.loggedin;
                     socket.user_id = data.user_id;
                     socket.username = data.username;
+                    socket.role = data.role;
+                    socket.sub_roles = data.sub_roles;
                 } catch (e) {
                 }
             } else
@@ -108,7 +118,13 @@ ws.on('connection', function(socket) {
                 case 'get_opnotes':
                     var mission = JSON.parse(msg.arg);
                     var analyst = socket.user_id;
-                    connection.query('SELECT id, event_time, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC', [mission, analyst], function(err, rows, fields) {
+                    var query = 'SELECT id, event_time, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND (analyst = ? OR role IN (?)) ORDER BY event_time ASC'
+                    var args = [mission, analyst, socket.sub_roles];
+                    if (socket.sub_roles.length === 0) {
+                        query = 'SELECT id, event_time, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC'
+                        args = [mission, analyst];
+                    }
+                    connection.query(query, args, function(err, rows, fields) {
                         if (!err) {
                             socket.send(JSON.stringify({act:'all_opnotes', arg:rows}));
                         } else
@@ -212,10 +228,10 @@ ws.on('connection', function(socket) {
                 case 'update_opnote':
                     var evt = msg.arg;
                     evt.analyst = socket.user_id;
-                    connection.query('UPDATE opnotes SET event_time = ?, source_object = ?, tool = ?, action = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst, evt.id], function (err, results) {
+                    connection.query('UPDATE opnotes SET event_time = ?, event = ?, source_object = ?, tool = ?, action = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.event, evt.source_object, evt.tool, evt.action, evt.analyst, evt.id], function (err, results) {
                         if (!err) {
                             evt.analyst = socket.username;
-                            sendToRoom(socket.room, JSON.stringify({act: 'update_opnote', arg: msg.arg}));
+                            sendToRoom(socket.room, JSON.stringify({act: 'update_opnote', arg: msg.arg}), socket, socket.role);
                         } else
                             console.log(err);
                     });
@@ -223,20 +239,27 @@ ws.on('connection', function(socket) {
                 case 'insert_opnote':
                     var evt = msg.arg;
                     evt.analyst = socket.user_id;
-                    connection.query('INSERT INTO opnotes (mission, event_time, source_object, tool, action, analyst) values (?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst], function (err, results) {
+                    connection.query('SELECT role FROM users WHERE id = ?', [socket.user_id], function (err, results) {
                         if (!err) {
-                            evt.id = results.insertId;
-                            evt.analyst = socket.username;
-                            sendToRoom(socket.room, JSON.stringify({act: 'insert_opnote', arg: evt}));
-                        } else
+                            var role = results[0].role;
+                            connection.query('INSERT INTO opnotes (mission, event, role, event_time, source_object, tool, action, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event, role, evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst], function (err, results) {
+                                if (!err) {
+                                    evt.id = results.insertId;
+                                    evt.analyst = socket.username;
+                                    sendToRoom(socket.room, JSON.stringify({act: 'insert_opnote', arg: evt}), socket, socket.role);
+                                } else
+                                    console.log(err);
+                            });
+                        } else {
                             console.log(err);
+                        }
                     });
                     break;
                 case 'delete_opnote':
                     var evt = msg.arg;
                     connection.query('DELETE FROM opnotes WHERE id = ?', [evt.id], function (err, results) {
                         if (!err) {
-                            sendToRoom(socket.room, JSON.stringify({act: 'delete_opnote', arg: msg.arg}));
+                            sendToRoom(socket.room, JSON.stringify({act: 'delete_opnote', arg: msg.arg}), socket, socket.role);
                         } else
                             console.log(err);
                     });
@@ -244,7 +267,13 @@ ws.on('connection', function(socket) {
                 case 'insert_object':
                     var o = msg.arg;
                     if (o.type === 'icon' || o.type === 'shape') {
-                        connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, x, y, z) values (?, ?, ?, ?, ?, ?, 64, 64, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, o.z], function (err, results) {
+                        var scale_x = 1;
+                        var scale_y = 1;
+                        if (o.type === 'shape') {
+                            scale_x = 64;
+                            scale_y = 64;
+                        }
+                        connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values (?, ?, ?, ?, ?, ?, ?, ?, 32, 32, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, o.z], function (err, results) {
                             if (!err) {
                                 o.id = results.insertId;
                                 connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
@@ -369,7 +398,7 @@ app.post('/api', function (req, res) {
         }
     } else if (req.body.table !== undefined && req.body.table === 'users') {
         if (req.body.action !== undefined && req.body.action === 'select') {
-            connection.query("SELECT id, username, name, '********' as password, access_level FROM users", function(err, rows, fields) {
+            connection.query("SELECT id, username, name, '********' as password, role FROM users", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
                 } else {
@@ -381,7 +410,7 @@ app.post('/api', function (req, res) {
             var row = JSON.parse(req.body.row);
             if (row.password !== '********') {
                 bcrypt.hash(row.password, null, null, function(err, hash) {
-                    connection.query('UPDATE users SET name = ?, password = ?, access_level = ? WHERE id = ?', [row.name, hash, row.access_level, row.id], function (err, results) {
+                    connection.query('UPDATE users SET name = ?, password = ?, role = ? WHERE id = ?', [row.name, hash, row.role, row.id], function (err, results) {
                         if (!err) {
                             res.end(JSON.stringify('OK'));
                         } else {
@@ -391,8 +420,8 @@ app.post('/api', function (req, res) {
                     });
                 });
             } else {
-                var query = 'UPDATE users SET name = ? WHERE id = ?';
-                var args = [row.name, row.id];
+                var query = 'UPDATE users SET name = ?, role = ? WHERE id = ?';
+                var args = [row.name, row.role, row.id];
                 connection.query(query, args, function (err, results) {
                     if (!err) {
                         res.end(JSON.stringify('OK'));
@@ -405,7 +434,7 @@ app.post('/api', function (req, res) {
         } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
             var row = JSON.parse(req.body.row);
             bcrypt.hash(row.password, null, null, function(err, hash) {
-                connection.query('INSERT INTO users (username, name, password, access_level) values (?, ?, ?, ?)', [row.username, row.name, hash, row.access_level], function (err, results) {
+                connection.query('INSERT INTO users (username, name, password, role) values (?, ?, ?, ?)', [row.username, row.name, hash, row.role], function (err, results) {
                     if (!err) {
                         res.end(JSON.stringify('OK'));
                     } else {
@@ -427,6 +456,92 @@ app.post('/api', function (req, res) {
                 });
             }
         }
+    } else if (req.body.table !== undefined && req.body.table === 'roles') {
+        if (req.body.action !== undefined && req.body.action === 'select') {
+            connection.query("SELECT roles.id, roles.name, (SELECT GROUP_CONCAT(sub_role_id) FROM sub_role_rel WHERE sub_role_rel.role_id = roles.id) as sub_roles FROM roles", function(err, rows, fields) {
+                if (!err) {
+                    res.end(JSON.stringify(rows));
+                } else {
+                    res.end(JSON.stringify('[]'));
+                    console.log(err);
+                }
+            });
+        } else if (req.body.action !== undefined && req.body.action === 'update' && req.body.row !== undefined) {
+            var row = JSON.parse(req.body.row);
+            connection.query('UPDATE roles SET name = ? WHERE id = ?', [row.name, row.id], function (err, results) {
+                if (!err) {
+                    if (row.sub_roles) {
+                        var sub_roles = [];
+                        for (var i = 0; i < row.sub_roles.length; i++) {
+                            sub_roles.push(parseInt(row.sub_roles[i]));
+                        }
+                        connection.query('SELECT id, sub_role_id FROM sub_role_rel WHERE role_id = ?', [row.id], function (err, results) {
+                            if (err) {
+                                res.end(JSON.stringify('ERR'));
+                                console.log(err);
+                            } else {
+                                var curr_roles = [];
+                                for (var j = 0; j < results.length; j++) {
+                                    curr_roles.push(results[j].sub_role_id);
+                                }
+                                var additions = sub_roles.filter(x => curr_roles.indexOf(x) < 0 );
+                                var subtractions = curr_roles.filter(x => sub_roles.indexOf(x) < 0 );
+                                if (subtractions.length === 0)
+                                    subtractions = '';
+                                connection.query('DELETE FROM sub_role_rel WHERE role_id = ? AND sub_role_id IN (?)', [row.id, subtractions], function (err, results) {
+                                    if (err) {
+                                        console.log(err);
+                                        res.end(JSON.stringify('ERR'));
+                                    } else {
+                                        if (additions.length === 0)
+                                            res.end(JSON.stringify('OK'));
+                                        else {
+                                            for (i = 0; i < additions.length; i++) {
+                                                connection.query('INSERT INTO sub_role_rel (role_id, sub_role_id) values (?, ?)', [row.id, additions[i]], function (err, results) {
+                                                    if (err) {
+                                                        res.end(JSON.stringify('ERR'));
+                                                        console.log(err);
+                                                    } else if (i === additions.length) {
+                                                        res.end(JSON.stringify('OK'));
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                } else {
+                    res.end(JSON.stringify('ERR'));
+                    console.log(err);
+                }
+            });
+        } else if (req.body.action !== undefined && req.body.action === 'insert' && req.body.row !== undefined) {
+            var row = JSON.parse(req.body.row);
+            connection.query('INSERT INTO roles (name) values (?)', [row.name], function (err, results) {
+                if (!err) {
+                    res.end(JSON.stringify('OK'));
+                } else {
+                    res.end(JSON.stringify('ERR'));
+                    console.log(err);
+                }
+            });
+        } else if (req.body.action !== undefined && req.body.action === 'delete' && req.body.id !== undefined) {
+            var id = JSON.parse(req.body.id);
+            if (id != 0) {
+                connection.query('DELETE FROM roles WHERE id = ?', [id], function (err, results) {
+                    if (!err) {
+                        res.end(JSON.stringify('OK'));
+                    } else {
+                        console.log(err);
+                        res.end(JSON.stringify('ERR'));
+                    }
+                });
+            }
+        }
+    } else {
+        res.end(JSON.stringify('ERR'));
     }
 });
 
@@ -474,7 +589,7 @@ app.get('/cop', function (req, res) {
 
 app.post('/login', function (req, res) {
     if (req.body.username !== undefined && req.body.username !== '' && req.body.password !== undefined && req.body.password !== '') {
-        connection.query('SELECT id, username, password FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
+        connection.query('SELECT id, username, password, role FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
             if (!err) {
                 if (rows.length === 1) {
                     bcrypt.compare(req.body.password, rows[0].password, function(err, bres) {
@@ -482,7 +597,16 @@ app.post('/login', function (req, res) {
                             req.session.user_id = rows[0].id;
                             req.session.username = rows[0].username;
                             req.session.loggedin = true;
-                            res.redirect('login');
+                            req.session.role = rows[0].role;
+                            req.session.sub_roles = [];
+                            connection.query('SELECT sub_role_id FROM sub_role_rel WHERE role_id = ?', [rows[0].role], function (err, rows, fields) {
+                                 if (!err) {
+                                    for (var i = 0; i < rows.length; i++) {
+                                        req.session.sub_roles.push(rows[i].sub_role_id);
+                                    }
+                                }
+                                res.redirect('login');
+                            });
                         } else
                             res.render('login', { title: 'MCSCOP', message: 'Invalid username or password.' });
                     });

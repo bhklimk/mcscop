@@ -39,12 +39,12 @@ MySQLDB.prototype.commit = function(collection, id, op, snapshot, options, callb
             return callback(null, false);
         }
         self.connection.query('START TRANSACTION', function(err) {
-            console.log('c ' + collection, 'i: '+ id, 'sv: ' + snapshot.v, 'op: ' + op);
             self.connection.query('INSERT INTO ops (collection, doc_id, version, operation) VALUES (?, ?, ?, ?)', [collection, id, snapshot.v, JSON.stringify(op)], function(err) {
                 if (err) {
                     // TODO: if err is "constraint violation", callback(null, false) instead
+                    console.log('rollback1');
                     self.connection.query('ROLLBACK');
-                    callback(err);
+                    callback(null, false);
                     return;
                 }
                 if (snapshot.v === 1) {
@@ -54,6 +54,7 @@ MySQLDB.prototype.commit = function(collection, id, op, snapshot, options, callb
                         // if the insert was successful and did not insert, callback(null, false)
                         // if there was an error, rollback and callback(error)
                         if (err) {
+                            console.log('rollback2');
                             self.connection.query('ROLLBACK');
                             callback(err);
                             return;
@@ -72,6 +73,7 @@ MySQLDB.prototype.commit = function(collection, id, op, snapshot, options, callb
                         // if 0 rows were updated, rollback and not success
                         // if error, rollback and not success
                         if (err) {
+                            console.log('rollback3');
                             self.connection.query('ROLLBACK');
                             callback(err);
                             return;

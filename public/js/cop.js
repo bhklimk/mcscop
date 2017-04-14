@@ -232,14 +232,21 @@ $(document).ready(function() {
                 objectSelect = [{id:0, name:'none/unknown'}];
                 objectsLoaded = [];
                 for (var o in msg.arg) {
-                    objectSelect.push({uuid:msg.arg[o].uuid, name:msg.arg[o].name.split('\n')[0]});
-                    if (o.type === 'icon' && SVGCache[msg.arg[o].image] === undefined && o.image !== undefined && o.image !== null) {
+                    if (msg.arg[o].type !== 'link') {
+                        objectSelect.push({uuid:msg.arg[o].uuid, name:msg.arg[o].name.split('\n')[0]});
+                    }
+                    if (msg.arg[o].type === 'icon' && SVGCache[msg.arg[o].image] === undefined && msg.arg[o].image !== undefined && msg.arg[o].image !== null) {
                         var shape = msg.arg[o].image;
                         SVGCache[msg.arg[o].image] = null;
                         objectsLoaded.push(false);
                         getIcon(msg.arg[o].image);
                     }
                 }
+                objectSelect.sort(function(a, b) {
+                    return a.name.localeCompare(b.name);
+                });
+                $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
+                $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
                 checkIfShapesCached(msg.arg);
                 break;
             case 'all_events':
@@ -270,7 +277,6 @@ $(document).ready(function() {
                 $('#ops').jsGrid('sort', 1, 'asc');
                 break;
             case 'change_object':
-                console.log('change');
                 var o = msg.arg;
                 var selected = false;
                 for (var i = 0; i < canvas.getObjects().length; i++) {
@@ -416,6 +422,14 @@ $(document).ready(function() {
             case 'insert_object':
                 var o = msg.arg;
                 addObjectToCanvas(o, false);
+                if (o.type !== 'link') {
+                    objectSelect.push({uuid:o.uuid, name:o.name.split('\n')[0]});
+                    objectSelect.sort(function(a, b) {
+                        return a.name.localeCompare(b.name);
+                    });
+                }
+                $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
+                $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
                 break;
             case 'delete_object':
                 var uuid = msg.arg;
@@ -627,8 +641,6 @@ function checkIfShapesCached(msg) {
 function checkIfObjectsLoaded() {
     if (objectsLoaded.length == 0) {
         console.log('objects loaded');
-        $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
-        $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
         $('#modal').modal('hide');
         dirty = true;
         canvas.renderAll();
@@ -846,8 +858,6 @@ function addObjectToCanvas(o, select) {
                 canvas.setActiveObject(shape);
             shape.moveTo(o.z);
             name.moveTo(o.z+1);
-            $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
-            $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
         });
     } else if (o.type === 'shape') {
         var shape = o.image.split('-')[3].split('.')[0];
@@ -901,15 +911,12 @@ function addObjectToCanvas(o, select) {
             top: o.y + (shape.getHeight()/2)
         });
         shape.children = [name];
-        objectsLoaded.pop();
         canvas.add(shape);
         canvas.add(name);
         if (select)
             canvas.setActiveObject(shape);
         shape.moveTo(o.z);
         name.moveTo(o.z+1);
-        $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
-        $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
     }
 }
 
@@ -1032,6 +1039,9 @@ function updatePropName(name) {
                 break;
             }
         }
+        objectSelect.sort(function(a, b) {
+            return a.name.localeCompare(b.name);
+        });
         canvas.renderAll();
         changeObject(o);
         $('#events').jsGrid("fieldOption", "source_object","items",objectSelect)
@@ -1159,7 +1169,10 @@ function openToolbar(mode) {
         $('#toolbarTitle').html('Edit Object');
         $('#propNameGroup').show();
         $('#propObjectGroup').show();
-        $('#propFillColor').show();
+        if (canvas.getActiveObject().objType && canvas.getActiveObject().objType === 'link')
+            $('#propFillColor').hide();
+        else
+            $('#propFillColor').show();
         $('#editDetailsButton').show();
         $('#deleteObjectButton').show();
         $('#insertObjectButton').hide();
@@ -1385,10 +1398,11 @@ $(document).ready(function() {
                     return input;
                 }
             },
+            { name: 'event_id', title: 'E. Id', type: 'number', width: 20},
             { name: 'source_object', title: 'Host/Device', type: 'text', width: 50},
             { name: 'tool', title: 'Tool', type: 'text', width: 50},
-            { name: 'action', title: 'Action', type: 'text'},
-            { name: 'analyst', title: 'Analyst', type: 'text', width: 50, readOnly: true},
+            { name: 'action', title: 'Action', type: 'textarea'},
+            { name: 'analyst', title: 'Analyst', type: 'text', width: 30, readOnly: true},
             { 
                 type: "control",
                 editButton: false,
@@ -1446,7 +1460,7 @@ $(document).ready(function() {
         sorting: true,
         paging: true,
         fields: [
-            { name: 'id', type: 'number', css: 'hide', width: 0},
+            { name: 'id', type: 'number', title: 'E. Id', width: 20},
             { name: 'event_time', title: 'Event Time', type : 'date', width: 65,
                 insertTemplate: function() {
                     var input = this.__proto__.insertTemplate.call(this);
