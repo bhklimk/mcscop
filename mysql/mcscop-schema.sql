@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 5.7.17, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 5.7.18, for Linux (x86_64)
 --
 -- Host: localhost    Database: mcscop
 -- ------------------------------------------------------
--- Server version	5.7.17
+-- Server version	5.7.18
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -26,7 +26,7 @@ CREATE TABLE `events` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `uuid` varchar(36) NOT NULL,
   `mission` int(11) NOT NULL,
-  `event_time` bigint(20) DEFAULT NULL,
+  `event_time` bigint(20) NOT NULL,
   `discovery_time` bigint(20) DEFAULT NULL,
   `source_object` varchar(36) DEFAULT NULL,
   `source_port` int(11) DEFAULT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE `events` (
   `short_desc` varchar(255) DEFAULT NULL,
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;
 /*!50003 SET @saved_cs_results     = @@character_set_results */ ;
@@ -64,7 +64,7 @@ DROP TABLE IF EXISTS `missions`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `missions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
   `start_date` bigint(20) DEFAULT NULL,
   `analyst` int(11) DEFAULT NULL,
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -84,22 +84,22 @@ CREATE TABLE `objects` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `uuid` varchar(36) NOT NULL,
   `mission` int(11) NOT NULL,
-  `type` varchar(25) NOT NULL,
+  `type` varchar(25) NOT NULL DEFAULT 'icon',
   `name` varchar(255) DEFAULT '',
-  `fill_color` varchar(24) DEFAULT NULL,
-  `stroke_color` varchar(24) DEFAULT NULL,
+  `fill_color` varchar(24) DEFAULT '#000000',
+  `stroke_color` varchar(24) NOT NULL DEFAULT '#ffffff',
   `image` varchar(255) DEFAULT NULL,
   `x` int(11) DEFAULT '0',
   `y` int(11) DEFAULT '0',
   `z` int(11) DEFAULT '0',
-  `obj_a` varchar(36) DEFAULT NULL,
-  `obj_b` varchar(36) DEFAULT NULL,
+  `obj_a` varchar(36) DEFAULT '1',
+  `obj_b` varchar(36) DEFAULT '1',
   `scale_x` double DEFAULT '1',
   `scale_y` double DEFAULT '1',
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uuid` (`uuid`)
-) ENGINE=InnoDB AUTO_INCREMENT=305 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=314 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;
 /*!50003 SET @saved_cs_results     = @@character_set_results */ ;
@@ -127,6 +127,8 @@ DROP TABLE IF EXISTS `opnotes`;
 CREATE TABLE `opnotes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `mission` int(11) NOT NULL,
+  `role` int(11) NOT NULL,
+  `event` int(11) DEFAULT NULL,
   `event_time` bigint(20) NOT NULL,
   `source_object` varchar(36) DEFAULT '',
   `tool` varchar(255) DEFAULT '',
@@ -134,23 +136,22 @@ CREATE TABLE `opnotes` (
   `action` mediumtext,
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=77 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `ops`
+-- Table structure for table `roles`
 --
 
-DROP TABLE IF EXISTS `ops`;
+DROP TABLE IF EXISTS `roles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `ops` (
-  `collection` varchar(255) NOT NULL,
-  `doc_id` varchar(255) NOT NULL,
-  `version` int(11) NOT NULL,
-  `operation` json NOT NULL,
-  PRIMARY KEY (`collection`,`doc_id`,`version`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+CREATE TABLE `roles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -169,20 +170,19 @@ CREATE TABLE `sessions` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `snapshots`
+-- Table structure for table `sub_role_rel`
 --
 
-DROP TABLE IF EXISTS `snapshots`;
+DROP TABLE IF EXISTS `sub_role_rel`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `snapshots` (
-  `collection` varchar(255) NOT NULL,
-  `doc_id` varchar(255) NOT NULL,
-  `doc_type` varchar(255) NOT NULL,
-  `version` int(11) NOT NULL,
-  `data` json NOT NULL,
-  PRIMARY KEY (`collection`,`doc_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+CREATE TABLE `sub_role_rel` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `role_id` int(11) NOT NULL,
+  `sub_role_id` int(11) NOT NULL,
+  `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -197,7 +197,7 @@ CREATE TABLE `users` (
   `username` varchar(100) NOT NULL,
   `password` varchar(100) NOT NULL,
   `name` varchar(100) DEFAULT '',
-  `access_level` int(11) NOT NULL,
+  `role` int(11) DEFAULT NULL,
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
@@ -214,4 +214,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2017-04-11 19:52:19
+-- Dump completed on 2017-04-14  8:30:06
