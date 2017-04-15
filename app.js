@@ -11,6 +11,7 @@ var bcrypt = require('bcrypt-nodejs');
 var bodyParser = require('body-parser');
 var mysql = require('mysql');
 var wss = require('ws');
+var async = require('async');
 var mysqlOptions = {
     host : 'localhost',
     user : 'mcscop',
@@ -30,6 +31,17 @@ var rooms = new Map();
 var connection = mysql.createConnection(mysqlOptions);
 var ws = new wss.Server({server:http});
 
+Array.prototype.move = function (old_index, new_index) {
+    if (new_index >= this.length) {
+        var k = new_index - this.length;
+        while ((k--) + 1) {
+            this.push(undefined);
+        }
+    }
+    this.splice(new_index, 0, this.splice(old_index, 1)[0]);
+    return this;
+};
+
 app.set('view engine', 'pug');
 app.use(express.static('public'));
 app.use(bodyParser.json());
@@ -38,7 +50,6 @@ app.use(sessionMiddleware);
 
 connection.connect();
 
-//var sdb = require('./sharedb-mysql')(connection);
 var db = require('sharedb-mongo')('mongodb://localhost:27017/mcscop');
 var backend = new ShareDB({db: db});
 
@@ -93,6 +104,7 @@ ws.on('connection', function(socket) {
                     break;
                 case 'join':
                     socket.room = msg.arg;
+                    socket.mission = msg.arg;
                     if (!rooms.get(msg.arg))
                         rooms.set(msg.arg, new Set());
                     rooms.get(msg.arg).add(socket);
@@ -153,21 +165,32 @@ ws.on('connection', function(socket) {
                     break;
                 case 'move_object':
                     var o = msg.arg;
-                    if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
-                        connection.query('UPDATE objects SET x = ?, y = ?, z = ?, scale_x = ?, scale_y = ? WHERE uuid = ?', [o.x, o.y, o.z, o.scale_x, o.scale_y, o.uuid], function (err, results) {
-                            if (!err) {
+                    connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                        var zs = [];
+                        for (var i = 0; i < results.length; i++)
+                            zs.push(results[i].uuid);
+                        if (o.z !== zs.indexOf(o.uuid)) {
+                            zs.move(zs.indexOf(o.uuid), o.z);
+                            async.forEachOf(zs, function(item, index, callback) {
+                                connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [index, item], function (err, results) {
+                                    if (err)
+                                        console.log(err);
+                                    callback();
+                                });
+                            }, function(err) {
                                 sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}));
-                            } else
-                                console.log(err);
-                        });
-                    } else if (o.type !== undefined && o.type === 'link') {
-                        connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
-                            if (!err) {
-                                sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}));
-                            } else
-                                console.log(err);
-                        });
-                    }
+                            });
+                        } else  {
+                            if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
+                                connection.query('UPDATE objects SET x = ?, y = ?, scale_x = ?, scale_y = ? WHERE uuid = ?', [o.x, o.y, o.scale_x, o.scale_y, o.uuid], function (err, results) {
+                                    if (!err) {
+                                        sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}));
+                                    } else
+                                        console.log(err);
+                                });
+                            }
+                        }
+                    });
                     break;
                 case 'change_link':
                     var o = msg.arg;
@@ -266,54 +289,69 @@ ws.on('connection', function(socket) {
                     break;
                 case 'insert_object':
                     var o = msg.arg;
-                    if (o.type === 'icon' || o.type === 'shape') {
-                        var scale_x = 1;
-                        var scale_y = 1;
-                        if (o.type === 'shape') {
-                            scale_x = 64;
-                            scale_y = 64;
+                    connection.query('SELECT count(*) AS z FROM objects WHERE mission = ?', [o.mission], function (err, results) {
+                        o.z = results[0].z;
+                        if (o.type === 'icon' || o.type === 'shape') {
+                            var scale_x = 1;
+                            var scale_y = 1;
+                            if (o.type === 'shape') {
+                                scale_x = 64;
+                                scale_y = 64;
+                            }
+                            connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values (?, ?, ?, ?, ?, ?, ?, ?, 32, 32, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, o.z], function (err, results) {
+                                if (!err) {
+                                    o.id = results.insertId;
+                                    connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
+                                        if (!err) {
+                                            sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
+                                        } else
+                                            console.log(err);
+                                    });
+                                } else
+                                    console.log(err);
+                            });
+                        } else if (o.type === 'link') {
+                            connection.query('INSERT INTO objects (mission, type, name, stroke_color, image, obj_a, obj_b) values (?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.image, o.obj_a, o.obj_b, o.z], function (err, results) {
+                                if (!err) {
+                                    o.id = results.insertId;
+                                    connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
+                                        if (!err) {
+                                            sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
+                                        } else
+                                            console.log(err);
+                                    });
+                                } else
+                                    console.log(err);
+                            });
                         }
-                        connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values (?, ?, ?, ?, ?, ?, ?, ?, 32, 32, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, o.z], function (err, results) {
-                            if (!err) {
-                                o.id = results.insertId;
-                                connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
-                                    if (!err) {
-                                        sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
-                                    } else
-                                        console.log(err);
-                                });
-                            } else
-                                console.log(err);
-                        });
-                    } else if (o.type === 'link') {
-                        connection.query('INSERT INTO objects (mission, type, name, stroke_color, image, obj_a, obj_b, z) values (?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.image, o.obj_a, o.obj_b, o.z], function (err, results) {
-                            if (!err) {
-                                o.id = results.insertId;
-                                connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
-                                    if (!err) {
-                                        sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
-                                    } else
-                                        console.log(err);
-                                });
-                            } else
-                                console.log(err);
-                        });
-                    }
+                    });
                     break;
                 case 'delete_object':
                     var o = msg.arg;
-                    if (o.type !== undefined) {
+                    if (o.type && o.uuid) {
                         if (o.type === 'icon' || o.type === 'shape') {
                             connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
                                 if (!err) {
                                     sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:o.uuid}));
                                     connection.query('SELECT uuid FROM objects WHERE obj_a = ? OR obj_b = ?', [o.uuid, o.uuid], function(err, rows, results) {
                                         if (!err) {
-                                            for (var r = 0; r < rows.length; r++) {
-                                                sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:rows[r].uuid}));
-                                                connection.query('DELETE FROM objects WHERE uuid = ?', [rows[r].uuid], function(err, results) {
+                                            async.each(rows, function(row, callback) {
+                                                connection.query('DELETE FROM objects WHERE uuid = ?', [rows.uuid], function(err, results) {
+                                                    if (err)
+                                                        console.log(err);
+                                                    else
+                                                        sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:row.uuid}));
                                                 });
-                                            }
+                                            }, function() {
+                                                connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                                                    for (var i = 0; i < results.length; i++) {
+                                                        connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
+                                                            if (err)
+                                                                console.log(err);
+                                                        });
+                                                    }
+                                                });
+                                            });
                                         } else
                                             console.log(err);
                                     });
@@ -324,6 +362,17 @@ ws.on('connection', function(socket) {
                             connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
                                 if (!err) {
                                     sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg: o.uuid}));
+                                    connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                                        if (!err) {
+                                            for (var i = 0; i < results.length; i++) {
+                                                connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
+                                                    if (err)
+                                                        console.log(err);
+                                                });
+                                            }
+                                        } else
+                                            console.log(err);
+                                    });
                                 } else
                                     console.log(err);
                             });

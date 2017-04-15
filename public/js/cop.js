@@ -286,24 +286,15 @@ $(document).ready(function() {
                         }
                         var to = canvas.item(i);
                         if (o.type === 'icon') {
-                            if (to.image !== o.image || to.fillColor !== o.fillColor || to.strokeColor !== o.strokeColor) {
-                                var children = to.children.length;
-                                for (var k = 0; k < children; k++)
-                                    canvas.remove(to.children[k]);
-                                canvas.remove(to);
-                                addObjectToCanvas(o, selected);
-                            } else {
-                                for (var k = 0; k < canvas.item(i).children.length; k++) {
-                                    if (canvas.item(i).children[k].objType === 'name')
-                                        canvas.item(i).children[k].text = o.name;
-                                }
-                            }
+                            var children = to.children.length;
+                            for (var k = 0; k < children; k++)
+                                canvas.remove(to.children[k]);
+                            canvas.remove(to);
+                            addObjectToCanvas(o, selected);
                             canvas.renderAll();
                         } else if (o.type === 'shape' || o.type === 'link') {
-                            canvas.item(i).strokeColor = o.stroke_color;
-                            canvas.item(i).stroke = o.stroke_color;
-                            canvas.item(i).fillColor = o.fill_color;
-                            canvas.item(i).fill = o.fill_color;
+                            canvas.item(i).setStroke(o.stroke_color);
+                            canvas.item(i).setFill(o.fill_color);
                             canvas.renderAll();
                         }
                         break;
@@ -340,13 +331,15 @@ $(document).ready(function() {
                                 }
                             });
                         }
-                        if (i !== o.z) {
-                            if (i < o.z)
-                                obj.moveTo(o.z + obj.children.length);
-                            else
-                                obj.moveTo(o.z);
-                            for (var k = 0; k < obj.children.length; k++) {
-                                obj.children[k].moveTo(canvas.getObjects().indexOf(obj)+1);
+                        if (i !== o.z*2) {
+                            if (i < o.z*2) {
+                                obj.moveTo(o.z*2 + 1);
+                                for (var k = 0; k < obj.children.length; k++)
+                                    obj.children[k].moveTo(canvas.getObjects().indexOf(obj));
+                            } else {
+                                obj.moveTo(o.z*2);
+                                for (var k = 0; k < obj.children.length; k++)
+                                    obj.children[k].moveTo(canvas.getObjects().indexOf(obj)+1);
                             }
                         }
                         break;
@@ -504,7 +497,7 @@ canvas.on('object:scaling', function(options) {
 canvas.on('object:modified', function(options) {
     var o = canvas.getActiveObject();
     if (o !== null) {
-        var z = canvas.getObjects().indexOf(o);
+        var z = canvas.getObjects().indexOf(o)/2;
         if (o.objType === 'link')
             diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, z: z}}));
         else if (o.objType === 'icon')
@@ -537,13 +530,8 @@ canvas.on('object:selected', function(options) {
                     }
                 } else {
                     $('#propID').val(o.uuid);
-                    if (o.objType === 'shape') {
-                        $('#propFillColor').val(o.fill);
-                        $('#propStrokeColor').val(o.stroke);
-                    } else {
-                        $('#propFillColor').val(o.fillColor);
-                        $('#propStrokeColor').val(o.strokeColor);
-                    }
+                    $('#propFillColor').val(o.fill);
+                    $('#propStrokeColor').val(o.stroke);
                     $('#propName').val('');
                     if (o.children !== undefined) {
                         for (var i = 0; i < o.children.length; i++) {
@@ -675,12 +663,13 @@ function editDetails(uuid) {
 }
 
 function updateLayers() {
+    /*
     var objects = [];
     for (var i = 0; i < canvas.getObjects().length; i++) {
         if (canvas.getObjects()[i].uuid)
             objects.push({uuid: canvas.getObjects()[i].uuid, type: canvas.getObjects()[i].objType, z: i});
     }
-    diagram.send(JSON.stringify({act: 'update_layers', arg: objects}));
+    diagram.send(JSON.stringify({act: 'update_layers', arg: objects}));*/
 } 
 
 function zoomIn() {
@@ -765,9 +754,8 @@ function addObjectToCanvas(o, select) {
             image: o.image,
             from: o.obj_a,
             to: o.obj_b,
-            fill: 'black',
+            fill: '#000000',
             stroke: o.stroke_color,
-            strokeColor: o.stroke_color,
             strokeWidth: 3,
             hasControls: false,
             lockMovementX: true,
@@ -797,8 +785,8 @@ function addObjectToCanvas(o, select) {
         line.children = [name];
         canvas.add(line);
         canvas.add(name);
-        line.moveTo(o.z);
-        name.moveTo(o.z+1);
+        line.moveTo(o.z*2);
+        name.moveTo(o.z*2+1);
     } else if (o.type === 'icon' && o.image !== undefined && o.image !== null) {
         var image, func;
         if (SVGCache[o.image] === undefined) {
@@ -813,15 +801,15 @@ function addObjectToCanvas(o, select) {
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
                 isChild: false,
-                fillColor: o.fill_color,
-                strokeColor: o.stroke_color,
+                fill: o.fill_color,
+                stroke: o.stroke_color,
                 strokeWidth: 1,
                 scaleX: o.scale_x,
                 scaleY: o.scale_y,
                 uuid: o.uuid,
                 objType: o.type,
                 image: o.image,
-                name: name,
+                name_val: o.name,
                 originX: 'center',
                 originY: 'center',
                 left: o.x,
@@ -856,8 +844,8 @@ function addObjectToCanvas(o, select) {
             canvas.add(name);
             if (select)
                 canvas.setActiveObject(shape);
-            shape.moveTo(o.z);
-            name.moveTo(o.z+1);
+            shape.moveTo(o.z*2);
+            name.moveTo(o.z*2+1);
         });
     } else if (o.type === 'shape') {
         var shape = o.image.split('-')[3].split('.')[0];
@@ -915,8 +903,8 @@ function addObjectToCanvas(o, select) {
         canvas.add(name);
         if (select)
             canvas.setActiveObject(shape);
-        shape.moveTo(o.z);
-        name.moveTo(o.z+1);
+        shape.moveTo(o.z*2);
+        name.moveTo(o.z*2+1);
     }
 }
 
@@ -969,51 +957,41 @@ function deleteObject() {
     }
 }
 
+function moveToZ(o, z) {
+    if (o.objType === 'link')
+        diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, z: z}}));
+    else if (o.objType === 'icon')
+        diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
+    else if (o.objType === 'shape')
+        diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
+}
+
+
 function moveToFront() {
-    if (canvas.getActiveObject().uuid) {
-        canvas.getActiveObject().bringToFront();
-        for (var i = 0; i < canvas.getActiveObject().children.length; i++) {
-            canvas.getActiveObject().children[i].bringToFront();
-        }
-        updateLayers();
-        canvas.trigger('object:modified');
-    }
+    var zTop = canvas.getObjects().length;
+    var o = canvas.getActiveObject();
+    moveToZ(o, zTop/2);
 }
 
 function moveToBack() {
-    if (canvas.getActiveObject().uuid) {
-        for (var i = 0; i < canvas.getActiveObject().children.length; i++) {
-            canvas.getActiveObject().children[i].sendToBack();
-        }
-        canvas.getActiveObject().sendToBack();
-        updateLayers();
-        canvas.trigger('object:modified');
-    }
+    var o = canvas.getActiveObject();
+    var z = 0;
+    moveToZ(o, z);
 }
 
 function moveUp() {
-    var obj = canvas.getActiveObject();
-    if (obj.uuid) {
-        if (canvas.getObjects().indexOf(obj) + obj.children.length + 1 < canvas.getObjects().length) {
-            obj.moveTo(canvas.getObjects().indexOf(obj) + obj.children.length + canvas.item(canvas.getObjects().indexOf(obj) + obj.children.length + 1).children.length + 1);
-            for (var i = 0; i < obj.children.length; i++) {
-                obj.children[i].moveTo(canvas.getObjects().indexOf(obj));
-            }
-            updateLayers();
-            canvas.trigger('object:modified');
-        }
+    var o = canvas.getActiveObject();
+    if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) < canvas.getObjects().length - 2) {
+        var z = canvas.getObjects().indexOf(o) / 2 + 1;
+        moveToZ(o, z);
     }
 }
 
 function moveDown() {
-    var obj = canvas.getActiveObject();
-    if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(obj) > 0) {
-        obj.moveTo(canvas.getObjects().indexOf(canvas.item(canvas.getObjects().indexOf(obj)-1).parent));
-        for (var i = 0; i < obj.children.length; i++) {
-            obj.children[i].moveTo(canvas.getObjects().indexOf(obj)+1);
-        }
-        updateLayers();
-        canvas.trigger('object:modified');
+    var o = canvas.getActiveObject();
+    if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) > 0) {
+        var z = canvas.getObjects().indexOf(o) / 2 - 1;
+        moveToZ(o, z);
     }
 }
 
@@ -1051,15 +1029,8 @@ function updatePropName(name) {
 
 function updatePropFillColor(color) {
     var o = canvas.getActiveObject();
-    if (o && (o.objType === 'icon' || o.objType === 'shape')) {
-        o.setFill(color);
-        if (o.paths) {
-            for (var j = 0; j < o.paths.length; j++) {
-                if (o.paths[j].fill !== 'rgba(254,254,254,1)')
-                    o.paths[j].setFill(o.fillColor);
-            }
-        }
-        canvas.renderAll();
+    if (o) {
+        o.fill = color;
         changeObject(o);
     }
 }
@@ -1067,54 +1038,27 @@ function updatePropFillColor(color) {
 function updatePropStrokeColor(color) {
     var o = canvas.getActiveObject();
     if (o) {
-        if (o.objType === 'icon') {
-            o.setStroke(color);
-            if (o.paths) {
-                for (var j = 0; j < o.paths.length; j++) {
-                    if (o.paths[j].stroke !== 'rgba(254,254,254,1)')
-                        o.paths[j].setStroke(o.strokeColor);
-                }
-            }
-        } else if (o.objType === 'shape' || o.objType === 'link')
-            o.setStroke(color);
-        canvas.renderAll();
+        o.stroke = color;
         changeObject(o);
     }
 }
 
 function changeObject(o) {
     var tempObj = {};
-    if (o.objType === 'icon' || o.objType === 'shape') {
-        tempObj.uuid = o.uuid;
-        tempObj.x = o.left;
-        tempObj.y = o.top;
-        tempObj.z = canvas.getObjects().indexOf(o);
-        tempObj.scale_x = o.scaleX;
-        tempObj.scale_y = o.scaleY;
-        tempObj.type = o.objType;
-        if (o.objType === 'shape') {
-            tempObj.fill_color = o.getFill();
-            tempObj.stroke_color = o.getStroke();
-        } else {
-            tempObj.fill_color = o.fillColor;
-            tempObj.stroke_color = o.strokeColor;
-        }
-        tempObj.image = o.image;
-        tempObj.name = '';
-        for (var i=0; i < o.children.length; i++) {
-            if (o.children[i].objType === 'name') {
-                tempObj.name = o.children[i].text;
-            }
-        }
-    } else if (o.objType === 'link') {
-        tempObj.uuid = o.uuid;
-        tempObj.type = o.objType;
-        tempObj.stroke_color = o.getStroke();
-        tempObj.name = '';
-        for (var i=0; i < o.children.length; i++) {
-            if (o.children[i].objType === 'name') {
-                tempObj.name = o.children[i].text;
-            }
+    tempObj.uuid = o.uuid;
+    tempObj.x = o.left;
+    tempObj.y = o.top;
+    tempObj.z = canvas.getObjects().indexOf(o);
+    tempObj.scale_x = o.scaleX;
+    tempObj.scale_y = o.scaleY;
+    tempObj.type = o.objType;
+    tempObj.fill_color = o.fill;
+    tempObj.stroke_color = o.stroke;
+    tempObj.image = o.image;
+    tempObj.name = '';
+    for (var i=0; i < o.children.length; i++) {
+        if (o.children[i].objType === 'name') {
+            tempObj.name = o.children[i].text;
         }
     }
     diagram.send(JSON.stringify({act: 'change_object', arg: tempObj}));
