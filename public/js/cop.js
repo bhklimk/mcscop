@@ -42,7 +42,7 @@ var tempLinks = [];
 var objectCache = {};
 var doc;
 var activeToolbar = null;
-var toolbarSizes = {'tools': 500, 'tasks': 500, 'notes': 500, 'opnotes': 1200};
+var toolbarSizes = {'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200};
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -442,7 +442,6 @@ $(document).ready(function() {
                 break;
         }
     };
-
     diagram.onclose = function() {
         canvas.clear();
         canvas.renderAll();
@@ -577,6 +576,7 @@ canvas.on('before:render', function(e) {
                         canvas.item(i).pending = false;
                     canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
                     canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
+                    canvas.item(i).setCoords();
                     for (var j = 0; j < canvas.item(i).children.length; j++) {
                         canvas.item(i).children[j].set({'left': canvas.item(i).getCenterPoint().x, 'top': canvas.item(i).getCenterPoint().y });
                         var angle = (Math.atan2((canvas.item(i).y1 - canvas.item(i).y2), (canvas.item(i).x1 - canvas.item(i).x2))) * (180/Math.PI);
@@ -662,16 +662,6 @@ function editDetails(uuid) {
     }
 }
 
-function updateLayers() {
-    /*
-    var objects = [];
-    for (var i = 0; i < canvas.getObjects().length; i++) {
-        if (canvas.getObjects()[i].uuid)
-            objects.push({uuid: canvas.getObjects()[i].uuid, type: canvas.getObjects()[i].objType, z: i});
-    }
-    diagram.send(JSON.stringify({act: 'update_layers', arg: objects}));*/
-} 
-
 function zoomIn() {
     canvas.zoomToPoint(new fabric.Point(canvas.width / 2, canvas.height / 2), canvas.getZoom() / 0.90);
     background.zoomToPoint(new fabric.Point(background.width / 2, background.height / 2), background.getZoom() / 0.90);
@@ -748,7 +738,6 @@ function addObjectToCanvas(o, select) {
         }
         var line = new fabric.Line([from.x, from.y, to.x, to.y], {
             pending: pending,
-            isChild: false,
             uuid: o.uuid,
             objType: 'link',
             image: o.image,
@@ -758,6 +747,7 @@ function addObjectToCanvas(o, select) {
             stroke: o.stroke_color,
             strokeWidth: 3,
             hasControls: false,
+            selctable: true,
             lockMovementX: true,
             lockMovementY: true,
             lockScalingX: true,
@@ -768,7 +758,6 @@ function addObjectToCanvas(o, select) {
             if(Math.abs(angle) > 90)
                 angle += 180;
         var name = new fabric.Text(o.name, {
-            isChild: true,
             parent_uuid: o.uuid,
             parent: line,
             objType: 'name',
@@ -800,7 +789,6 @@ function addObjectToCanvas(o, select) {
             var name;
             var shape = fabric.util.groupSVGElements(objects, options);
             shape.set({
-                isChild: false,
                 fill: o.fill_color,
                 stroke: o.stroke_color,
                 strokeWidth: 1,
@@ -826,7 +814,6 @@ function addObjectToCanvas(o, select) {
                 }
             }
             name = new fabric.Text(o.name, {
-                isChild: true,
                 parent_uuid: o.uuid,
                 parent: shape,
                 objType: 'name',
@@ -853,7 +840,6 @@ function addObjectToCanvas(o, select) {
             shape = new fabric.Rect({
                 width: o.scale_x,
                 height: o.scale_y,
-                isChild: false,
                 fill: o.fill_color,
                 stroke: o.stroke_color,
                 strokeWidth: 2,
@@ -870,7 +856,6 @@ function addObjectToCanvas(o, select) {
             shape = new fabric.Ellipse({
                 rx: o.scale_x / 2,
                 ry: o.scale_y / 2,
-                isChild: false,
                 fill: o.fill_color,
                 stroke: o.stroke_color,
                 strokeWidth: 2,
@@ -886,7 +871,6 @@ function addObjectToCanvas(o, select) {
         } else
             return;
         name = new fabric.Text(o.name, {
-            isChild: true,
             parent_uuid: o.uuid,
             parent: shape,
             objType: 'name',
@@ -929,6 +913,10 @@ function getParameterByName(name, url) {
   }
   resizeCanvas();
 })();
+
+function blink(div) {
+    $(div).effect('highlight','slow');
+}
 
 function insertLink() {
     closeToolbar();
@@ -1342,7 +1330,7 @@ $(document).ready(function() {
                     return input;
                 }
             },
-            { name: 'event_id', title: 'E. Id', type: 'number', width: 20},
+            { name: 'event', title: 'E. Id', type: 'number', width: 20},
             { name: 'source_object', title: 'Host/Device', type: 'text', width: 50},
             { name: 'tool', title: 'Tool', type: 'text', width: 50},
             { name: 'action', title: 'Action', type: 'textarea'},

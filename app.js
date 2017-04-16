@@ -130,10 +130,10 @@ ws.on('connection', function(socket) {
                 case 'get_opnotes':
                     var mission = JSON.parse(msg.arg);
                     var analyst = socket.user_id;
-                    var query = 'SELECT id, event_time, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND (analyst = ? OR role IN (?)) ORDER BY event_time ASC'
+                    var query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND (analyst = ? OR role IN (?)) ORDER BY event_time ASC'
                     var args = [mission, analyst, socket.sub_roles];
                     if (socket.sub_roles.length === 0) {
-                        query = 'SELECT id, event_time, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC'
+                        query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC'
                         args = [mission, analyst];
                     }
                     connection.query(query, args, function(err, rows, fields) {
@@ -195,25 +195,6 @@ ws.on('connection', function(socket) {
                 case 'change_link':
                     var o = msg.arg;
                     if (o.type !== undefined && o.type === 'link') {
-                    }
-                    break;
-                case 'update_layers':
-                    var objs = msg.arg;
-                    for (var i = 0; i < objs.length; i ++) {
-                        var o = objs[i];
-                        if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
-                            connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
-                                if (!err) {
-                                } else
-                                    console.log(err);
-                            });
-                        } else if (o.type !== undefined && o.type === 'link') {
-                            connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [o.z, o.uuid], function (err, results) {
-                                if (!err) {
-                                } else
-                                    console.log(err);
-                            });
-                        }
                     }
                     break;
                 case 'update_event':
@@ -317,11 +298,15 @@ ws.on('connection', function(socket) {
                                     connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
                                         if (!err) {
                                             sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
-                                        } else
+                                        } else {
                                             console.log(err);
+                                            socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
+                                        }
                                     });
-                                } else
+                                } else {
                                     console.log(err);
+                                    socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
+                                }
                             });
                         }
                     });
@@ -337,17 +322,20 @@ ws.on('connection', function(socket) {
                                         if (!err) {
                                             async.each(rows, function(row, callback) {
                                                 connection.query('DELETE FROM objects WHERE uuid = ?', [rows.uuid], function(err, results) {
-                                                    if (err)
+                                                    if (err) {
                                                         console.log(err);
-                                                    else
+                                                        socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
+                                                    } else
                                                         sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:row.uuid}));
                                                 });
                                             }, function() {
                                                 connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                                                     for (var i = 0; i < results.length; i++) {
                                                         connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
-                                                            if (err)
+                                                            if (err) {
                                                                 console.log(err);
+                                                                socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
+                                                            }
                                                         });
                                                     }
                                                 });
@@ -366,15 +354,21 @@ ws.on('connection', function(socket) {
                                         if (!err) {
                                             for (var i = 0; i < results.length; i++) {
                                                 connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
-                                                    if (err)
+                                                    if (err) {
                                                         console.log(err);
+                                                        socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
+                                                    }
                                                 });
                                             }
-                                        } else
+                                        } else {
                                             console.log(err);
+                                            socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
+                                        }
                                     });
-                                } else
+                                } else {
                                     console.log(err);
+                                    socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
+                                }
                             });
                         }
                     }
