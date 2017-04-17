@@ -42,7 +42,7 @@ var tempLinks = [];
 var objectCache = {};
 var doc;
 var activeToolbar = null;
-var toolbarSizes = {'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200};
+var toolbarSizes = {'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400};
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -193,264 +193,8 @@ DateField.prototype = new jsGrid.Field({
         return this._editPicker.datepicker("getDate").getTime();
     }
 });
-jsGrid.fields.date = DateField;
 
-$(document).ready(function() {
-    diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
-    diagram.onopen = function() {
-        $('#modal').modal('hide');
-        $('#modal-title').text('Please wait...!');
-        $('#modal-body').html('<p>Loading COP, please wait...</p><img src="images/loading.gif"/>');
-        $('#modal-footer').html('');
-        $('#modal').modal('show')
-        console.log('connect');
-        diagram.send(JSON.stringify({act:'join', arg: mission}));
-        console.log('get objects');
-        diagram.send(JSON.stringify({act:'get_objects', arg: mission}));
-        console.log('get events');
-        diagram.send(JSON.stringify({act:'get_events', arg: mission}));
-        console.log('get opnotes');
-        diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
-    };
-    diagram.onmessage = function(msg) {
-        msg = JSON.parse(msg.data);
-        switch(msg.act) {
-            case 'disco':
-                canvas.clear();
-                canvas.renderAll();
-                $('#modal').data('bs.modal',null);
-                $('#modal-title').text('Attention!');
-                $('#modal-body').html('<p>Connection lost! Please refresh the page to continue!</p>');
-                $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
-                $('#modal').modal({
-                    backdrop: 'static',
-                    keyboard: false
-                });
-                break;
-            case 'all_objects':
-                canvas.clear();
-                objectSelect = [{id:0, name:'none/unknown'}];
-                objectsLoaded = [];
-                for (var o in msg.arg) {
-                    if (msg.arg[o].type !== 'link') {
-                        objectSelect.push({uuid:msg.arg[o].uuid, name:msg.arg[o].name.split('\n')[0]});
-                    }
-                    if (msg.arg[o].type === 'icon' && SVGCache[msg.arg[o].image] === undefined && msg.arg[o].image !== undefined && msg.arg[o].image !== null) {
-                        var shape = msg.arg[o].image;
-                        SVGCache[msg.arg[o].image] = null;
-                        objectsLoaded.push(false);
-                        getIcon(msg.arg[o].image);
-                    }
-                }
-                objectSelect.sort(function(a, b) {
-                    return a.name.localeCompare(b.name);
-                });
-                $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
-                $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
-                checkIfShapesCached(msg.arg);
-                break;
-            case 'all_events':
-                eventTableData = [];
-                eventTimes = [0,9999999999999];
-                for (var evt in msg.arg) {
-                    eventTableData.push(msg.arg[evt]);
-                    eventTimes.splice(eventTimes.length - 1, 0, msg.arg[evt].event_time);
-                }
-                var end = eventTimes.length + 1;
-                dateSlider.noUiSlider.updateOptions({
-                    start: [0,end],
-                    range: {
-                        'min': 0,
-                        'max': end
-                    },
-                    step: 1
-                });
-                $('#events').jsGrid('loadData');
-                $('#events').jsGrid('sort', 1, 'asc');
-                break;
-            case 'all_opnotes':
-                opnoteTableData = [];
-                for (var evt in msg.arg) {
-                    opnoteTableData.push(msg.arg[evt]);
-                }
-                $('#ops').jsGrid('loadData');
-                $('#ops').jsGrid('sort', 1, 'asc');
-                break;
-            case 'change_object':
-                var o = msg.arg;
-                var selected = false;
-                for (var i = 0; i < canvas.getObjects().length; i++) {
-                    if (canvas.item(i).uuid === o.uuid) {
-                        if (canvas.getActiveObject() && canvas.getActiveObject().uuid === o.uuid) {
-                            selected = true;
-                        }
-                        var to = canvas.item(i);
-                        if (o.type === 'icon') {
-                            var children = to.children.length;
-                            for (var k = 0; k < children; k++)
-                                canvas.remove(to.children[k]);
-                            canvas.remove(to);
-                            addObjectToCanvas(o, selected);
-                            canvas.renderAll();
-                        } else if (o.type === 'shape' || o.type === 'link') {
-                            canvas.item(i).setStroke(o.stroke_color);
-                            canvas.item(i).setFill(o.fill_color);
-                            canvas.renderAll();
-                        }
-                        break;
-                    }
-                }
-                $('#events').jsGrid("fieldOption", "source_object","items",objectSelect)
-                $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect)
-                break;
-            case 'move_object':
-                dirty = true;
-                var o = msg.arg;
-                for (var i = 0; i < canvas.getObjects().length; i++) {
-                    if (canvas.item(i).uuid == o.uuid) {
-                        var obj = canvas.item(i);
-                        obj.dirty = true;
-                        if (o.type !== 'link') {
-                            if (o.type === 'icon') {
-                                obj.scaleX = o.scale_x;
-                                obj.scaleY = o.scale_y;
-                            } else if (o.type === 'shape') {
-                                obj.width = o.scale_x;
-                                obj.height = o.scale_y;
-                            }
-                            obj.animate({left: o.x, top: o.y}, {
-                                duration: 100,
-                                onChange: function() {
-                                    dirty = true;
-                                    obj.dirty = true;
-                                    for (var j = 0; j < obj.children.length; j++) {
-                                        obj.children[j].setTop(obj.getTop() + (obj.getHeight()/2));
-                                        obj.children[j].setLeft(obj.getLeft());
-                                    }
-                                    canvas.renderAll();;
-                                }
-                            });
-                        }
-                        if (i !== o.z*2) {
-                            if (i < o.z*2) {
-                                obj.moveTo(o.z*2 + 1);
-                                for (var k = 0; k < obj.children.length; k++)
-                                    obj.children[k].moveTo(canvas.getObjects().indexOf(obj));
-                            } else {
-                                obj.moveTo(o.z*2);
-                                for (var k = 0; k < obj.children.length; k++)
-                                    obj.children[k].moveTo(canvas.getObjects().indexOf(obj)+1);
-                            }
-                        }
-                        break;
-                    }
-                }
-                break;
-            case 'update_event':
-                var evt = msg.arg;
-                for (var i = 0; i < eventTableData.length; i++) {
-                    if (eventTableData[i].id === evt.id) {
-                        eventTableData[i] = evt;
-                    }
-                }
-                $('#events').jsGrid('loadData');
-                $('#events').jsGrid('sort', 1, 'asc');
-                break;
-            case 'insert_event':
-                var evt = msg.arg;
-                eventTableData.push(evt);
-                $('#events').jsGrid('insertItem', evt);
-                break;
-            case 'delete_event':
-                var evt = msg.arg;
-                for (var i = 0; i < eventTableData.length; i++) {
-                    if (eventTableData[i].id === evt.id) {
-                        eventTableData.splice(i, 1);
-                        break;
-                    }
-                }
-                for (i = 0; i < eventTimes.length; i++) {
-                    if (eventTimes[i] === evt.event_time) {
-                        eventTimes.splice(i, 1);
-                        break;
-                    }
-                }
-                dateSlider.noUiSlider.updateOptions({
-                    start: [0,eventTimes.length+1],
-                    range: {
-                        'min': 0,
-                        'max': eventTimes.length+1
-                    },
-                    step: 1
-                });
-                $('#events').jsGrid('loadData');
-                $('#events').jsGrid('sort', 1, 'asc');
-                break;
-            case 'update_opnote':
-                var evt = msg.arg;
-                for (var i = 0; i < opnoteTableData.length; i++) {
-                    if (opnoteTableData[i].id === evt.id) {
-                        opnoteTableData[i] = evt;
-                    }
-                }
-                $('#ops').jsGrid('loadData');
-                $('#ops').jsGrid('sort', 1, 'asc');
-                break;
-            case 'insert_opnote':
-                var evt = msg.arg;
-                opnoteTableData.push(evt);
-                $('#ops').jsGrid('insertItem', evt);
-                break;
-            case 'delete_opnote':
-                var evt = msg.arg;
-                for (var i = 0; i < opnoteTableData.length; i++) {
-                    if (opnoteTableData[i].id === evt.id) {
-                        opnoteTableData.splice(i, 1);
-                        break;
-                    }
-                }
-                $('#ops').jsGrid('loadData');
-                $('#ops').jsGrid('sort', 1, 'asc');
-                break;
-            case 'insert_object':
-                var o = msg.arg;
-                addObjectToCanvas(o, false);
-                if (o.type !== 'link') {
-                    objectSelect.push({uuid:o.uuid, name:o.name.split('\n')[0]});
-                    objectSelect.sort(function(a, b) {
-                        return a.name.localeCompare(b.name);
-                    });
-                }
-                $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
-                $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
-                break;
-            case 'delete_object':
-                var uuid = msg.arg;
-                for (var i = 0; i < canvas.getObjects().length; i++) {
-                    if (canvas.item(i).uuid == uuid) {
-                        var object = canvas.item(i);
-                        if (canvas.item(i).children !== undefined) {
-                            for (var k = 0; k < object.children.length; k++) {
-                                canvas.remove(object.children[k]);
-                            }
-                        }
-                        canvas.remove(object);
-                        break;
-                    }
-                }
-                canvas.renderAll();
-                break;
-        }
-    };
-    diagram.onclose = function() {
-        canvas.clear();
-        canvas.renderAll();
-        $('#modal-title').text('Attention!');
-        $('#modal-body').html('<p>Connection lost! Please refesh the page to retry!</p>');
-        $('#modal-footer').html('');
-        $('#modal').removeData('bs.modal').modal({backdrop: 'static', keyboard: false});
-    };
-});
+jsGrid.fields.date = DateField;
 
 $('#diagram').mousedown(startPan);
 
@@ -902,18 +646,6 @@ function getParameterByName(name, url) {
     return decodeURIComponent(results[2].replace(/\+/g, " "));
 }
 
-(function(){
-  window.addEventListener('resize', resizeCanvas, false);
-  function resizeCanvas() {
-    canvas.setHeight(window.innerHeight);
-    canvas.setWidth(window.innerWidth);
-    background.setHeight(window.innerHeight);
-    background.setWidth(window.innerWidth);
-    canvas.renderAll();
-  }
-  resizeCanvas();
-})();
-
 function blink(div) {
     $(div).effect('highlight','slow');
 }
@@ -1074,6 +806,7 @@ function openToolbar(mode) {
         $('#tasksForm').hide();
         $('#notesForm').hide();
         $('#opsForm').hide();
+        $('#filesForm').hide();
     } else if (mode === 'tasks') {
         activeToolbar = 'tasks';
         $('#toolbar-body').css('width',toolbarSizes['tasks']);
@@ -1081,6 +814,7 @@ function openToolbar(mode) {
         $('#tasksForm').show();
         $('#notesForm').hide();
         $('#opsForm').hide();
+        $('#filesForm').hide();
     } else if (mode === 'notes') {
         activeToolbar = 'notes';
         $('#toolbar-body').css('width',toolbarSizes['notes']);
@@ -1088,6 +822,7 @@ function openToolbar(mode) {
         $('#tasksForm').hide();
         $('#notesForm').show();
         $('#opsForm').hide();
+        $('#filesForm').hide();
     } else if (mode === 'ops') {
         activeToolbar = 'opnotes';
         $('#toolbar-body').css('width',toolbarSizes['opnotes']);
@@ -1095,6 +830,15 @@ function openToolbar(mode) {
         $('#tasksForm').hide();
         $('#notesForm').hide();
         $('#opsForm').show();
+        $('#filesForm').hide();
+    } else if (mode === 'files') {
+        activeToolbar = 'files';
+        $('#toolbar-body').css('width',toolbarSizes['files']);
+        $('#toolsForm').hide();
+        $('#tasksForm').hide();
+        $('#notesForm').hide();
+        $('#opsForm').hide();
+        $('#filesForm').show();
     }
     // edit
     if (canvas.getActiveObject()) {
@@ -1137,9 +881,6 @@ function openToolbar(mode) {
 
 function closeToolbar() {
     $('#toolbar-body').hide();
-    $('#diagram').width('100%');
-    $('#objectsButton').css('background-color','darkgray');
-    $('#linksButton').css('background-color','darkgray');
 }
 
 function timestamp(str){
@@ -1203,7 +944,274 @@ function startTasks() {
 }
 
 $(document).ready(function() {
+    // ---------------------------- SOCKETS ----------------------------------
+    diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
+    diagram.onopen = function() {
+        $('#modal').modal('hide');
+        $('#modal-title').text('Please wait...!');
+        $('#modal-body').html('<p>Loading COP, please wait...</p><img src="images/loading.gif"/>');
+        $('#modal-footer').html('');
+        $('#modal').modal('show')
+        console.log('connect');
+        diagram.send(JSON.stringify({act:'join', arg: mission}));
+        console.log('get objects');
+        diagram.send(JSON.stringify({act:'get_objects', arg: mission}));
+        console.log('get events');
+        diagram.send(JSON.stringify({act:'get_events', arg: mission}));
+        console.log('get opnotes');
+        diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
+        console.log('get files');
+        diagram.send(JSON.stringify({act:'get_files', arg: mission}));
+    };
+    diagram.onmessage = function(msg) {
+        msg = JSON.parse(msg.data);
+        switch(msg.act) {
+            case 'disco':
+                canvas.clear();
+                canvas.renderAll();
+                $('#modal').data('bs.modal',null);
+                $('#modal-title').text('Attention!');
+                $('#modal-body').html('<p>Connection lost! Please refresh the page to continue!</p>');
+                $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
+                $('#modal').modal({
+                    backdrop: 'static',
+                    keyboard: false
+                });
+                break;
+            case 'all_files':
+                $('#fileTree')
+                    .on('select_node.jstree', function (e, data) {
+                        var o = data.selected[0];
+                    })
+                    .jstree({'core':{'data':msg.arg}});
+                break;
+            case 'all_objects':
+                objectSelect = [{id:0, name:'none/unknown'}];
+                objectsLoaded = [];
+                for (var o in msg.arg) {
+                    if (msg.arg[o].type !== 'link') {
+                        objectSelect.push({uuid:msg.arg[o].uuid, name:msg.arg[o].name.split('\n')[0]});
+                    }
+                    if (msg.arg[o].type === 'icon' && SVGCache[msg.arg[o].image] === undefined && msg.arg[o].image !== undefined && msg.arg[o].image !== null) {
+                        var shape = msg.arg[o].image;
+                        SVGCache[msg.arg[o].image] = null;
+                        objectsLoaded.push(false);
+                        getIcon(msg.arg[o].image);
+                    }
+                }
+                objectSelect.sort(function(a, b) {
+                    return a.name.localeCompare(b.name);
+                });
+                $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
+                $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
+                checkIfShapesCached(msg.arg);
+                break;
+            case 'all_events':
+                eventTableData = [];
+                eventTimes = [0,9999999999999];
+                for (var evt in msg.arg) {
+                    eventTableData.push(msg.arg[evt]);
+                    eventTimes.splice(eventTimes.length - 1, 0, msg.arg[evt].event_time);
+                }
+                var end = eventTimes.length + 1;
+                dateSlider.noUiSlider.updateOptions({
+                    start: [0,end],
+                    range: {
+                        'min': 0,
+                        'max': end
+                    },
+                    step: 1
+                });
+                $('#events').jsGrid('loadData');
+                $('#events').jsGrid('sort', 1, 'asc');
+                break;
+            case 'all_opnotes':
+                opnoteTableData = [];
+                for (var evt in msg.arg) {
+                    opnoteTableData.push(msg.arg[evt]);
+                }
+                $('#ops').jsGrid('loadData');
+                $('#ops').jsGrid('sort', 1, 'asc');
+                break;
+            case 'change_object':
+                var o = msg.arg;
+                var selected = false;
+                for (var i = 0; i < canvas.getObjects().length; i++) {
+                    if (canvas.item(i).uuid === o.uuid) {
+                        if (canvas.getActiveObject() && canvas.getActiveObject().uuid === o.uuid) {
+                            selected = true;
+                        }
+                        var to = canvas.item(i);
+                        if (o.type === 'icon') {
+                            var children = to.children.length;
+                            for (var k = 0; k < children; k++)
+                                canvas.remove(to.children[k]);
+                            canvas.remove(to);
+                            addObjectToCanvas(o, selected);
+                            canvas.renderAll();
+                        } else if (o.type === 'shape' || o.type === 'link') {
+                            canvas.item(i).setStroke(o.stroke_color);
+                            canvas.item(i).setFill(o.fill_color);
+                            canvas.renderAll();
+                        }
+                        break;
+                    }
+                }
+                $('#events').jsGrid("fieldOption", "source_object","items",objectSelect)
+                $('#events').jsGrid("fieldOption", "dest_object","items",objectSelect)
+                break;
+            case 'move_object':
+                dirty = true;
+                var o = msg.arg;
+                for (var i = 0; i < canvas.getObjects().length; i++) {
+                    if (canvas.item(i).uuid == o.uuid) {
+                        var obj = canvas.item(i);
+                        obj.dirty = true;
+                        if (o.type !== 'link') {
+                            if (o.type === 'icon') {
+                                obj.scaleX = o.scale_x;
+                                obj.scaleY = o.scale_y;
+                            } else if (o.type === 'shape') {
+                                obj.width = o.scale_x;
+                                obj.height = o.scale_y;
+                            }
+                            obj.animate({left: o.x, top: o.y}, {
+                                duration: 100,
+                                onChange: function() {
+                                    dirty = true;
+                                    obj.dirty = true;
+                                    for (var j = 0; j < obj.children.length; j++) {
+                                        obj.children[j].setTop(obj.getTop() + (obj.getHeight()/2));
+                                        obj.children[j].setLeft(obj.getLeft());
+                                    }
+                                    canvas.renderAll();;
+                                }
+                            });
+                        }
+                        if (i !== o.z*2) {
+                            if (i < o.z*2) {
+                                obj.moveTo(o.z*2 + 1);
+                                for (var k = 0; k < obj.children.length; k++)
+                                    obj.children[k].moveTo(canvas.getObjects().indexOf(obj));
+                            } else {
+                                obj.moveTo(o.z*2);
+                                for (var k = 0; k < obj.children.length; k++)
+                                    obj.children[k].moveTo(canvas.getObjects().indexOf(obj)+1);
+                            }
+                        }
+                        break;
+                    }
+                }
+                break;
+            case 'update_event':
+                var evt = msg.arg;
+                for (var i = 0; i < eventTableData.length; i++) {
+                    if (eventTableData[i].id === evt.id) {
+                        eventTableData[i] = evt;
+                    }
+                }
+                $('#events').jsGrid('loadData');
+                $('#events').jsGrid('sort', 1, 'asc');
+                break;
+            case 'insert_event':
+                var evt = msg.arg;
+                eventTableData.push(evt);
+                $('#events').jsGrid('insertItem', evt);
+                break;
+            case 'delete_event':
+                var evt = msg.arg;
+                for (var i = 0; i < eventTableData.length; i++) {
+                    if (eventTableData[i].id === evt.id) {
+                        eventTableData.splice(i, 1);
+                        break;
+                    }
+                }
+                for (i = 0; i < eventTimes.length; i++) {
+                    if (eventTimes[i] === evt.event_time) {
+                        eventTimes.splice(i, 1);
+                        break;
+                    }
+                }
+                dateSlider.noUiSlider.updateOptions({
+                    start: [0,eventTimes.length+1],
+                    range: {
+                        'min': 0,
+                        'max': eventTimes.length+1
+                    },
+                    step: 1
+                });
+                $('#events').jsGrid('loadData');
+                $('#events').jsGrid('sort', 1, 'asc');
+                break;
+            case 'update_opnote':
+                var evt = msg.arg;
+                for (var i = 0; i < opnoteTableData.length; i++) {
+                    if (opnoteTableData[i].id === evt.id) {
+                        opnoteTableData[i] = evt;
+                    }
+                }
+                $('#ops').jsGrid('loadData');
+                $('#ops').jsGrid('sort', 1, 'asc');
+                break;
+            case 'insert_opnote':
+                var evt = msg.arg;
+                opnoteTableData.push(evt);
+                $('#ops').jsGrid('insertItem', evt);
+                break;
+            case 'delete_opnote':
+                var evt = msg.arg;
+                for (var i = 0; i < opnoteTableData.length; i++) {
+                    if (opnoteTableData[i].id === evt.id) {
+                        opnoteTableData.splice(i, 1);
+                        break;
+                    }
+                }
+                $('#ops').jsGrid('loadData');
+                $('#ops').jsGrid('sort', 1, 'asc');
+                break;
+            case 'insert_object':
+                var o = msg.arg;
+                addObjectToCanvas(o, false);
+                if (o.type !== 'link') {
+                    objectSelect.push({uuid:o.uuid, name:o.name.split('\n')[0]});
+                    objectSelect.sort(function(a, b) {
+                        return a.name.localeCompare(b.name);
+                    });
+                }
+                $('#events').jsGrid("fieldOption", "source_object", "items", objectSelect);
+                $('#events').jsGrid("fieldOption", "dest_object", "items", objectSelect);
+                break;
+            case 'delete_object':
+                var uuid = msg.arg;
+                for (var i = 0; i < canvas.getObjects().length; i++) {
+                    if (canvas.item(i).uuid == uuid) {
+                        var object = canvas.item(i);
+                        if (canvas.item(i).children !== undefined) {
+                            for (var k = 0; k < object.children.length; k++) {
+                                canvas.remove(object.children[k]);
+                            }
+                        }
+                        canvas.remove(object);
+                        break;
+                    }
+                }
+                canvas.renderAll();
+                break;
+        }
+    };
+
+    diagram.onclose = function() {
+        canvas.clear();
+        canvas.renderAll();
+        $('#modal-title').text('Attention!');
+        $('#modal-body').html('<p>Connection lost! Please refesh the page to retry!</p>');
+        $('#modal-footer').html('');
+        $('#modal').removeData('bs.modal').modal({backdrop: 'static', keyboard: false});
+    };
+
     startTasks();
+
+    // ---------------------------- IMAGE PICKER ----------------------------------
     $('#propIcon').imagepicker({
         hide_select : true,
         selected : function() {
@@ -1229,6 +1237,8 @@ $(document).ready(function() {
         }
     });
 
+
+    // ---------------------------- DIAGRAM ----------------------------------
     var gridsize = 40
     for(var x=1;x<(MAXWIDTH/gridsize);x++)
     {
@@ -1239,6 +1249,7 @@ $(document).ready(function() {
     background.add(new fabric.Line([-10, 0, 12, 0],{ stroke: "3399ff", strokeWidth: 2, selectable:false, strokeDashArray: [1, 1]}));
     background.add(new fabric.Line([0, -10, 0, 12],{ stroke: "3399ff", strokeWidth: 2, selectable:false, strokeDashArray: [1, 1]}));
 
+    // ---------------------------- SLIDER ----------------------------------
     dateSlider = document.getElementById('slider');
     noUiSlider.create(dateSlider, {
         start: [0,1],
@@ -1311,8 +1322,7 @@ $(document).ready(function() {
         canvas.renderAll();
     });
 
-    var dj = document.getElementById('diagram_jumbotron');
-
+    // ---------------------------- JSGRIDS ----------------------------------
     $('#ops').jsGrid({
         autoload: false,
         width: '100%',
@@ -1482,27 +1492,23 @@ $(document).ready(function() {
             }
             this.editing && this.editItem($row);
         }
-    });
-});
+    }); 
 
-$( function() {
+    // ---------------------------- MISC ----------------------------------
+    $("#dropZone").dropzone({ url: "upload" })
     $("#diagram_jumbotron").resizable();
     $("#toolbar-body").resizable({ handles: 'w' });
     $("#toolbar-body").on("resize", function( event, ui ) {
         toolbarSizes[activeToolbar] = $('#toolbar-body').css('width');
-    });
+    }); 
 
-});
-
-$(function() {
-    $('.tabs nav a').on('click', function() {
-        show_content($(this).index());
-    });
-    show_content(0);
-    function show_content(index) {
-        $('.tabs .content.visible').removeClass('visible');
-        $('.tabs .content:nth-of-type(' + (index + 1) + ')').addClass('visible');
-        $('.tabs nav a.selected').removeClass('selected');
-        $('.tabs nav a:nth-of-type(' + (index + 1) + ')').addClass('selected');
+    window.addEventListener('resize', resizeCanvas, false);
+    function resizeCanvas() {
+        canvas.setHeight(window.innerHeight);
+        canvas.setWidth(window.innerWidth);
+        background.setHeight(window.innerHeight);
+        background.setWidth(window.innerWidth);
+        canvas.renderAll();
     }
+    resizeCanvas();
 });

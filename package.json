@@ -12,6 +12,7 @@
     "express-mysql-session": "^1.2.0",
     "express-session": "^1.15.2",
     "fast-json-patch": "^1.1.8",
+    "jstree": "^3.3.4",
     "mongodb": "^2.2.25",
     "mysql": "^2.11.1",
     "ot-text": "1.0.1",

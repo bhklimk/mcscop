@@ -12,6 +12,7 @@ var bodyParser = require('body-parser');
 var mysql = require('mysql');
 var wss = require('ws');
 var async = require('async');
+var path = require('path');
 var mysqlOptions = {
     host : 'localhost',
     user : 'mcscop',
@@ -69,6 +70,35 @@ function sendToRoom(room, msg, sender, roleFilter) {
     }
 }
 
+function processReq(dir, socket) {
+    var resp = [];
+    fs.readdir(dir, function(err, list) {
+        for (var i = list.length - 1; i >= 0; i--) {
+            resp.push(processNode(dir, list[i]));
+        }
+        socket.send(JSON.stringify({act:'all_files', arg:resp}));
+    });
+}
+
+function processNode(dir, f) {
+    var s = fs.statSync(path.join(dir, f));
+    return {
+        "id": path.join(dir, f),
+        "text": f,
+        "icon" : s.isDirectory() ? 'jstree-custom-folder' : 'jstree-custom-file',
+        "state": {
+            "opened": false,
+            "disabled": false,
+            "selected": false
+        },
+        "li_attr": {
+            "base": path.join(dir, f),
+            "isLeaf": !s.isDirectory()
+        },
+        "children": s.isDirectory()
+    };
+}
+
 ws.on('connection', function(socket) {
     socket.loggedin = false;
     socket.session = '';
@@ -108,6 +138,13 @@ ws.on('connection', function(socket) {
                     if (!rooms.get(msg.arg))
                         rooms.set(msg.arg, new Set());
                     rooms.get(msg.arg).add(socket);
+                    break;
+                case 'get_files':
+                    var dir = path.resolve(__dirname, './mission_files/mission-' + socket.mission);
+                    if (!fs.existsSync(dir)){
+                        fs.mkdirSync(dir);
+                    }
+                    processReq(dir, socket);
                     break;
                 case 'get_objects':
                     var mission = msg.arg;
@@ -588,9 +625,9 @@ app.post('/api', function (req, res) {
     }
 });
 
-app.get('/users', function (req, res) {
+app.get('/config', function (req, res) {
     if (req.session.loggedin) {
-        res.render('users', { title: 'MCSCOP'});
+        res.render('config', { title: 'MCSCOP'});
     } else {
        res.redirect('login');
     }
@@ -628,6 +665,11 @@ app.get('/cop', function (req, res) {
     } else {
        res.redirect('login');
     }
+});
+
+app.post('/upload', function (req, res) {
+    console.log(req);
+    res.end();
 });
 
 app.post('/login', function (req, res) {
