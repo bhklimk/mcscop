@@ -1,6 +1,7 @@
 var express = require('express');
 var fs = require('fs');
 var app = express();
+var multer = require('multer');
 var ShareDB = require('sharedb');
 var WebSocketJSONStream = require('websocket-json-stream');
 var http = require('http').Server(app);
@@ -31,6 +32,7 @@ var sessionMiddleware = session({
 var rooms = new Map();
 var connection = mysql.createConnection(mysqlOptions);
 var ws = new wss.Server({server:http});
+var upload = multer({dest: './temp_uploads'});
 
 Array.prototype.move = function (old_index, new_index) {
     if (new_index >= this.length) {
@@ -70,13 +72,13 @@ function sendToRoom(room, msg, sender, roleFilter) {
     }
 }
 
-function processReq(dir, socket) {
-    var resp = [];
+function getDir(dir, cb) {
     fs.readdir(dir, function(err, list) {
+        var resp = new Array();
         for (var i = list.length - 1; i >= 0; i--) {
             resp.push(processNode(dir, list[i]));
         }
-        socket.send(JSON.stringify({act:'all_files', arg:resp}));
+        cb(resp);
     });
 }
 
@@ -144,7 +146,7 @@ ws.on('connection', function(socket) {
                     if (!fs.existsSync(dir)){
                         fs.mkdirSync(dir);
                     }
-                    processReq(dir, socket);
+                    getDir(dir, function(resp) { socket.send(JSON.stringify({act:'all_files', arg:resp}))});
                     break;
                 case 'get_objects':
                     var mission = msg.arg;
@@ -667,9 +669,21 @@ app.get('/cop', function (req, res) {
     }
 });
 
-app.post('/upload', function (req, res) {
-    console.log(req);
-    res.end();
+app.post('/upload', upload.any(), function (req, res) {
+    if (req.body.mission && !isNaN(parseFloat(req.body.mission)) && isFinite(req.body.mission)) {
+        async.each(req.files, function(file, callback) {
+            fs.rename(file.path, './mission_files/mission-' + req.body.mission + '/' + file.originalname, function(err) {
+                if (err)
+                    console.log(err);
+                callback();
+            });
+        }, function() {
+            getDir('./mission_files/mission-' + req.body.mission, function(resp) {
+                sendToRoom(req.body.mission, JSON.stringify({act:'update_files', arg:resp}));
+                res.end()
+            });
+        });
+    }
 });
 
 app.post('/login', function (req, res) {

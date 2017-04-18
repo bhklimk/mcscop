@@ -41,8 +41,10 @@ var SVGCache = {};
 var tempLinks = [];
 var objectCache = {};
 var doc;
+var myDropzone;
 var activeToolbar = null;
 var toolbarSizes = {'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400};
+Dropzone.autoDiscover = false;
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -150,7 +152,7 @@ CustomDirectLoadStrategy.prototype.finishInsert = function(loadedData) {
         grid.option("data").push(loadedData);
         grid.refresh();
     }
-    grid.inserting = false;
+//    grid.inserting = false;
 };
 
 var DateField = function(config) {
@@ -197,27 +199,6 @@ DateField.prototype = new jsGrid.Field({
 jsGrid.fields.date = DateField;
 
 $('#diagram').mousedown(startPan);
-
-document.onkeydown = checkKey;
-function checkKey(e) {
-    e = e || window.event;
-    if (e.keyCode == '38') {
-       // up arrow
-       canvas.relativePan({ x: 0, y: -5 });
-    }
-    else if (e.keyCode == '40') {
-       // down arrow
-       canvas.relativePan({ x: 0, y: 5 });
-    }
-    else if (e.keyCode == '37') {
-       // left arrow
-       canvas.relativePan({ x: -5, y: 0 });
-    }
-    else if (e.keyCode == '39') {
-       // right arrow
-       canvas.relativePan({ x: 5, y: 0 });
-    }
-}
 
 canvas.on('object:moving', function(options) {
     dirty = true;
@@ -830,6 +811,7 @@ function openToolbar(mode) {
         $('#tasksForm').hide();
         $('#notesForm').hide();
         $('#opsForm').show();
+        setTimeout(function() { $("#ops").jsGrid("refresh") }, 10);
         $('#filesForm').hide();
     } else if (mode === 'files') {
         activeToolbar = 'files';
@@ -875,7 +857,6 @@ function openToolbar(mode) {
     }
     if ($('#toolbar-body').is(':hidden')) {
         $('#toolbar-body').show();
-        $('#diagram').width($('#diagram').width() - 310);
     }
 }
 
@@ -943,7 +924,84 @@ function startTasks() {
     }
 }
 
+function downloadOpnotes() {
+    JSONToCSVConvertor(opnoteTableData, 'opnotes.csv');
+}
+
+function downloadEvents() {
+}
+
+// https://ciphertrick.com/2014/12/07/download-json-data-in-csv-format-cross-browser-support/
+function msieversion() {
+    var ua = window.navigator.userAgent;
+    var msie = ua.indexOf("MSIE ");
+    if (msie > 0 || !!navigator.userAgent.match(/Trident.*rv\:11\./))
+    {
+        return true;
+    } else { // If another browser,
+        return false;
+    }
+}
+
+function JSONToCSVConvertor(JSONData, fileName) {
+    var arrData = typeof JSONData != 'object' ? JSON.parse(JSONData) : JSONData;
+    var CSV = '';
+    var row = "";
+    for (var index in arrData[0]) {
+        row += index + ',';
+    }
+    row = row.slice(0, -1);
+    CSV += row + '\r\n';
+    for (var i = 0; i < arrData.length; i++) {
+        var row = "";
+        for (var index in arrData[i]) {
+            var arrValue = arrData[i][index] == null ? "" : '"' + arrData[i][index] + '"';
+            row += arrValue + ',';
+        }
+        row.slice(0, row.length - 1);
+        CSV += row + '\r\n';
+    }
+    if (CSV == '') {
+        return;
+    }
+    var fileName = "Result";
+    if(msieversion()){
+        var IEwindow = window.open();
+        IEwindow.document.write('sep=,\r\n' + CSV);
+        IEwindow.document.close();
+        IEwindow.document.execCommand('SaveAs', true, fileName + ".csv");
+        IEwindow.close();
+    } else {
+        var uri = 'data:application/csv;charset=utf-8,' + escape(CSV);
+        var link = document.createElement("a");
+        link.href = uri;
+        link.style = "visibility:hidden";
+        link.download = fileName + ".csv";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+function startTime() {
+    var today = new Date();
+    var eh = today.getHours() - 4;
+    var uh = today.getHours();
+    var m = today.getMinutes();
+    var s = today.getSeconds();
+    m = checkTime(m);
+    s = checkTime(s);
+    $('#est').html('EST: ' + eh + ":" + m + ":" + s);
+    $('#utc').html('UTC: ' + uh + ":" + m + ":" + s);
+    var t = setTimeout(startTime, 500);
+}
+function checkTime(i) {
+    if (i < 10) {i = "0" + i};
+    return i;
+}
+
 $(document).ready(function() {
+    startTime();
     // ---------------------------- SOCKETS ----------------------------------
     diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
     diagram.onopen = function() {
@@ -979,11 +1037,17 @@ $(document).ready(function() {
                 });
                 break;
             case 'all_files':
+                console.log('all_files');
                 $('#fileTree')
                     .on('select_node.jstree', function (e, data) {
                         var o = data.selected[0];
+                        console.log(o);
                     })
                     .jstree({'core':{'data':msg.arg}});
+                break;
+            case 'update_files':
+                $('#fileTree').jstree(true).settings.core.data = msg.arg;
+                $('#fileTree').jstree(true).refresh();
                 break;
             case 'all_objects':
                 objectSelect = [{id:0, name:'none/unknown'}];
@@ -1321,15 +1385,15 @@ $(document).ready(function() {
         background.renderAll();
         canvas.renderAll();
     });
-
+    console.log($('#ops').height());
     // ---------------------------- JSGRIDS ----------------------------------
     $('#ops').jsGrid({
         autoload: false,
         width: '100%',
-        height: 650,
+        height: '100%',
         editing: true,
         sorting: true,
-        paging: true,
+        paging: false,
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
             { name: 'event_time', title: 'Action Time', type : 'date', width: 50,
@@ -1370,7 +1434,6 @@ $(document).ready(function() {
                     item.mission = mission;
                     diagram.send(JSON.stringify({act: 'insert_opnote', arg: item}));
                 }
-                return;
             },
             updateItem: function(item) {
                 diagram.send(JSON.stringify({act: 'update_opnote', arg: item}));
@@ -1495,7 +1558,12 @@ $(document).ready(function() {
     }); 
 
     // ---------------------------- MISC ----------------------------------
-    $("#dropZone").dropzone({ url: "upload" })
+    myDropzone = new Dropzone("#dropzone", {
+        url: "upload",
+        params: {
+            mission: mission
+        }
+    });
     $("#diagram_jumbotron").resizable();
     $("#toolbar-body").resizable({ handles: 'w' });
     $("#toolbar-body").on("resize", function( event, ui ) {

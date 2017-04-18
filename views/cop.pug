@@ -15,6 +15,11 @@ html
     link(rel='stylesheet', href='css/style.css')
   body
     div.container
+      div.clockBar#clockBar
+        div
+        div.clock#est
+        div.clock#utc
+        div
       include nav.pug
       div.jumbotron.diagram_jumbotron#diagram_jumbotron(style='height:700px')
         div.canvas#diagram
@@ -35,6 +40,7 @@ html
           div.toolbar-body#toolbar-body
             div#opsForm
               div#ops
+              button.btn.btn-primary#downloadOpnotes(onclick='downloadOpnotes()') Download
             div#notesForm
               textarea#notes
             div#tasksForm
@@ -43,8 +49,7 @@ html
               textarea.tasks#ccirs
             div#filesForm
               div#fileTree
-              div.dz-message#dropZone
-                span Drop files here to upload.
+              form.dropzone(action='upload')#dropzone
             form#toolsForm
               span.toolbarTitle#toolbarTitle Edit Object
               button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()") New!
