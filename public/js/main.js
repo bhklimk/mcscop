@@ -143,7 +143,14 @@ $(document).ready(function() {
                 return ('<a href="cop?mission=' + item.id + '">' + item.name + "</a>");
                 }
             },
-            { name: 'start_date', title: 'Start Date', type: 'date', width: 25},
+            { name: 'start_date', title: 'Start Date', type: 'date', width: 25,
+                insertTemplate: function() {
+                    var input = this.__proto__.insertTemplate.call(this);
+                    var date = new Date();
+                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    return input;
+                }
+            },
             { name: 'analyst', title: 'Battle Captain', type: 'select', items: users, valueField: 'id', textField: 'name', width: 65, filterValue: function() {
                     return this.items[this.filterControl.val()][this.textField];
                 }

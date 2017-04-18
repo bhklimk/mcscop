@@ -1003,7 +1003,7 @@ function checkTime(i) {
 $(document).ready(function() {
     startTime();
     // ---------------------------- SOCKETS ----------------------------------
-    diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
+    diagram = new WebSocket('ws://' + window.location.host + '/mcscop/');
     diagram.onopen = function() {
         $('#modal').modal('hide');
         $('#modal-title').text('Please wait...!');
