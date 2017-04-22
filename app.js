@@ -239,7 +239,7 @@ ws.on('connection', function(socket) {
                 case 'update_event':
                     var evt = msg.arg;
                     evt.analyst = socket.user_id;
-                    connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst, evt.id], function (err, results) {
+                    connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.id], function (err, results) {
                         if (!err) {
                             evt.analyst = socket.username;
                             sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}));
@@ -309,7 +309,17 @@ ws.on('connection', function(socket) {
                     break;
                 case 'insert_object':
                     var o = msg.arg;
+                    if (!o.image || o.image === '') {
+                        socket.send(JSON.stringify({act: 'error', arg: 'Error: Missing image!'}));
+                        break;
+                    }
                     connection.query('SELECT count(*) AS z FROM objects WHERE mission = ?', [o.mission], function (err, results) {
+                        var x = 32;
+                        var y = 32;
+                        if (!isNaN(parseFloat(o.x)) && isFinite(o.x) && !isNaN(parseFloat(o.y)) && isFinite(o.y)) {
+                            x = o.x;
+                            y = o.y;
+                        }
                         o.z = results[0].z;
                         if (o.type === 'icon' || o.type === 'shape') {
                             var scale_x = 1;
@@ -318,7 +328,7 @@ ws.on('connection', function(socket) {
                                 scale_x = 64;
                                 scale_y = 64;
                             }
-                            connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values (?, ?, ?, ?, ?, ?, ?, ?, 32, 32, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, o.z], function (err, results) {
+                            connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, x, y, o.z], function (err, results) {
                                 if (!err) {
                                     o.id = results.insertId;
                                     connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
@@ -331,7 +341,7 @@ ws.on('connection', function(socket) {
                                     console.log(err);
                             });
                         } else if (o.type === 'link') {
-                            connection.query('INSERT INTO objects (mission, type, name, stroke_color, image, obj_a, obj_b) values (?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.image, o.obj_a, o.obj_b, o.z], function (err, results) {
+                            connection.query('INSERT INTO objects (mission, type, name, stroke_color, image, obj_a, obj_b, z) values (?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.image, o.obj_a, o.obj_b, o.z], function (err, results) {
                                 if (!err) {
                                     o.id = results.insertId;
                                     connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {

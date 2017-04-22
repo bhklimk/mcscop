@@ -17,12 +17,9 @@ MAXHEIGHT=4000;
 canvas.setZoom(1.0);
 var creatingLink = false;
 var firstObject = null;
-var startX = 0;
-var startY = 0;
 var scale = 1;
-var originx = 0;
-var originy = 0;
-var zoomIntensity = 0.2;
+var offsetX = 0;
+var offsetY = 0;
 var mission = getParameterByName('mission');
 var objectSelect = [{id:0, name:'none/unknown'}];
 var dateSlider = null;
@@ -49,6 +46,7 @@ Dropzone.autoDiscover = false;
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
 };
+
 
 // Rescale stroke widths based on object size
 // http://jsfiddle.net/davidtorroija/nawLjtn8/
@@ -231,6 +229,30 @@ canvas.on('object:modified', function(options) {
     }
 });
 
+fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
+    var o = canvas.findTarget(e);
+    if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null) {
+        if (o.objType !== undefined) {
+            $('#propID').val(o.uuid);
+            $('#propFillColor').val(o.fill);
+            $('#propStrokeColor').val(o.stroke);
+            $('#propName').val('');
+            if (o.children !== undefined) {
+                for (var i = 0; i < o.children.length; i++) {
+                    if (o.children[i].objType === 'name')
+                        $('#propName').val(o.children[i].text);
+                }
+            }
+            $('#propType').val(o.objType);
+            $('#propIcon').val(o.image);
+            $('#propIcon').data('picker').sync_picker_with_select();
+            openToolbar('tools');
+        }
+    } else {
+        closeToolbar();
+    }
+});
+
 canvas.on('object:selected', function(options) {
     var o = options.target;
     if (o) {
@@ -252,25 +274,8 @@ canvas.on('object:selected', function(options) {
                             creatingLink = false;
                         }
                     }
-                } else {
-                    $('#propID').val(o.uuid);
-                    $('#propFillColor').val(o.fill);
-                    $('#propStrokeColor').val(o.stroke);
-                    $('#propName').val('');
-                    if (o.children !== undefined) {
-                        for (var i = 0; i < o.children.length; i++) {
-                            if (o.children[i].objType === 'name')
-                                $('#propName').val(o.children[i].text);
-                        }
-                    }
-                    $('#propType').val(o.objType);
-                    $('#propIcon').val(o.image);
-                    $('#propIcon').data('picker').sync_picker_with_select();
-                    openToolbar('tools');
                 }
             }
-        } else {
-            closeToolbar();
         }
     }
 });
@@ -388,6 +393,8 @@ function editDetails(uuid) {
 }
 
 function zoomIn() {
+    offsetX = offsetX + ((canvas.width - (canvas.width * 0.90))/2) / canvas.getZoom() 
+    offsetY = offsetY - ((canvas.height - (canvas.height * 0.90))/2) / canvas.getZoom() 
     canvas.zoomToPoint(new fabric.Point(canvas.width / 2, canvas.height / 2), canvas.getZoom() / 0.90);
     background.zoomToPoint(new fabric.Point(background.width / 2, background.height / 2), background.getZoom() / 0.90);
 }
@@ -408,6 +415,8 @@ function startPan(event) {
             y = event.screenY;
         if (x - x0 != 0 || y - y0 != 0)
         {
+            offsetX -= (x - x0) / canvas.getZoom();
+            offsetY += (y - y0) / canvas.getZoom();
             canvas.relativePan({ x: x - x0, y: y - y0 });
             background.relativePan({ x: x - x0, y: y - y0 });
             
@@ -632,7 +641,6 @@ function blink(div) {
 }
 
 function insertLink() {
-    closeToolbar();
     creatingLink = true;
     showMessage('Click on a node to start a new link.');
     $('#cancelLink').show();
@@ -646,10 +654,13 @@ function cancelLink() {
 }
 
 function insertObject() {
+    closeToolbar();
     if ($('#propType').val() === 'link')
         insertLink();
-    else
-        diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#propIcon').val(), type:$('#propType').val(), z: canvas.getObjects().length}})); 
+    else {
+        var center = new fabric.Point(canvas.width / 2, canvas.height / 2);
+        diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#propIcon').val(), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
+    }
 }
 
 function deleteObject() {
@@ -846,7 +857,7 @@ function openToolbar(mode) {
         $('#propStrokeColor').val('#ffffff');
         $('#propShapeGroup').hide();
         $('#propIconGroup').show();
-        $('#propIcon').val('00-000-hub.svg');
+        $('#propIcon').val('00-000-icon-hub.svg');
         $('#propIcon').data('picker').sync_picker_with_select();
         $('#newObjectButton').hide();
         $('#editDetailsButton').hide();
@@ -1041,7 +1052,6 @@ $(document).ready(function() {
                 $('#fileTree')
                     .on('select_node.jstree', function (e, data) {
                         var o = data.selected[0];
-                        console.log(o);
                     })
                     .jstree({'core':{'data':msg.arg}});
                 break;
@@ -1572,10 +1582,10 @@ $(document).ready(function() {
 
     window.addEventListener('resize', resizeCanvas, false);
     function resizeCanvas() {
-        canvas.setHeight(window.innerHeight);
-        canvas.setWidth(window.innerWidth);
-        background.setHeight(window.innerHeight);
-        background.setWidth(window.innerWidth);
+        canvas.setHeight($('#diagram').height());
+        canvas.setWidth($('#diagram').width());
+        background.setHeight($('#diagram').height());
+        background.setWidth($('#diagram').width());
         canvas.renderAll();
     }
     resizeCanvas();
