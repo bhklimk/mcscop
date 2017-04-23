@@ -84,8 +84,10 @@ function getDir(dir, cb) {
 
 function processNode(dir, f) {
     var s = fs.statSync(path.join(dir, f));
+    var base = path.join(dir, f);
+    var rel = path.join('/download/', path.relative(path.join(__dirname, '/mission_files/'), base));
     return {
-        "id": path.join(dir, f),
+        "id": rel,
         "text": f,
         "icon" : s.isDirectory() ? 'jstree-custom-folder' : 'jstree-custom-file',
         "state": {
@@ -94,7 +96,7 @@ function processNode(dir, f) {
             "selected": false
         },
         "li_attr": {
-            "base": path.join(dir, f),
+            "base": rel,
             "isLeaf": !s.isDirectory()
         },
         "children": s.isDirectory()
@@ -645,23 +647,6 @@ app.get('/config', function (req, res) {
     }
 });
 
-app.get('/copview', function (req, res) {
-    if (req.session.loggedin) {
-        if (req.query.mission !== undefined && req.query.mission > 0) {
-            fs.readdir('./public/images/icons', function(err, icons) {
-                fs.readdir('./public/images/shapes', function(err, shapes) {
-                    res.render('cop', { title: 'MCSCOP', icons: icons, shapes: shapes});
-                });
-            });
-
-        } else {
-            res.redirect('../');
-        }
-    } else {
-       res.redirect('login');
-    }
-});
-
 app.get('/cop', function (req, res) {
     if (req.session.loggedin) {
         if (req.query.mission !== undefined && req.query.mission > 0) {
@@ -678,6 +663,32 @@ app.get('/cop', function (req, res) {
        res.redirect('login');
     }
 });
+
+app.get('/download/:mission*', function (req, res) {
+    if (req.session.loggedin) {
+        var file = req.params.mission + req.params[0]
+        if (file) {
+            dir = path.normalize(file).replace(/^(\.\.[\/\\])+/, '');
+            dir = path.join(__dirname + '/mission_files/', dir);
+            var s = fs.statSync(dir);
+            if (s.isFile()) {
+                res.writeHead(200, {
+                    'Content-Type': 'application/octet-stream',
+                    'Content-Length': s.size
+                });
+                var rs = fs.createReadStream(dir);
+                rs.pipe(res);
+            } else {
+                res.status(404).send('Not found');
+            }
+        } else {
+            res.status(404).send('Not found');
+        }
+    } else {
+        res.redirect('login');
+    }
+});
+
 
 app.post('/upload', upload.any(), function (req, res) {
     if (req.body.mission && !isNaN(parseFloat(req.body.mission)) && isFinite(req.body.mission)) {

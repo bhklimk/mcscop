@@ -47,7 +47,6 @@ var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
 };
 
-
 // Rescale stroke widths based on object size
 // http://jsfiddle.net/davidtorroija/nawLjtn8/
 fabric.Object.prototype.resizeToScale = function () {
@@ -338,7 +337,6 @@ function getIcon(icon, type) {
         objectsLoaded.pop();
     }, 'text');
 }
-
 
 function checkIfShapesCached(msg) {
     if (objectsLoaded.length == 0) {
@@ -1052,6 +1050,8 @@ $(document).ready(function() {
                 $('#fileTree')
                     .on('select_node.jstree', function (e, data) {
                         var o = data.selected[0];
+                        console.log(o);
+                        var dl = $('<iframe />').attr('src',o).hide().appendTo('body');
                     })
                     .jstree({'core':{'data':msg.arg}});
                 break;

@@ -23,6 +23,10 @@ canvas {
     justify-content: space-between;
 }
 
+#download {
+    display: none;
+}
+
 #downloadOpnotes {
     position: absolute;
     left: 15px;
