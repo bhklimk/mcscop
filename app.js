@@ -267,10 +267,8 @@ ws.on('connection', function(socket) {
                     break;
                 case 'update_event':
                     var evt = msg.arg;
-                    evt.analyst = socket.user_id;
                     connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.id], function (err, results) {
                         if (!err) {
-                            evt.analyst = socket.username;
                             sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}));
                         } else
                             console.log(err);
