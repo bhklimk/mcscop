@@ -72,20 +72,51 @@ function sendToRoom(room, msg, sender, roleFilter) {
     }
 }
 
-function getDir(dir, cb) {
+function getDir(dir, mission, cb) {
+    var resp = new Array();
+    if (dir === path.join(__dirname + '/mission-files/mission-' + mission)) {
+        resp.push({
+            "id": '/',
+            "text": '/',
+            "icon" : 'jstree-custom-folder',
+            "state": {
+                "opened": true,
+                "disabled": true,
+                "selected": false
+            },
+            "li_attr": {
+                "base": '#',
+                "isLeaf": false
+            },
+            "a_attr": {
+                "class": 'droppable'
+            },
+            "children": null
+        });
+    }
     fs.readdir(dir, function(err, list) {
-        var resp = new Array();
-        for (var i = list.length - 1; i >= 0; i--) {
-            resp.push(processNode(dir, list[i]));
+        if (list) {
+            var children = new Array();
+            list.sort(function(a, b) {
+                return a.toLowerCase() < b.toLowerCase() ? -1 : 1;
+            }).forEach(function(file, key) {
+                children.push(processNode(dir, mission, file));
+            });
+            if (dir === path.join(__dirname + '/mission-files/mission-' + mission)) {
+                resp[0].children = children;
+                cb(resp);
+            } else
+                cb(children);
+        } else {
+            cb([]);
         }
-        cb(resp);
     });
 }
 
-function processNode(dir, f) {
+function processNode(dir, mission, f) {
     var s = fs.statSync(path.join(dir, f));
     var base = path.join(dir, f);
-    var rel = path.join('/download/', path.relative(path.join(__dirname, '/mission_files/'), base));
+    var rel = path.relative(path.join(__dirname, '/mission-files/mission-' + mission), base);
     return {
         "id": rel,
         "text": f,
@@ -98,6 +129,9 @@ function processNode(dir, f) {
         "li_attr": {
             "base": rel,
             "isLeaf": !s.isDirectory()
+        },
+        "a_attr": {
+            "class": (s.isDirectory() ? 'droppable' : '')
         },
         "children": s.isDirectory()
     };
@@ -142,13 +176,6 @@ ws.on('connection', function(socket) {
                     if (!rooms.get(msg.arg))
                         rooms.set(msg.arg, new Set());
                     rooms.get(msg.arg).add(socket);
-                    break;
-                case 'get_files':
-                    var dir = path.resolve(__dirname, './mission_files/mission-' + socket.mission);
-                    if (!fs.existsSync(dir)){
-                        fs.mkdirSync(dir);
-                    }
-                    getDir(dir, function(resp) { socket.send(JSON.stringify({act:'all_files', arg:resp}))});
                     break;
                 case 'get_objects':
                     var mission = msg.arg;
@@ -664,49 +691,6 @@ app.get('/cop', function (req, res) {
     }
 });
 
-app.get('/download/:mission*', function (req, res) {
-    if (req.session.loggedin) {
-        var file = req.params.mission + req.params[0]
-        if (file) {
-            dir = path.normalize(file).replace(/^(\.\.[\/\\])+/, '');
-            dir = path.join(__dirname + '/mission_files/', dir);
-            var s = fs.statSync(dir);
-            if (s.isFile()) {
-                res.writeHead(200, {
-                    'Content-Type': 'application/octet-stream',
-                    'Content-Length': s.size
-                });
-                var rs = fs.createReadStream(dir);
-                rs.pipe(res);
-            } else {
-                res.status(404).send('Not found');
-            }
-        } else {
-            res.status(404).send('Not found');
-        }
-    } else {
-        res.redirect('login');
-    }
-});
-
-
-app.post('/upload', upload.any(), function (req, res) {
-    if (req.body.mission && !isNaN(parseFloat(req.body.mission)) && isFinite(req.body.mission)) {
-        async.each(req.files, function(file, callback) {
-            fs.rename(file.path, './mission_files/mission-' + req.body.mission + '/' + file.originalname, function(err) {
-                if (err)
-                    console.log(err);
-                callback();
-            });
-        }, function() {
-            getDir('./mission_files/mission-' + req.body.mission, function(resp) {
-                sendToRoom(req.body.mission, JSON.stringify({act:'update_files', arg:resp}));
-                res.end()
-            });
-        });
-    }
-});
-
 app.post('/login', function (req, res) {
     if (req.body.username !== undefined && req.body.username !== '' && req.body.password !== undefined && req.body.password !== '') {
         connection.query('SELECT id, username, password, role FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
@@ -746,6 +730,144 @@ app.get('/login', function (req, res) {
     else
         res.render('login', { title: 'MCSCOP Login' });
 });
+
+
+// --------------------------------------- FILES ------------------------------------------
+
+app.post('/dir/', function (req, res) {
+    var dir = req.body.id;
+    var mission = req.body.mission;
+    if (dir && mission && dir !== '#') {
+        dir = path.normalize(dir).replace(/^(\.\.[\/\\])+/, '');
+        dir = path.join(__dirname + '/mission-files/mission-' + mission, dir);
+        var s = fs.statSync(dir);
+        if (s.isDirectory()) {
+            getDir(dir, mission, function(r) {
+                res.send(r);
+            })
+        } else {
+            res.status(404).send('Not found');
+        }
+    } else if (dir && mission) {
+        dir = path.join(__dirname, '/mission-files/mission-' + mission);
+        getDir(dir, mission, function(r) {
+            res.send(r);
+        });
+    }
+});
+
+app.use('/download', express.static(path.join(__dirname, 'mission-files'), {
+    etag: false,
+    setHeaders: function(res, path) {
+        res.attachment(path);
+    }
+
+}))
+
+app.post('/mkdir', function (req, res) {
+    var id = req.body.id;
+    var name = req.body.name;
+    var mission = req.body.mission;
+    if (id && name && mission) {
+        var dir = path.normalize(id).replace(/^(\.\.[\/\\])+/, '');
+        name = path.normalize('/' + name + '/').replace(/^(\.\.[\/\\])+/, '');
+        dir = path.join(path.join(path.join(__dirname, '/mission-files/mission-' + mission + '/'), dir), name);
+        fs.stat(dir, function (err, s) {
+            if (err == null)
+                res.status(500).send('mkdir error');
+            else if (err.code == 'ENOENT') {
+                fs.mkdir(dir,function(err){
+                    if(err)
+                        res.status(500).send('mkdir error');
+                    else
+                        res.send('{}');
+               });
+            } else {
+                res.status(500).send('mkdir error');
+            }
+        });
+    } else
+        res.status(404).send('Y U bein wierd?');
+});
+
+app.post('/mv', function (req, res) {
+    var dst = req.body.dst;
+    var src = req.body.src;
+    var mission = req.body.mission;
+    if (dst && src && mission) {
+        var dstdir = path.normalize(dst).replace(/^(\.\.[\/\\])+/, '');
+        var srcdir = path.normalize(src).replace(/^(\.\.[\/\\])+/, '');
+        dstdir = path.join(path.join(__dirname, '/mission-files/mission-' + mission), dstdir);
+        srcdir = path.join(path.join(__dirname, '/mission-files/mission-' + mission), srcdir);
+        fs.stat(dstdir, function (err, s) {
+            if (s.isDirectory()) {
+                fs.stat(srcdir, function (err, s) {
+                    if (s.isDirectory() || s.isFile()) {
+                        fs.rename(srcdir, dstdir + '/' + path.basename(srcdir), function(err) {
+                            if (err)
+                                res.status(500).send('mv error');
+                            res.send('{}');
+                        });
+                    } else
+                        res.status(500).send('mv error');
+                });
+            } else
+                res.status(500).send('mv error');
+        });
+    } else
+        res.status(404).send('Y U bein wierd?');
+});
+
+app.post('/delete', function (req, res) {
+    var id = req.body.id;
+    var mission = req.body.mission;
+    if (id) {
+        var dir = path.normalize(id).replace(/^(\.\.[\/\\])+/, '');
+        dir = path.join(path.join(__dirname, '/mission-files/mission-' + mission + '/'), dir);
+        fs.stat(dir, function (err, s) {
+            if (err)
+                res.status(500).send('delete error');
+            if (s.isDirectory()) {
+                fs.rmdir(dir,function(err){
+                    if(err)
+                        res.status(500).send('delete error');
+                    else
+                        res.send('{}');
+               });
+            } else {
+                fs.unlink(dir,function(err){
+                    if(err)
+                        res.status(500).send('delete error');
+                    else
+                        res.send('{}');
+               });
+            }
+        });
+    } else
+        res.status(404).send('Y U bein wierd?');
+});
+
+app.post('/upload', upload.any(), function (req, res) {
+    if (req.body.dir && req.body.dir.indexOf('_anchor') && req.body.mission) {
+        var dir = req.body.dir.substring(0,req.body.dir.indexOf('_anchor'));
+        dir = path.normalize(dir).replace(/^(\.\.[\/\\])+/, '');
+        dir = path.join(__dirname + '/mission-files/mission-' + req.body.mission + '/', dir);
+        async.each(req.files, function(file, callback) {
+            fs.rename(file.path, dir + '/' + file.originalname, function(err) {
+                if (err)
+                    res.status(500).send('delete error');
+                callback();
+            });
+        }, function() {
+            res.send('{}');
+            getDir('./mission-files', req.body.mission, function(resp) {
+            });
+        });
+    } else
+       res.status(404).send('Y U bein wierd?');
+});
+
+// -------------------------------------------------------------------------
 
 http.listen(3000, function () {
     console.log('Server listening on port 3000!');

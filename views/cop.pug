@@ -11,7 +11,7 @@ html
     link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
     link(rel='stylesheet', href='css/nouislider.min.css')
     link(rel='stylesheet', href='css/jstree.min.css')
-    link(rel='stylesheet', href='css/dropzone.min.css')
+    link(rel='stylesheet', href='css/files.css')
     link(rel='stylesheet', href='css/style.css')
   body
     div.container
@@ -48,8 +48,7 @@ html
               textarea.tasks#networkTasks
               textarea.tasks#ccirs
             div#filesForm
-              div#fileTree
-              form.dropzone(action='upload')#dropzone
+              div#files
             form#toolsForm
               span.toolbarTitle#toolbarTitle Edit Object
               button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()") New!
@@ -94,5 +93,6 @@ html
   script(src='js/nouislider.min.js')
   script(src='js/sharedbclient.js')
   script(src='js/jstree.min.js')
-  script(src='js/dropzone.min.js')
+  script(src='js/files.js')
+  script(src='js/bootbox.min.js')
   script(src='js/cop.js')

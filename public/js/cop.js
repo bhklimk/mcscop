@@ -39,10 +39,8 @@ var SVGCache = {};
 var tempLinks = [];
 var objectCache = {};
 var doc;
-var myDropzone;
 var activeToolbar = null;
 var toolbarSizes = {'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400};
-Dropzone.autoDiscover = false;
 
 var CustomDirectLoadStrategy = function(grid) {
     jsGrid.loadStrategies.DirectLoadingStrategy.call(this, grid);
@@ -1027,8 +1025,6 @@ $(document).ready(function() {
         diagram.send(JSON.stringify({act:'get_events', arg: mission}));
         console.log('get opnotes');
         diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
-        console.log('get files');
-        diagram.send(JSON.stringify({act:'get_files', arg: mission}));
     };
     diagram.onmessage = function(msg) {
         msg = JSON.parse(msg.data);
@@ -1044,16 +1040,6 @@ $(document).ready(function() {
                     backdrop: 'static',
                     keyboard: false
                 });
-                break;
-            case 'all_files':
-                console.log('all_files');
-                $('#fileTree')
-                    .on('select_node.jstree', function (e, data) {
-                        var o = data.selected[0];
-                        console.log(o);
-                        var dl = $('<iframe />').attr('src',o).hide().appendTo('body');
-                    })
-                    .jstree({'core':{'data':msg.arg}});
                 break;
             case 'update_files':
                 $('#fileTree').jstree(true).settings.core.data = msg.arg;
@@ -1337,7 +1323,6 @@ $(document).ready(function() {
 
     dateSlider.noUiSlider.on('update', function(values, handle) {
         var filter = [];
-        console.log(parseInt(values[0]), parseInt(values[1]), eventTimes.length);
         if (parseInt(values[1]) == eventTimes.length - 1) {
             if (parseInt(values[1]) > 0 )
                 filter = [eventTimes[parseInt(values[0])]];
@@ -1352,7 +1337,6 @@ $(document).ready(function() {
             }
             tempLinks = [];
         }
-        console.log(filter);
         for (var j = 0; j < canvas.getObjects().length; j++)
             canvas.item(j).setShadow(null);
         for (var i = 0; i < eventTableData.length; i++) {
@@ -1398,7 +1382,6 @@ $(document).ready(function() {
         }
         canvas.renderAll();
     });
-    console.log($('#ops').height());
     // ---------------------------- JSGRIDS ----------------------------------
     $('#ops').jsGrid({
         autoload: false,
@@ -1571,12 +1554,6 @@ $(document).ready(function() {
     }); 
 
     // ---------------------------- MISC ----------------------------------
-    myDropzone = new Dropzone("#dropzone", {
-        url: "upload",
-        params: {
-            mission: mission
-        }
-    });
     $("#diagram_jumbotron").resizable();
     $("#toolbar-body").resizable({ handles: 'w' });
     $("#toolbar-body").on("resize", function( event, ui ) {
