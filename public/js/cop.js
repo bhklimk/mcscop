@@ -11,6 +11,7 @@ var background = new fabric.Canvas('background', {
     renderOnAddRemove: false,
     enableRetinaScaling: false
 });
+
 MAXWIDTH=4000;
 MAXHEIGHT=4000;
 
@@ -324,7 +325,6 @@ canvas.on('before:render', function(e) {
                 tempLinks[i].set({ 'x1': tempLinks[i].from.getCenterPoint().x, 'y1': tempLinks[i].from.getCenterPoint().y });
                 tempLinks[i].set({ 'x2': tempLinks[i].to.getCenterPoint().x, 'y2': tempLinks[i].to.getCenterPoint().y });
             }
-            background.renderAll();
         }
         dirty = false;
     }
@@ -847,7 +847,6 @@ function openToolbar(mode) {
     } else if (canvas.getActiveObject() === undefined || canvas.getActiveObject() === null) {
         $('#toolbarTitle').html('New Object');
         $('#propID').val('');
-        $('#propType').val();
         $('#propNameGroup').show();
         $('#propName').val('');
         $('#propFillColor').show();
@@ -855,6 +854,7 @@ function openToolbar(mode) {
         $('#propStrokeColor').val('#ffffff');
         $('#propShapeGroup').hide();
         $('#propIconGroup').show();
+        $('#propType').val('icon');
         $('#propIcon').val('00-000-icon-hub.svg');
         $('#propIcon').data('picker').sync_picker_with_select();
         $('#newObjectButton').hide();
@@ -1087,7 +1087,7 @@ $(document).ready(function() {
                     eventTableData.push(msg.arg[evt]);
                     eventTimes.splice(eventTimes.length - 1, 0, msg.arg[evt].event_time);
                 }
-                var end = eventTimes.length + 1;
+                var end = eventTimes.length - 1;
                 dateSlider.noUiSlider.updateOptions({
                     start: [0,end],
                     range: {
@@ -1207,10 +1207,10 @@ $(document).ready(function() {
                     }
                 }
                 dateSlider.noUiSlider.updateOptions({
-                    start: [0,eventTimes.length+1],
+                    start: [0,eventTimes.length-1],
                     range: {
                         'min': 0,
-                        'max': eventTimes.length+1
+                        'max': eventTimes.length-1
                     },
                     step: 1
                 });
@@ -1337,19 +1337,22 @@ $(document).ready(function() {
 
     dateSlider.noUiSlider.on('update', function(values, handle) {
         var filter = [];
-        if (parseInt(values[1]) > eventTimes.length)
-            filter = [eventTimes[parseInt(values[0])]];
-        else {
-            for (var i = parseInt(values[0]); i < parseInt(values[1]); i ++) {
+        console.log(parseInt(values[0]), parseInt(values[1]), eventTimes.length);
+        if (parseInt(values[1]) == eventTimes.length - 1) {
+            if (parseInt(values[1]) > 0 )
+                filter = [eventTimes[parseInt(values[0])]];
+        } else {
+            for (var i = parseInt(values[0]); i <= parseInt(values[1]); i ++) {
                 filter.push(eventTimes[i]);
             }
         }
         if (tempLinks.length > 0) {
             for (var i = 0; i < tempLinks.length; i++) {
-                background.remove(tempLinks[i]);
+                canvas.remove(tempLinks[i]);
             }
             tempLinks = [];
         }
+        console.log(filter);
         for (var j = 0; j < canvas.getObjects().length; j++)
             canvas.item(j).setShadow(null);
         for (var i = 0; i < eventTableData.length; i++) {
@@ -1373,7 +1376,8 @@ $(document).ready(function() {
                             to: to,
                             stroke: 'red',
                             strokeColor: 'red',
-                            strokeWidth: 5,
+                            strokeWidth: 8,
+                            strokeDashArray: [15,10],
                             hasControls: false,
                             lockMovementX: true,
                             lockMovementY: true,
@@ -1382,8 +1386,8 @@ $(document).ready(function() {
                             lockRotation: true,
                         });
                         tempLink = line;
-                        background.add(line);
-                        line.sendToBack();
+                        canvas.add(line);
+                        //line.sendToBack();
                         tempLinks.push(tempLink);
                         break;
                     }
@@ -1392,7 +1396,6 @@ $(document).ready(function() {
                 $('#events').jsGrid("rowByItem",eventTableData[i]).removeClass('highlight');
             }
         }
-        background.renderAll();
         canvas.renderAll();
     });
     console.log($('#ops').height());
@@ -1533,10 +1536,10 @@ $(document).ready(function() {
                     diagram.send(JSON.stringify({act: 'insert_event', arg: item}));
                     eventTimes.splice(eventTimes.length-1,0,item.event_time);
                     dateSlider.noUiSlider.updateOptions({
-                        start: [0,eventTimes.length+1],
+                        start: [0,eventTimes.length-1],
                         range: {
                             'min': 0,
-                            'max': eventTimes.length+1
+                            'max': eventTimes.length-1
                         },
                         step: 1
                     });
