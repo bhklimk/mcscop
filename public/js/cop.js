@@ -32,6 +32,7 @@ var objectsLoaded = null;
 var updatingObject = false;
 var diagram;
 var toolbarMode = null;
+var toolbarState = false;
 var firstNode = null;
 var zoom = 1.0;
 var dirty = false;
@@ -229,7 +230,7 @@ canvas.on('object:modified', function(options) {
 
 fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
     var o = canvas.findTarget(e);
-    if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null) {
+    if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null && !creatingLink) {
         if (o.objType !== undefined) {
             $('#propID').val(o.uuid);
             $('#propFillColor').val(o.fill);
@@ -272,6 +273,21 @@ canvas.on('object:selected', function(options) {
                             creatingLink = false;
                         }
                     }
+                } else if (toolbarState) {
+                    $('#propID').val(o.uuid);
+                    $('#propFillColor').val(o.fill);
+                    $('#propStrokeColor').val(o.stroke);
+                    $('#propName').val('');
+                    if (o.children !== undefined) {
+                        for (var i = 0; i < o.children.length; i++) {
+                            if (o.children[i].objType === 'name')
+                                $('#propName').val(o.children[i].text);
+                        }
+                    }
+                    $('#propType').val(o.objType);
+                    $('#propIcon').val(o.image);
+                    $('#propIcon').data('picker').sync_picker_with_select();
+                    openToolbar('tools');
                 }
             }
         }
@@ -786,6 +802,7 @@ function toggleToolbar(mode) {
 }
 
 function openToolbar(mode) {
+    toolbarState = true;
     toolbarMode = mode;
     if (mode === 'tools') {
         activeToolbar = 'tools';
@@ -868,6 +885,7 @@ function openToolbar(mode) {
 }
 
 function closeToolbar() {
+    toolbarState = false;
     $('#toolbar-body').hide();
 }
 
@@ -936,7 +954,9 @@ function downloadOpnotes() {
 }
 
 function downloadEvents() {
+    JSONToCSVConvertor(eventTableData, 'events.csv');
 }
+
 
 // https://ciphertrick.com/2014/12/07/download-json-data-in-csv-format-cross-browser-support/
 function msieversion() {
@@ -1474,7 +1494,7 @@ $(document).ready(function() {
                 insertTemplate: function() {
                     var input = this.__proto__.insertTemplate.call(this);
                     var date = new Date();
-                    input.val((addZero(date.getMonth()+1) + '/' + addZero(date.getDate()) + '/' + date.getFullYear() + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
+                    input.val((date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds()));
                     return input;
                 }
             },
@@ -1489,7 +1509,7 @@ $(document).ready(function() {
             },
             { name: 'dest_port', title: 'DPort', type: 'number', width: 20},
             { name: 'event_type', title: 'Event Type', type: 'text'},
-            { name: 'short_desc', title: 'Event Description', type: 'text'},
+            { name: 'short_desc', title: 'Event Description', type: 'textarea'},
             { name: 'analyst', title: 'Analyst', type: 'text', width: 50, readOnly: true},
             { 
                 type: "control",
