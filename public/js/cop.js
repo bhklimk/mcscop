@@ -727,10 +727,12 @@ function moveDown() {
 }
 
 function showMessage(msg, timeout) {
-    $('#message').html(msg);
+    $('#message').html('<span class="messageHeader">' + msg + '</span>');
+    $('#message').show();
     if (timeout !== undefined) {
         setTimeout(function() {
             $('#message').html('');
+            $('#message').hide();
         }, timeout * 1000);
     }
 }
@@ -897,7 +899,8 @@ function closeToolbar() {
 }
 
 function timestamp(str){
-    return new Date(str).getTime();   
+    var date = new Date(str);
+    return (date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds());
 }
 
 function startTasks() {
@@ -1437,10 +1440,18 @@ $(document).ready(function() {
                 }
                 tempLinks = [];
             }
+            if (filter.length === 1) {
+                $('#message').show();
+                $('#message').css('display','inline-block');
+            } else {
+                $('#message').hide();
+            }
             for (var i = 0; i < $('#events').data('JSGrid').data.length; i++) {
                 $row = $('#events').data('JSGrid').data[i];
                 if ($row) {
                     if (filter.indexOf(i) !== -1) {
+                        if (filter.length === 1)
+                            $('#message').html('<span class="messageHeader">' + timestamp($row.event_time) + '</span><br/><span class="messageBody">' + $row.short_desc.replace('\n','<br>') + '</span>');
                         $('#events').jsGrid("rowByItem",$row).addClass('highlight');
                         var from = null;
                         var to = null;
@@ -1723,7 +1734,6 @@ $(document).ready(function() {
     function resizeCanvas() {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(function() {
-            console.log('ressize');
             canvas.setHeight($('#diagram').height());
             canvas.setWidth($('#diagram').width());
             background.setHeight($('#diagram').height());

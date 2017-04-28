@@ -23,9 +23,9 @@ html
       include nav.pug
       div.jumbotron.diagram_jumbotron#diagram_jumbotron(style='height:700px')
         div.canvas#diagram
-          span.message#message
           canvas#background
           canvas#canvas
+          div#message
           div#zoom-buttons
             button.zoomIn#zoomIn(onclick='zoomIn()') +
             button.zoomOut#zoomOut(onclick='zoomOut()') -
@@ -80,10 +80,11 @@ html
                   button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()") Delete
                   button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
       div.jumbotron
-        div#slider
+        div#sliderContainer
+          button#play P
+          div#slider
         div#events
         button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download
-  div#c2
   script(src='js/jquery.js')
   script(src='js/jsgrid.min.js')
   script(src='js/bootstrap.min.js')
