@@ -27,7 +27,6 @@ var dateSlider = null;
 var images = {};
 var eventTableData = [];
 var opnoteTableData = [];
-var eventTimes = [];
 var objectsLoaded = null;
 var updatingObject = false;
 var diagram;
@@ -39,6 +38,9 @@ var dirty = false;
 var SVGCache = {};
 var tempLinks = [];
 var objectCache = {};
+var resizeTimer = null;
+var eventTableTimer = null;
+var opnoteTableTimer = null;
 var doc;
 var activeToolbar = null;
 var toolbarSizes = {'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400};
@@ -336,8 +338,12 @@ canvas.on('before:render', function(e) {
         }
         if (tempLinks.length > 0) {
             for (var i = 0; i < tempLinks.length; i++) {
-                tempLinks[i].set({ 'x1': tempLinks[i].from.getCenterPoint().x, 'y1': tempLinks[i].from.getCenterPoint().y });
-                tempLinks[i].set({ 'x2': tempLinks[i].to.getCenterPoint().x, 'y2': tempLinks[i].to.getCenterPoint().y });
+                if (tempLinks[i].objType === 'link') {
+                    tempLinks[i].set({ 'x1': tempLinks[i].from.getCenterPoint().x, 'y1': tempLinks[i].from.getCenterPoint().y });
+                    tempLinks[i].set({ 'x2': tempLinks[i].to.getCenterPoint().x, 'y2': tempLinks[i].to.getCenterPoint().y });
+                } else {
+                    tempLinks[i].set({top: tempLinks[i].dad.top, left: tempLinks[i].dad.left});
+                }
             }
         }
         dirty = false;
@@ -692,7 +698,8 @@ function moveToZ(o, z) {
 
 
 function moveToFront() {
-    var zTop = canvas.getObjects().length;
+    var zTop = canvas.getObjects().length - tempLinks.length;
+    console.log(tempLinks.length, zTop);
     var o = canvas.getActiveObject();
     moveToZ(o, zTop/2);
 }
@@ -705,7 +712,7 @@ function moveToBack() {
 
 function moveUp() {
     var o = canvas.getActiveObject();
-    if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) < canvas.getObjects().length - 2) {
+    if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) < canvas.getObjects().length - 2 - tempLinks.length) {
         var z = canvas.getObjects().indexOf(o) / 2 + 1;
         moveToZ(o, z);
     }
@@ -1010,6 +1017,39 @@ function JSONToCSVConvertor(JSONData, fileName) {
     }
 }
 
+function updateOpnoteTable() {
+    console.log('waiting');
+    if (opnoteTableTimer)
+        window.clearTimeout(opnoteTableTimer);
+    if (!$('#ops').data('JSGrid')._editingRow) {
+        $('#ops').jsGrid('loadData'); 
+    } else {
+        opnoteTableTimer = setTimeout(function() {
+            updateOpnoteTable();
+        }, 100);
+    }
+}
+
+function updateEventTable() {
+    if (eventTableTimer)
+        window.clearTimeout(eventTableTimer);
+    if (!$('#events').data('JSGrid')._editingRow) {
+        $('#events').jsGrid('loadData'); 
+        dateSlider.noUiSlider.updateOptions({
+            start: [-1, $('#events').data('JSGrid').data.length],
+            range: {
+                'min': -1,
+                'max': $('#events').data('JSGrid').data.length
+            },
+            step: 1
+        });
+    } else {
+        eventTableTimer = setTimeout(function() {
+            updateEventTable();
+        }, 100);
+    }
+}
+
 function startTime() {
     var today = new Date();
     var eh = today.getHours() - 4;
@@ -1062,8 +1102,7 @@ $(document).ready(function() {
                 });
                 break;
             case 'update_files':
-                $('#fileTree').jstree(true).settings.core.data = msg.arg;
-                $('#fileTree').jstree(true).refresh();
+                $('#files').jstree('refresh');
                 break;
             case 'all_objects':
                 objectSelect = [{id:0, name:'none/unknown'}];
@@ -1087,23 +1126,19 @@ $(document).ready(function() {
                 checkIfShapesCached(msg.arg);
                 break;
             case 'all_events':
-                eventTableData = [];
-                eventTimes = [0,9999999999999];
                 for (var evt in msg.arg) {
                     eventTableData.push(msg.arg[evt]);
-                    eventTimes.splice(eventTimes.length - 1, 0, msg.arg[evt].event_time);
                 }
-                var end = eventTimes.length - 1;
+                $('#events').jsGrid('loadData');
+                $('#events').jsGrid('sort', 1, 'asc');
                 dateSlider.noUiSlider.updateOptions({
-                    start: [0,end],
+                    start: [-1, $('#events').data('JSGrid').data.length],
                     range: {
-                        'min': 0,
-                        'max': end
+                        'min': -1,
+                        'max': $('#events').data('JSGrid').data.length
                     },
                     step: 1
                 });
-                $('#events').jsGrid('loadData');
-                $('#events').jsGrid('sort', 1, 'asc');
                 break;
             case 'all_opnotes':
                 opnoteTableData = [];
@@ -1170,7 +1205,7 @@ $(document).ready(function() {
                         }
                         if (i !== o.z*2) {
                             if (i < o.z*2) {
-                                obj.moveTo(o.z*2 + 1);
+                                obj.moveTo((o.z-1)*2 + 1);
                                 for (var k = 0; k < obj.children.length; k++)
                                     obj.children[k].moveTo(canvas.getObjects().indexOf(obj));
                             } else {
@@ -1190,13 +1225,33 @@ $(document).ready(function() {
                         eventTableData[i] = evt;
                     }
                 }
-                $('#events').jsGrid('loadData');
-                $('#events').jsGrid('sort', 1, 'asc');
+                if (!$('#events').data('JSGrid')._editingRow) {
+                    for (var i = 0; i < $('#events').data('JSGrid').data.length; i++) {
+                        $row = $('#events').data('JSGrid').data[i];
+                        if ($row.id === evt.id) {
+                            evt.rx = true;
+                            $('#events').jsGrid('updateItem', $row, evt);
+                            break;
+                        }
+                    }
+                } else
+                    updateEventTable();
                 break;
             case 'insert_event':
                 var evt = msg.arg;
                 eventTableData.push(evt);
-                $('#events').jsGrid('insertItem', evt);
+                if (!$('#events').data('JSGrid')._editingRow) {
+                    $('#events').jsGrid('insertItem', evt);
+                    dateSlider.noUiSlider.updateOptions({
+                        start: [-1, $('#events').data('JSGrid').data.length],
+                        range: {
+                            'min': -1,
+                            'max': $('#events').data('JSGrid').data.length
+                        },
+                        step: 1
+                    });
+                } else
+                    updateEventTable();
                 break;
             case 'delete_event':
                 var evt = msg.arg;
@@ -1206,22 +1261,25 @@ $(document).ready(function() {
                         break;
                     }
                 }
-                for (i = 0; i < eventTimes.length; i++) {
-                    if (eventTimes[i] === evt.event_time) {
-                        eventTimes.splice(i, 1);
-                        break;
+                if (!$('#events').data('JSGrid')._editingRow) {
+                    for (var i = 0; i < $('#events').data('JSGrid').data.length; i++) {
+                        $row = $('#events').data('JSGrid').data[i];
+                        if ($row.id === evt.id) {
+                            $row.rx = true;
+                            $('#events').jsGrid('deleteItem', $row);
+                            dateSlider.noUiSlider.updateOptions({
+                                start: [-1, $('#events').data('JSGrid').data.length],
+                                range: {
+                                    'min': -1,
+                                    'max': $('#events').data('JSGrid').data.length
+                                },
+                                step: 1
+                            });
+                            break;
+                        }
                     }
-                }
-                dateSlider.noUiSlider.updateOptions({
-                    start: [0,eventTimes.length-1],
-                    range: {
-                        'min': 0,
-                        'max': eventTimes.length-1
-                    },
-                    step: 1
-                });
-                $('#events').jsGrid('loadData');
-                $('#events').jsGrid('sort', 1, 'asc');
+                } else
+                    updateEventTable();
                 break;
             case 'update_opnote':
                 var evt = msg.arg;
@@ -1230,13 +1288,25 @@ $(document).ready(function() {
                         opnoteTableData[i] = evt;
                     }
                 }
-                $('#ops').jsGrid('loadData');
-                $('#ops').jsGrid('sort', 1, 'asc');
+                if (!$('#ops').data('JSGrid')._editingRow) {
+                    for (var i = 0; i < $('#ops').data('JSGrid').data.length; i++) {
+                        $row = $('#ops').data('JSGrid').data[i];
+                        if ($row.id === evt.id) {
+                            evt.rx = true;
+                            $('#ops').jsGrid('updateItem', $row, evt);
+                            break;
+                        }
+                    }
+                } else
+                    updateOpnoteTable();
                 break;
             case 'insert_opnote':
                 var evt = msg.arg;
                 opnoteTableData.push(evt);
-                $('#ops').jsGrid('insertItem', evt);
+                if (!$('#ops').data('JSGrid')._editingRow) {
+                    $('#ops').jsGrid('insertItem', evt);
+                } else
+                    updateOpnoteTable();
                 break;
             case 'delete_opnote':
                 var evt = msg.arg;
@@ -1246,8 +1316,17 @@ $(document).ready(function() {
                         break;
                     }
                 }
-                $('#ops').jsGrid('loadData');
-                $('#ops').jsGrid('sort', 1, 'asc');
+                if (!$('#ops').data('JSGrid')._editingRow) {
+                    for (var i = 0; i < $('#ops').data('JSGrid').data.length; i++) {
+                        $row = $('#ops').data('JSGrid').data[i];
+                        if ($row.id === evt.id) {
+                            $row.rx = true;
+                            $('#ops').jsGrid('deleteItem', $row);
+                            break;
+                        }
+                    }
+                } else
+                    updateOpnoteTable();
                 break;
             case 'insert_object':
                 var o = msg.arg;
@@ -1332,9 +1411,9 @@ $(document).ready(function() {
     // ---------------------------- SLIDER ----------------------------------
     dateSlider = document.getElementById('slider');
     noUiSlider.create(dateSlider, {
-        start: [0,1],
+        start: [-1,1],
         range: {
-            'min': [0],
+            'min': [-1],
             'max': [1]
         },
         connect: [false, true, false],
@@ -1342,65 +1421,99 @@ $(document).ready(function() {
     });
 
     dateSlider.noUiSlider.on('update', function(values, handle) {
-        var filter = [];
-        if (parseInt(values[1]) == eventTimes.length - 1) {
-            if (parseInt(values[1]) > 0 )
-                filter = [eventTimes[parseInt(values[0])]];
-        } else {
-            for (var i = parseInt(values[0]); i <= parseInt(values[1]); i ++) {
-                filter.push(eventTimes[i]);
+        if ($('#events').data('JSGrid')) {
+            var filter = [];
+            if (parseInt(values[1]) == $('#events').data('JSGrid').data.length) {
+                if (parseInt(values[0]) > -1)
+                    filter = [parseInt(values[0])];
+            } else {
+                for (var i = parseInt(values[0]); i <= parseInt(values[1]); i ++) {
+                    filter.push(i);
+                }
             }
-        }
-        if (tempLinks.length > 0) {
-            for (var i = 0; i < tempLinks.length; i++) {
-                canvas.remove(tempLinks[i]);
+            if (tempLinks.length > 0) {
+                for (var i = 0; i < tempLinks.length; i++) {
+                    canvas.remove(tempLinks[i]);
+                }
+                tempLinks = [];
             }
-            tempLinks = [];
-        }
-        for (var j = 0; j < canvas.getObjects().length; j++)
-            canvas.item(j).setShadow(null);
-        for (var i = 0; i < eventTableData.length; i++) {
-            if (filter.indexOf(eventTableData[i].event_time) !== -1) {
-                var from = null;
-                var to = null;
-                var tempLink;
-                $('#events').jsGrid("rowByItem",eventTableData[i]).addClass('highlight');
-                for (var j = 0; j < canvas.getObjects().length; j++) {
-                    if (canvas.item(j).uuid === eventTableData[i].source_object || canvas.item(j).uuid === eventTableData[i].dest_object) {
-                        if (canvas.item(j).uuid === eventTableData[i].source_object)
-                            from = canvas.item(j);
-                        else if (canvas.item(j).uuid === eventTableData[i].dest_object)
-                            to = canvas.item(j);
-                        //canvas.item(j).setShadow("0px 0px 50px rgba(255, 0, 0, 1.0)");
-                        canvas.item(j).setShadow({color: 'red', offsetX: 2, offsetY:2, blur: 5});
-                    }
-                    if (from && to) {
-                        var line = new fabric.Line([from.getCenterPoint().x, from.getCenterPoint().y, to.getCenterPoint().x, to.getCenterPoint().y], {
-                            from: from,
-                            to: to,
-                            stroke: 'red',
-                            strokeColor: 'red',
-                            strokeWidth: 8,
-                            strokeDashArray: [15,10],
-                            hasControls: false,
-                            lockMovementX: true,
-                            lockMovementY: true,
-                            lockScalingX: true,
-                            lockScalingY: true,
-                            lockRotation: true,
-                        });
-                        tempLink = line;
-                        canvas.add(line);
-                        //line.sendToBack();
-                        tempLinks.push(tempLink);
-                        break;
+            for (var i = 0; i < $('#events').data('JSGrid').data.length; i++) {
+                $row = $('#events').data('JSGrid').data[i];
+                if ($row) {
+                    if (filter.indexOf(i) !== -1) {
+                        $('#events').jsGrid("rowByItem",$row).addClass('highlight');
+                        var from = null;
+                        var to = null;
+                        var tempLink;
+                        for (var j = 0; j < canvas.getObjects().length; j++) {
+                            if (canvas.item(j).uuid === $row.source_object || canvas.item(j).uuid === $row.dest_object) {
+                                if (canvas.item(j).uuid === $row.source_object) {
+                                    from = canvas.item(j);
+                                    var shape = new fabric.Rect({
+                                        dad: from,
+                                        objType: 'shape',
+                                        width: from.getWidth() + 10,
+                                        height: from.getHeight() + 10,
+                                        stroke: 'red',
+                                        fill: 'rgba(0,0,0,0)',
+                                        strokeWidth: 5,
+                                        originX: 'center',
+                                        originY: 'center',
+                                        left: from.left,
+                                        top: from.top,
+                                        selectable: false,
+                                        evented: false
+                                    });
+                                    var tempShape = shape;
+                                    tempLinks.push(tempShape);
+                                    canvas.add(shape);
+                                } else if (canvas.item(j).uuid === $row.dest_object) {
+                                    to = canvas.item(j);
+                                    var shape = new fabric.Rect({
+                                        dad: to,
+                                        objType: 'shape',
+                                        width: to.getWidth() + 10,
+                                        height: to.getHeight() + 10,
+                                        stroke: 'red',
+                                        fill: 'rgba(0,0,0,0)',
+                                        strokeWidth: 5,
+                                        originX: 'center',
+                                        originY: 'center',
+                                        left: to.left,
+                                        top: to.top,
+                                        selectable: false,
+                                        evented: false
+                                    });
+                                    var tempShape = shape;
+                                    tempLinks.push(tempShape);
+                                    canvas.add(shape);
+                                }
+                            }
+                            if (from && to) {
+                                var line = new fabric.Line([from.getCenterPoint().x, from.getCenterPoint().y, to.getCenterPoint().x, to.getCenterPoint().y], {
+                                    objType: 'link',
+                                    from: from,
+                                    to: to,
+                                    stroke: 'red',
+                                    strokeColor: 'red',
+                                    strokeWidth: 8,
+                                    strokeDashArray: [15,10],
+                                    selectable: false,
+                                    evented: false
+                                });
+                                tempLink = line;
+                                canvas.add(line);
+                                tempLinks.push(tempLink);
+                                break;
+                            }
+                        }
+                    } else {
+                        $('#events').jsGrid("rowByItem",$row).removeClass('highlight');
                     }
                 }
-            } else {
-                $('#events').jsGrid("rowByItem",eventTableData[i]).removeClass('highlight');
             }
+            canvas.renderAll();
         }
-        canvas.renderAll();
     });
     // ---------------------------- JSGRIDS ----------------------------------
     $('#ops').jsGrid({
@@ -1410,6 +1523,7 @@ $(document).ready(function() {
         editing: true,
         sorting: true,
         paging: false,
+        confirmDeleting: false,
         fields: [
             { name: 'id', type: 'number', css: 'hide', width: 0},
             { name: 'event_time', title: 'Action Time', type : 'date', width: 50,
@@ -1452,10 +1566,22 @@ $(document).ready(function() {
                 }
             },
             updateItem: function(item) {
-                diagram.send(JSON.stringify({act: 'update_opnote', arg: item}));
+                if (item.rx) {
+                    item.rx = null;
+                    return item;
+                } else {
+                    diagram.send(JSON.stringify({act: 'update_opnote', arg: item}));
+                    return;
+                }
             },
             deleteItem: function(item) {
-                diagram.send(JSON.stringify({act: 'delete_opnote', arg: item}));
+                if (item.rx) {
+                    item.rx = null;
+                    return item;
+                } else {
+                    diagram.send(JSON.stringify({act: 'delete_opnote', arg: item}));
+                    return;
+                }
             }
         },
         loadStrategy: function() {
@@ -1480,6 +1606,7 @@ $(document).ready(function() {
         editing: true,
         sorting: true,
         paging: true,
+        confirmDeleting: false,
         fields: [
             { name: 'id', type: 'number', title: 'E. Id', width: 20},
             { name: 'event_time', title: 'Event Time', type : 'date', width: 65,
@@ -1526,6 +1653,15 @@ $(document).ready(function() {
                         });
 
                     return $button;
+                },
+                itemTemplate: function(value, item) {
+                    var $customButton = $("<img>")
+                        .click(function(e) {
+                            e.stopPropagation();
+                        });
+                    $customButton.attr('src', 'images/attach.png');
+                    var $result = jsGrid.fields.control.prototype.itemTemplate.apply(this, arguments);
+                    return $result.add($customButton);
                 }
             }
         ],
@@ -1537,25 +1673,26 @@ $(document).ready(function() {
                 if (item.id === 0 || item.id === undefined) {
                     item.mission = mission;
                     diagram.send(JSON.stringify({act: 'insert_event', arg: item}));
-                    eventTimes.splice(eventTimes.length-1,0,item.event_time);
-                    dateSlider.noUiSlider.updateOptions({
-                        start: [0,eventTimes.length-1],
-                        range: {
-                            'min': 0,
-                            'max': eventTimes.length-1
-                        },
-                        step: 1
-                    });
                 }
                 return;
             },
             updateItem: function(item) {
-                diagram.send(JSON.stringify({act: 'update_event', arg: item}));
-                //eventTableData[item['id']] = item;
+                if (item.rx) {
+                    item.rx = null;
+                    return item;
+                } else {
+                    diagram.send(JSON.stringify({act: 'update_event', arg: item}));
+                    return;
+                }
             },
             deleteItem: function(item) {
-                diagram.send(JSON.stringify({act: 'delete_event', arg: item}));
-
+                if (item.rx) {
+                    item.rx = null;
+                    return item;
+                } else {
+                    diagram.send(JSON.stringify({act: 'delete_event', arg: item}));
+                    return;
+                }
             }
         },
         loadStrategy: function() {
@@ -1579,14 +1716,20 @@ $(document).ready(function() {
     $("#toolbar-body").on("resize", function( event, ui ) {
         toolbarSizes[activeToolbar] = $('#toolbar-body').css('width');
     }); 
-
+    $('#diagram_jumbotron').on('resize', function() {
+        resizeCanvas();
+    });
     window.addEventListener('resize', resizeCanvas, false);
     function resizeCanvas() {
-        canvas.setHeight($('#diagram').height());
-        canvas.setWidth($('#diagram').width());
-        background.setHeight($('#diagram').height());
-        background.setWidth($('#diagram').width());
-        canvas.renderAll();
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            console.log('ressize');
+            canvas.setHeight($('#diagram').height());
+            canvas.setWidth($('#diagram').width());
+            background.setHeight($('#diagram').height());
+            background.setWidth($('#diagram').width());
+            canvas.renderAll();
+        }, 50);
     }
     resizeCanvas();
 });

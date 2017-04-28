@@ -32,7 +32,6 @@ var f = function(e)
                 contentType: false,
                 processData: false,
                 success: function() {
-                    $('#files').jstree('refresh');
                 },
                 error: function() {
                     console.log('upload error');
@@ -86,7 +85,6 @@ $(document).ready(function() {
                                         type: 'POST',
                                         data: {'id': _node.id, 'name': name, 'mission': mission},
                                         success: function() {
-                                            $('#files').jstree('refresh');
                                         },
                                         error: function() {
                                             console.log('mkdir error');
@@ -105,7 +103,6 @@ $(document).ready(function() {
                                     type: 'POST',
                                     data: {'id': node.id, 'mission': mission},
                                     success: function() {
-                                        $('#files').jstree('refresh');
                                     },
                                     error: function() {
                                         console.log('delete error');
@@ -127,7 +124,6 @@ $(document).ready(function() {
             type: 'POST',
             data: {'dst': dst, 'src': src},
             success: function() {
-                $('#files').jstree('refresh');
             },
             error: function() {
                 console.log('mv error');

@@ -75,6 +75,17 @@ function sendToRoom(room, msg, sender, roleFilter) {
 function getDir(dir, mission, cb) {
     var resp = new Array();
     if (dir === path.join(__dirname + '/mission-files/mission-' + mission)) {
+        fs.stat(dir, function (err, s) {
+            if (err == null) {
+            } else if (err.code == 'ENOENT') {
+                fs.mkdir(dir,function(err){
+                    if(err)
+                        console.log(err);
+               });
+            } else {
+                console.log(err);
+            }
+        });
         resp.push({
             "id": '/',
             "text": '/',
@@ -233,6 +244,7 @@ ws.on('connection', function(socket) {
                     break;
                 case 'move_object':
                     var o = msg.arg;
+                    o.z = Math.floor(o.z);
                     connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                         var zs = [];
                         for (var i = 0; i < results.length; i++)
@@ -329,7 +341,7 @@ ws.on('connection', function(socket) {
                     var evt = msg.arg;
                     connection.query('DELETE FROM opnotes WHERE id = ?', [evt.id], function (err, results) {
                         if (!err) {
-                            sendToRoom(socket.room, JSON.stringify({act: 'delete_opnote', arg: msg.arg}), socket, socket.role);
+                            sendToRoom(socket.room, JSON.stringify({act: 'delete_opnote', arg: evt}), socket, socket.role);
                         } else
                             console.log(err);
                     });
@@ -777,8 +789,10 @@ app.post('/mkdir', function (req, res) {
                 fs.mkdir(dir,function(err){
                     if(err)
                         res.status(500).send('mkdir error');
-                    else
+                    else {
                         res.send('{}');
+                        sendToRoom(req.body.mission, JSON.stringify({act: 'update_files', arg: null}));
+                    }
                });
             } else {
                 res.status(500).send('mkdir error');
@@ -804,7 +818,10 @@ app.post('/mv', function (req, res) {
                         fs.rename(srcdir, dstdir + '/' + path.basename(srcdir), function(err) {
                             if (err)
                                 res.status(500).send('mv error');
-                            res.send('{}');
+                            else {
+                                res.send('{}');
+                                sendToRoom(req.body.mission, JSON.stringify({act: 'update_files', arg: null}));
+                            }
                         });
                     } else
                         res.status(500).send('mv error');
@@ -829,15 +846,19 @@ app.post('/delete', function (req, res) {
                 fs.rmdir(dir,function(err){
                     if(err)
                         res.status(500).send('delete error');
-                    else
+                    else {
                         res.send('{}');
+                        sendToRoom(req.body.mission, JSON.stringify({act: 'update_files', arg: null}));
+                    }
                });
             } else {
                 fs.unlink(dir,function(err){
                     if(err)
                         res.status(500).send('delete error');
-                    else
+                    else {
                         res.send('{}');
+                        sendToRoom(req.body.mission, JSON.stringify({act: 'update_files', arg: null}));
+                    }
                });
             }
         });
@@ -853,13 +874,12 @@ app.post('/upload', upload.any(), function (req, res) {
         async.each(req.files, function(file, callback) {
             fs.rename(file.path, dir + '/' + file.originalname, function(err) {
                 if (err)
-                    res.status(500).send('delete error');
+                    res.status(500).send('upload error');
                 callback();
             });
         }, function() {
             res.send('{}');
-            getDir('./mission-files', req.body.mission, function(resp) {
-            });
+            sendToRoom(req.body.mission, JSON.stringify({act: 'update_files', arg: null}));
         });
     } else
        res.status(404).send('Y U bein wierd?');
