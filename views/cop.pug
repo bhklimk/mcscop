@@ -81,10 +81,13 @@ html
                   button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
       div.jumbotron
         div#sliderContainer
-          button#play P
+          button#play(onclick='toggleAnimateSlider()') >
           div#slider
         div#events
-        button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download
+        span(style='margin-right: 10px;')
+          button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
+        span
+          button.btn.btn-primary#downloadEvents(onclick='downloadDiagram()') Download Diagram
   script(src='js/jquery.js')
   script(src='js/jsgrid.min.js')
   script(src='js/bootstrap.min.js')

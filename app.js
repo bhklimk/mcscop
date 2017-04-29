@@ -190,7 +190,8 @@ ws.on('connection', function(socket) {
                     break;
                 case 'get_objects':
                     var mission = msg.arg;
-                    connection.query('SELECT * FROM objects WHERE mission = ? ORDER BY FIELD(type, "icon", "shape", "link"), z', [mission], function(err, rows, fields) {
+                    //connection.query('SELECT * FROM objects WHERE mission = ? ORDER BY FIELD(type, "icon", "shape", "link"), z', [mission], function(err, rows, fields) {
+                    connection.query('SELECT * FROM objects WHERE mission = ? ORDER BY z ASC', [mission], function(err, rows, fields) {
                         if (!err) {
                             socket.send(JSON.stringify({act:'all_objects', arg:rows}));
                         } else

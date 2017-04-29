@@ -41,6 +41,7 @@ var objectCache = {};
 var resizeTimer = null;
 var eventTableTimer = null;
 var opnoteTableTimer = null;
+var sliderTimer = null;
 var doc;
 var activeToolbar = null;
 var toolbarSizes = {'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400};
@@ -270,6 +271,7 @@ canvas.on('object:selected', function(options) {
                             var z = canvas.getObjects().indexOf(firstNode) - 1;
                             if (canvas.getObjects().indexOf(o) < z)
                                 z = canvas.getObjects().indexOf(o) - 1;
+                            console.log(z);
                             diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#propIcon').val(), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
                             firstNode = null;
                             creatingLink = false;
@@ -518,7 +520,7 @@ function addObjectToCanvas(o, select) {
             textAlign: 'center',
             fill: o.stroke_color,
             angle: angle,
-            fontSize: 8,
+            fontSize: 10,
             fontFamily: 'verdana',
             left: line.getCenterPoint().x,
             top: line.getCenterPoint().y
@@ -688,18 +690,18 @@ function deleteObject() {
 }
 
 function moveToZ(o, z) {
-    if (o.objType === 'link')
-        diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, z: z}}));
-    else if (o.objType === 'icon')
-        diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
-    else if (o.objType === 'shape')
-        diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
+    if (o) {
+        if (o.objType === 'link')
+            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, z: z}}));
+        else if (o.objType === 'icon')
+            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
+        else if (o.objType === 'shape')
+            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
+    }
 }
 
-
 function moveToFront() {
-    var zTop = canvas.getObjects().length - tempLinks.length;
-    console.log(tempLinks.length, zTop);
+    var zTop = canvas.getObjects().length - tempLinks.length - 2;
     var o = canvas.getActiveObject();
     moveToZ(o, zTop/2);
 }
@@ -722,6 +724,7 @@ function moveDown() {
     var o = canvas.getActiveObject();
     if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) > 0) {
         var z = canvas.getObjects().indexOf(o) / 2 - 1;
+        console.log(canvas.getObjects().indexOf(o), z);
         moveToZ(o, z);
     }
 }
@@ -798,8 +801,8 @@ function changeObject(o) {
 }
 
 function toggleToolbar(mode) {
-    if (canvas.getActiveObject())
-        canvas.deactivateAll().renderAll();
+    //if (canvas.getActiveObject())
+      // canvas.deactivateAll().renderAll();
     if ($('#toolbar-body').is(':hidden')) {
         openToolbar(mode);
     } else {
@@ -959,6 +962,10 @@ function startTasks() {
     }
 }
 
+function downloadDiagram() {
+    window.open(canvas.toDataURL('png'));
+}
+
 function downloadOpnotes() {
     JSONToCSVConvertor(opnoteTableData, 'opnotes.csv');
 }
@@ -1020,6 +1027,31 @@ function JSONToCSVConvertor(JSONData, fileName) {
     }
 }
 
+function toggleAnimateSlider() {
+    if (sliderTimer) {
+        window.clearTimeout(sliderTimer);
+    } else {
+        animateSlider(0);
+    }
+}
+
+function animateSlider(i) {
+    setSlider(0, i);
+    var next = i;
+    sliderTimer = setTimeout(function() {
+        next += 1;
+        if (next >= dateSlider.noUiSlider.options.range.max)
+            next = 0;
+        animateSlider(next);
+    }, 5000);
+}
+
+function setSlider(i, value) {
+    var r = [null,null];
+    r[i] = value;
+    dateSlider.noUiSlider.set(r);
+}
+
 function updateOpnoteTable() {
     console.log('waiting');
     if (opnoteTableTimer)
@@ -1040,6 +1072,7 @@ function updateEventTable() {
         $('#events').jsGrid('loadData'); 
         dateSlider.noUiSlider.updateOptions({
             start: [-1, $('#events').data('JSGrid').data.length],
+            behaviour: 'drag',
             range: {
                 'min': -1,
                 'max': $('#events').data('JSGrid').data.length
@@ -1136,6 +1169,7 @@ $(document).ready(function() {
                 $('#events').jsGrid('sort', 1, 'asc');
                 dateSlider.noUiSlider.updateOptions({
                     start: [-1, $('#events').data('JSGrid').data.length],
+                    behaviour: 'drag',
                     range: {
                         'min': -1,
                         'max': $('#events').data('JSGrid').data.length
@@ -1208,7 +1242,8 @@ $(document).ready(function() {
                         }
                         if (i !== o.z*2) {
                             if (i < o.z*2) {
-                                obj.moveTo((o.z-1)*2 + 1);
+                                console.log(o.z);
+                                obj.moveTo((o.z)*2 + 1);
                                 for (var k = 0; k < obj.children.length; k++)
                                     obj.children[k].moveTo(canvas.getObjects().indexOf(obj));
                             } else {
@@ -1247,6 +1282,7 @@ $(document).ready(function() {
                     $('#events').jsGrid('insertItem', evt);
                     dateSlider.noUiSlider.updateOptions({
                         start: [-1, $('#events').data('JSGrid').data.length],
+                        behaviour: 'drag',
                         range: {
                             'min': -1,
                             'max': $('#events').data('JSGrid').data.length
@@ -1272,6 +1308,7 @@ $(document).ready(function() {
                             $('#events').jsGrid('deleteItem', $row);
                             dateSlider.noUiSlider.updateOptions({
                                 start: [-1, $('#events').data('JSGrid').data.length],
+                                behaviour: 'drag',
                                 range: {
                                     'min': -1,
                                     'max': $('#events').data('JSGrid').data.length
@@ -1415,6 +1452,7 @@ $(document).ready(function() {
     dateSlider = document.getElementById('slider');
     noUiSlider.create(dateSlider, {
         start: [-1,1],
+        behaviour: 'drag',
         range: {
             'min': [-1],
             'max': [1]
@@ -1655,14 +1693,12 @@ $(document).ready(function() {
                 headerTemplate: function() {
                     var grid = this._grid;
                     var isInserting = grid.inserting;
-
                     var $button = $("<input>").attr("type", "button")
                         .addClass([this.buttonClass, this.modeButtonClass, this.insertModeButtonClass].join(" "))
                         .on("click", function() {
                             isInserting = !isInserting;
                             grid.option("inserting", isInserting);
                         });
-
                     return $button;
                 },
                 itemTemplate: function(value, item) {
