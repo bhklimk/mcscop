@@ -56,18 +56,18 @@ connection.connect();
 var db = require('sharedb-mongo')('mongodb://localhost:27017/mcscop');
 var backend = new ShareDB({db: db});
 
-function sendToRoom(room, msg, sender, roleFilter) {
+function sendToRoom(room, msg, selfSocket, roleFilter) {
+    if (!selfSocket)
+        selfSocket = null;
     if (rooms.get(room)) {
         rooms.get(room).forEach((socket) => {
-            if (socket && socket.readyState === socket.OPEN)
-                if (sender && roleFilter) {
-                   if (socket.sub_roles.indexOf(roleFilter) !== -1 || sender === socket)
-                        socket.send(msg); 
-                } else if (sender) {
-                    if (sender === socket)
-                        socket.send(msg);
-                } else
+            if (socket && socket.readyState === socket.OPEN) {
+                if (roleFilter && socket.sub_roles.indexOf(roleFilter) !== -1 && socket !== selfSocket) {
+                    socket.send(msg); 
+                } else if (socket !== selfSocket) {
                     socket.send(msg);
+                }
+            }
         });
     }
 }
@@ -282,7 +282,7 @@ ws.on('connection', function(socket) {
                     var evt = msg.arg;
                     connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.id], function (err, results) {
                         if (!err) {
-                            sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}));
+                            sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}), socket);
                         } else
                             console.log(err);
                     });
@@ -303,7 +303,7 @@ ws.on('connection', function(socket) {
                     var evt = msg.arg;
                     connection.query('DELETE FROM events WHERE id = ?', [evt.id], function (err, results) {
                         if (!err) {
-                            sendToRoom(socket.room, JSON.stringify({act: 'delete_event', arg: msg.arg}));
+                            sendToRoom(socket.room, JSON.stringify({act: 'delete_event', arg: msg.arg}), socket);
                         } else
                             console.log(err);
                     });
@@ -329,7 +329,7 @@ ws.on('connection', function(socket) {
                                 if (!err) {
                                     evt.id = results.insertId;
                                     evt.analyst = socket.username;
-                                    sendToRoom(socket.room, JSON.stringify({act: 'insert_opnote', arg: evt}), socket, socket.role);
+                                    sendToRoom(socket.room, JSON.stringify({act: 'insert_opnote', arg: evt}), null, socket.role);
                                 } else
                                     console.log(err);
                             });

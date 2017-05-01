@@ -4,11 +4,10 @@ html
     link(rel='stylesheet', href='css/bootstrap.min.css')
     link(rel='stylesheet', href='css/jquery.dataTables.min.css')
     link(rel='stylesheet', href='css/image-picker.css')
-    link(rel='stylesheet', href='css/jsgrid.min.css')
-    link(rel='stylesheet', href='css/jsgrid-theme.min.css')
     link(rel='stylesheet', href='css/jquery-ui.min.css')
     link(rel='stylesheet', href='css/jquery-ui.theme.min.css')
     link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
+    link(rel='stylesheet', href='css/ui.jqgrid.min.css')
     link(rel='stylesheet', href='css/nouislider.min.css')
     link(rel='stylesheet', href='css/jstree.min.css')
     link(rel='stylesheet', href='css/files.css')
@@ -39,7 +38,8 @@ html
             div.nav-button#filesButton(onclick='toggleToolbar("files")') F<br>I<br>L<br>E<br>S
           div.toolbar-body#toolbar-body
             div#opsForm
-              div#ops
+              table#opnotes
+              div#opnotesPager
               button.btn.btn-primary#downloadOpnotes(onclick='downloadOpnotes()') Download
             div#notesForm
               textarea#notes
@@ -79,17 +79,18 @@ html
                   button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
                   button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()") Delete
                   button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
-      div.jumbotron
+      div.jumbotron#events
         div#sliderContainer
           button#play(onclick='toggleAnimateSlider()') >
           div#slider
-        div#events
+        table#events2
+        div#eventsPager
         span(style='margin-right: 10px;')
           button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
         span
           button.btn.btn-primary#downloadEvents(onclick='downloadDiagram()') Download Diagram
   script(src='js/jquery.js')
-  script(src='js/jsgrid.min.js')
+  script(src='js/jquery.jqgrid.min.js')
   script(src='js/bootstrap.min.js')
   script(src='js/image-picker.min.js')
   script(src='js/fabric.min.js')

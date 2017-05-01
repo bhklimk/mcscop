@@ -1,5 +1,6 @@
 body {
     background-color: darkgray;
+    font-family: verdana;
 }
 
 h1, h2, h3, h4, .h1, .h2, .h3, .h4 {
@@ -23,6 +24,10 @@ canvas {
     justify-content: space-between;
 }
 
+#eventsPager, #opnotesPager {
+    height: 35px;
+}
+
 #download {
     display: none;
 }
@@ -35,6 +40,18 @@ canvas {
 
 .noUi-connect {
     background: #385a91;
+}
+
+.ui-jqgrid>.ui-jqgrid-view input, .ui-jqgrid>.ui-jqgrid-view textarea, .ui-jqgrid>.ui-jqgrid-view select {
+    font-size: 14px;
+}
+
+.ui-jqgrid .ui-jqgrid-bdiv {
+    overflow-y: scroll;
+}
+
+.ui-jqgrid {
+    margin-bottom: 10px;
 }
 
 .jsgrid-header-cell, .jsgrid-cell {
@@ -79,7 +96,10 @@ canvas {
 }
 
 #sliderContainer {
-    margin: 10px;
+    margin-left: 1px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    margin-right: 12px;
 }
 
 #toolsButton {
@@ -363,5 +383,6 @@ input[type="password"] {
 }
 
 table {
-    font-size: 12px;
+    font-size: 14px;
+    font-family: verdana;
 }
