@@ -76,7 +76,7 @@ var updateSettingsTimer = null;
 var sliderTimer = null;
 var doc;
 var activeToolbar = null;
-var lastselection;
+var lastselection = {id: null, iRow: null, iCol: null};
 var gridsize = 40;
 var lastFillColor = '#000000';
 var lastStrokeColor = '#000000';
@@ -425,7 +425,7 @@ function editDetails(id) {
             doc.destroy();
             doc = undefined;
         }
-        doc = shareDBConnection.get('mcscop', canvas.getActiveObject().id);
+        doc = shareDBConnection.get('mcscop', 'details-' + canvas.getActiveObject().id);
         doc.subscribe(function(err) {
             if (doc.type === null) {
                 doc.create('');
@@ -1695,7 +1695,11 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!opnotes_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-cell ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#opnotes\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#opnotes\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
                 width: 15,
@@ -1724,7 +1728,7 @@ $(document).ready(function() {
             }},
             { label: 'Host/Device', name: 'source_object', width: 50, editable: true },
             { label: 'Tool', name: 'tool', width: 20, editable: true },
-            { label: 'Action', name: 'action', width: 75, editable: true },
+            { label: 'Action', name: 'action', width: 75, edittype: 'textarea', editable: true },
             { label: 'Analyst', name: 'analyst', width: 40, editable: false },
         ],
         onSelectRow: function() {
@@ -1733,23 +1737,23 @@ $(document).ready(function() {
         beforeSelectRow: function(rowid, e) {
             return false;
         },
-        beforeEditCell: function (id) {
-            if (lastselection && lastselection !== id) {
-                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
-                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
-                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
+        beforeEditCell: function (id, cn, val, iRow, iCol) {
+            if (lastselection.id && lastselection.id !== id) {
+                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-cell').hide();
+                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-cell').hide();
             }
             $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
-            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
-            lastselection = id;
+            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-cell').show();
+            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-cell').show();
+            lastselection = {id: id, iRow: iRow, iCol: iCol};
         },
         beforeSaveCell: function(options, col, value) {
             $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
             $('#opnotes').jqGrid('resetSelection');
-            lastselection = null;
+            lastselection.id = null;
             var data = $('#opnotes').getRowData(options);
             data[col] = value;
             if (data.event_time)
@@ -1760,8 +1764,8 @@ $(document).ready(function() {
         },
         afterRestoreCell: function (options) {
             $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
             $('#opnotes').jqGrid('resetSelection');
         }
 
@@ -1792,16 +1796,16 @@ $(document).ready(function() {
                             diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
                             $('#opnotes').jqGrid('resetSelection');
                         },
-                        oneditfunc: function(id) {
-                            if (lastselection && lastselection !== id) {
-                                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
-                                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
-                                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
+                        oneditfunc: function(id, cn, val, iRow, iCol) {
+                            if (lastselection.id && lastselection.id !== id) {
+                                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
+                                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
                             }
                             $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
-                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
-                            lastselection = id;
+                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
+                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
+                            lastselection = {id: id, iRow: iRow, iCol: iCol};
                         }
                     }
                });
@@ -1843,7 +1847,11 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!events_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#events2\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#events2\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
                 width: 45,
@@ -1910,23 +1918,24 @@ $(document).ready(function() {
         beforeSelectRow: function(rowid, e) {
             return false;
         },
-        beforeEditCell: function (id) {
-            if (lastselection && lastselection !== id) {
-                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
-                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
-                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
+        beforeEditCell: function (id, cn, val, iRow, iCol) {
+            if (lastselection.id && lastselection.id !== id) {
+                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-cell').hide();
+                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-cell').hide();
             }                
             $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
-            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
-            lastselection = id;
+            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-cell').show();
+            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-cell').show();
+            lastselection = {id: id, iRow: iRow, iCol: iCol};
         },
         beforeSaveCell: function (options, col, value) {
+            console.log('bsc');
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
-            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
-            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
             $('#events2').jqGrid('resetSelection');
-            lastselection = null;
+            lastselection.id = null;
             var data = $('#events2').getRowData(options);
             data[col] = value;
             if (data.event_time)
@@ -1938,9 +1947,10 @@ $(document).ready(function() {
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
         },
         afterRestoreCell: function (options) {
+            console.log('arc');
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
-            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
-            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
             $('#events2').jqGrid('resetSelection');
         }
     });
@@ -1972,15 +1982,16 @@ $(document).ready(function() {
                             $('#events2').jqGrid('resetSelection');
                         },
                         oneditfunc: function(id) {
-                            if (lastselection && lastselection !== id) {
-                                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
-                                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
-                                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
+                            console.log('oef');
+                            if (lastselection.id && lastselection.id !== id) {
+                                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
+                                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
                             }
                             $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
-                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
-                            lastselection = id;
+                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
+                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
+                            lastselection = {id: id, iRow: null, iCol: null};
                         }
                     }
                });
