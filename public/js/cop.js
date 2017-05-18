@@ -429,22 +429,23 @@ function checkIfShapesCached(msg) {
 
 // ---------------------------- CHAT / LOG WINDOW  ----------------------------------
 function addChatMessage(msg) {
-    var lf = $('#' + msg.channel);
     if (msg.more && !msg.prepend)
         lf.append('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
     for (var i = 0; i < msg.messages.length; i++) {
+        var lf = $('#' + msg.messages[i].channel);
         var ts = msg.messages[i].timestamp;
         if (ts < earliest_message) {
             earliest_message = ts;
         }
         if (msg.prepend)
-            lf.prepend('<div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
+            lf.prepend('<div class="message-wraper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
         else
-            lf.append('<div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
+            lf.append('<div class="message-wrapper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
+        $('#' + msg.messages[i].channel).scrollTop($('#' + msg.messages[i].channel)[0].scrollHeight);
     }
-    if (msg.more && msg.prepend)
-        lf.prepend('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
-    $('#chat2').scrollTop($('#chat2')[0].scrollHeight);
+    //if (msg.more && msg.prepend)
+    //    lf.prepend('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
+    //console.log(msg.channel);
 }
 
 function getMoreMessages() {
@@ -1521,7 +1522,6 @@ $(document).ready(function() {
                                 canvas.remove(to.children[k]);
                             canvas.remove(to);
                             addObjectToCanvas(o, selected);
-                            canvas.item(i).set('dirty', true);
                             canvas.renderAll();
                         } else if (o.type === 'shape' || o.type === 'link') {
                             canvas.item(i).setStroke(o.stroke_color);
@@ -2203,8 +2203,7 @@ $(document).ready(function() {
             $("#globalSearch").click();
         }
     });
-    $("#globalSearch").button({
-    }).click(function () {
+    $("#globalSearch").button({}).click(function () {
         var $grid = $('#events2');
         var rules = [], i, cm, postData = $grid.jqGrid("getGridParam", "postData"),
             colModel = $grid.jqGrid("getGridParam", "colModel"),
@@ -2228,7 +2227,14 @@ $(document).ready(function() {
         $grid.trigger("reloadGrid", [{page: 1, current: true}]);
         return false;
     });
-
+    // ---------------------------- CHAT ----------------------------------
+    $('.channel').click(function(e) {
+        var c = e.target.id.split('-')[1];
+        $('.channel-pane').hide();
+        $('.channel').removeClass('channel-selected');
+        $('#' + c).show();
+        $('#channel-' + c).addClass('channel-selected');
+    });
     // ---------------------------- MISC ----------------------------------
     $('#propFillColor').simplecolorpicker({picker: true});
     $('#propStrokeColor').simplecolorpicker({picker: true});

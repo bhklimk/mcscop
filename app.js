@@ -175,11 +175,13 @@ function processNode(dir, mission, f) {
     };
 }
 
-function insertLogEvent(socket, message) {
+function insertLogEvent(socket, message, channel) {
+    if (!channel)
+        channel = 'log';
     var analyst = socket.user_id;
     var timestamp = (new Date).getTime();
-    connection.query('INSERT INTO log (mission, text, analyst, timestamp) values (?, ?, ?, ?)', [socket.mission, message, analyst, timestamp]);
-    sendToRoom(socket.room, JSON.stringify({act:'log', arg:{prepend:false, more:false, messages:[{analyst: socket.username, user_id: socket.user_id, text: message, timestamp: timestamp}]}}));
+    connection.query('INSERT INTO log (mission, channel, text, analyst, timestamp) values (?, ?, ?, ?, ?)', [socket.mission, channel, message, analyst, timestamp]);
+    sendToRoom(socket.room, JSON.stringify({act:'log', arg:{prepend:false, more:false, messages:[{analyst: socket.username, user_id: socket.user_id, channel: channel, text: message, timestamp: timestamp}]}}));
 }
 
 function patch() {
@@ -254,12 +256,12 @@ ws.on('connection', function(socket) {
                     var args = [socket.mission];
                     var prepend = false;
                     var more = false;
-                    var query = 'SELECT * FROM (SELECT analyst as user_id, (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, text, timestamp FROM log WHERE deleted = 0 AND mission = ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp ASC';
+                    var query = 'SELECT * FROM (SELECT analyst as user_id, (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, channel, text, timestamp FROM log WHERE deleted = 0 AND mission = ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp ASC';
                     if (msg.arg.start_from !== undefined && !isNaN(msg.arg.start_from)) {
                         console.log(msg, msg.arg.start_from);
                         prepend = true;
                         args = [socket.mission, parseInt(msg.arg.start_from)];
-                        query = 'SELECT * FROM (SELECT (SELECT analyst as user_id, username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, text, timestamp FROM log WHERE deleted = 0 AND mission = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp DESC';
+                        query = 'SELECT * FROM (SELECT (SELECT analyst as user_id, username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, channel, text, timestamp FROM log WHERE deleted = 0 AND mission = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp DESC';
                     }
                     connection.query(query, args, function(err, rows, fields) {
                         if (rows.length == 50)

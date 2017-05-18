@@ -129,9 +129,6 @@ html
                   button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
                   button.propButton.btn.btn-danger#deleteObjectButton(type='button') Delete
                   button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
-            div#logForm.toolbar-form
-              div#log
-              input(type="text", name="message-input-box")#message-input-box.message-input-box
 
       div.jumbotron#tables(style="overflow: visible")
         div.table-nav
@@ -160,9 +157,13 @@ html
           button.btn.btn-primary#downloadOpnotes(onclick='downloadOpnotes()') Download Opnotes
         div#chat(style="display: none;")
           div#channels
-            div.channel logs
-          div#logs
-          input(type="text", name="message-input-box")#message-input-box.message-input-box
+            div.channel.channel-selected#channel-log #log
+            div.channel#channel-general #general
+          div#channel-panes
+            div#log.channel-pane
+            div#general.channel-pane(style="display: none;")
+            div#channel-footer
+              input(type="text", name="message-input-box")#message-input-box.message-input-box
         div#settings(style="display: none;")
 script var permissions = "#{permissions}".split(',');
 script(src='js/jquery.js')

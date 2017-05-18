@@ -35,6 +35,11 @@ td a {
     height: 48px;
 }
 
+.message-wrapper {
+    display: block;
+    margin-bottom: 3px;
+}
+
 .message {
     display: flex;
 }
@@ -49,6 +54,7 @@ td a {
 .message-avatar {
     width: 36px;
     height: 36px;
+    border-radius: 4px;
 }
 
 .message-sender {
@@ -67,12 +73,7 @@ td a {
 .message-input-box {
     border-color: #717274;
     border-radius: 6px !important;
-    -webkit-box-sizing: border-box;
-    -moz-box-sizing: border-box;
-    box-sizing: border-box;
-    width: 95%;
-    position: absolute;
-    bottom: 10px;
+    width: 100%;
 }
 
 #get-more-messages {
@@ -245,7 +246,7 @@ td a {
     width: 100%;
 }
 
-#log, #files, #notes {
+#files, #notes {
     height: 100%;
     overflow-y: scroll;
     overflow-x: hidden;
@@ -254,7 +255,6 @@ td a {
 #chat {
     height: 400px;
     width: 100%;
-    padding-bottom: 30px;
     border: 1px solid #7f7f7f;
 }
 
@@ -278,8 +278,35 @@ td a {
     vertical-align: middle;
 }
 
+.channel-selected {
+    background: #4C9689;
+    color: #ffffff;
+}
+
 .channel:hover {
     background: #3e313c;
+}
+
+#channel-panes {
+    width: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+}
+
+#channel-footer {
+    width: 100%;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: 5px;
+}
+
+.channel-pane {
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    padding-left: 15px;
 }
 
 #channels {
@@ -293,12 +320,12 @@ td a {
     overflow-y: scroll;
 }
 
-#opnotesForm, #logForm, #toolsForm, #notesForm, #filesForm, #tasksForm {
+#opnotesForm, #toolsForm, #notesForm, #filesForm, #tasksForm {
     height: 100%;
     padding: 10px;
 }
 
-#logForm, #notesForm, #opnotesForm {
+#notesForm, #opnotesForm {
     padding-bottom: 45px;
 }
 
