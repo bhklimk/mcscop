@@ -45,6 +45,9 @@ var f = function(e)
                 processData: false,
                 success: function() {
                     $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload successful!');
+                    setTimeout(function() {
+                        $("#progressbar").fadeOut("slow");
+                    }, 5000);
                 },
                 error: function() {
                     $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload error!');

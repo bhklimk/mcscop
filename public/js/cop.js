@@ -510,7 +510,8 @@ function epochToDateString(value){
 
 function dateStringToEpoch(value) {
     var parts = value.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d+)/);
-    return(Date(parts[1], parts[2]-1, parts[3], parts[4], parts[5], parts[6], parts[7]));
+    var d = new Date(parts[1], parts[2]-1, parts[3], parts[4], parts[5], parts[6], parts[7]);
+    return(d.getTime());
 }
 
 function startPan(event) {
@@ -1211,6 +1212,13 @@ function checkTime(i) {
     return i;
 }
 
+function deleteRowConfirm(type, table, id) {
+    $('#modal-title').text('Are you sure?');
+    $('#modal-body').html('<p>Are you sure you want to delete this row?</p>');
+    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal" onClick="deleteRow(\'' + type + '\', \'' + table + '\', \'' + id + '\');">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal').modal('show')
+}
+
 function deleteRow(type, table, id) {
     diagram.send(JSON.stringify({act: 'delete_' + type, arg: {id: id}}));
     $(table).jqGrid('delRowData', id);
@@ -1424,6 +1432,7 @@ $(document).ready(function() {
                 var evt = msg.arg;
                 eventTableData.push(evt);
                 $('#events2').jqGrid('addRowData', evt.id, evt, 'last');
+                $('#events2').jqGrid('sortGrid', 'event_time', false, 'asc');
                 dateSlider.noUiSlider.updateOptions({
                     start: [-1, $('#events2').getRowData().length],
                     behaviour: 'drag',
@@ -1466,6 +1475,7 @@ $(document).ready(function() {
                 var evt = msg.arg;
                 opnoteTableData.push(evt);
                 $('#opnotes').jqGrid('addRowData', evt.id, evt, 'last');
+                $('#opnotes').jqGrid('sortGrid', 'event_time', false, 'asc');
                 break;
             case 'delete_opnote':
                 var evt = msg.arg;
@@ -1689,16 +1699,19 @@ $(document).ready(function() {
         cellEdit: true,
         sortable: true,
         pager: '#opnotesPager',
+        rowNum: 9999,
         pgbuttons: false,
         pgtext: null,
         viewrecords: false,
+        sortname: 'event_time',
+        sortorder: 'asc',
         colModel: [
             { label: 'Id', name: 'id', hidden: true, key: true, editable: false },
             { label: ' ', template: 'actions', formatter: function(cell, options, row) {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!opnotes_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRowConfirm(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-cell ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#opnotes\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
@@ -1717,7 +1730,8 @@ $(document).ready(function() {
                         dateFormat: "yy-mm-dd",
                         timeFormat: "HH:mm:ss.l",
                         controlType: 'select',
-                        showMillisec: true
+                        showMillisec: true,
+                        useCurrent: true
                     })
                 },
                 editrules: {
@@ -1726,8 +1740,7 @@ $(document).ready(function() {
                 },
                 formatoptions: {
                     newformat: 'yy-mm-dd HH:mm:ss.l'
-                },
-                defaultValue: getDate()
+                }
             }},
             { label: 'Host/Device', name: 'source_object', width: 50, editable: true },
             { label: 'Tool', name: 'tool', width: 20, editable: true },
@@ -1783,7 +1796,7 @@ $(document).ready(function() {
         add: false,
         edit: false,
         del: false,
-        refresh: false
+        refresh: false,
     })
     if (opnotes_rw) {
         $('#opnotes').jqGrid('navGrid').jqGrid('navButtonAdd', '#opnotesPager',{
@@ -1793,7 +1806,7 @@ $(document).ready(function() {
             onClickButton: function() {
                 if (!addingRow) {
                     addingRow = true;
-                    $('#opnotes').jqGrid('addRow', {addRowParams: {
+                    $('#opnotes').jqGrid('addRow', {position: 'last', initdata: {event_time: getDate()}, addRowParams: {
                             keys: true,
                             beforeSaveRow: function(options, id) {
                                 addingRow = false;
@@ -1834,10 +1847,13 @@ $(document).ready(function() {
         editurl: 'clientArray',
         data: [],
         height: 250,
+        rowNum: 9999,
         subGrid: true,
         cellEdit: true,
         pager: '#eventsPager',
         pgbuttons: false,
+        sortname: 'event_time',
+        sortorder: 'asc',
         pgtext: null,
         viewrecords: false,
         toolbar: [true, "top"],
@@ -1863,7 +1879,7 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!events_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRowConfirm(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#events2\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
@@ -1885,7 +1901,6 @@ $(document).ready(function() {
                         showMillisec: true
                     })
                 },
-                defaultValue: getDate(),
                 editrules: {
                     date: true,
                     minValue: 0
@@ -1904,7 +1919,6 @@ $(document).ready(function() {
                         vertical: 'top'
                     })
                 },
-                defaultValue: getDate(),
                 editrules: {
                     date: true,
                     minValue: 0
@@ -1989,7 +2003,7 @@ $(document).ready(function() {
             onClickButton: function(){
                 if (!addingRow) {
                     addingRow = true;
-                    $('#events2').jqGrid('addRow', {addRowParams: {
+                    $('#events2').jqGrid('addRow', {position: 'last', initdata: {event_time: getDate(), discovery_time: getDate()}, addRowParams: {
                             keys: true,
                             beforeSaveRow: function(options, id) {
                                 addingRow = false;

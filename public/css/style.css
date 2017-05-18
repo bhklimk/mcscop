@@ -113,7 +113,7 @@ td a {
     width: 100%;
     position: absolute;
     left: 0px;
-    bottom: 10px;
+    bottom: 0px;
     padding: 10px;
 }
 
@@ -121,6 +121,10 @@ td a {
     width: 100%;
     height: 25px;
     text-align: center;
+}
+
+.ui-icon {
+    margin-top: 0px;
 }
 
 .ui-state-default {
@@ -135,6 +139,11 @@ td a {
 .ui-jqdialog {
     left: 44%;
     top: 100px;
+}
+
+.ui-pg-div .ui-inline-cancel {
+    width: 16px;
+    height: 16px;
 }
 
 .ui-inline-del, .ui-inline-cancel {
@@ -274,6 +283,11 @@ td a {
 
 #notesButton {
     background-color: #3b722c;
+}
+
+#files {
+    height: 100%;
+    overflow: scroll;
 }
 
 #filesButton {
