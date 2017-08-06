@@ -2,12 +2,13 @@ html
   head
     title= title
     link(rel='stylesheet', href='css/bootstrap.min.css')
-    link(rel='stylesheet', href='css/jquery.dataTables.min.css')
     link(rel='stylesheet', href='css/image-picker.css')
     link(rel='stylesheet', href='css/jquery-ui.min.css')
     link(rel='stylesheet', href='css/jquery-ui.theme.min.css')
     link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
-    link(rel='stylesheet', href='css/ui.jqgrid.min.css')
+    link(rel='stylesheet', href='css/ui.jqgrid.css')
+    link(rel='stylesheet', href='css/ui.jqgrid-bootstrap-ui.css')
+    link(rel='stylesheet', href='css/ui.jqgrid-bootstrap.css')
     link(rel='stylesheet', href='css/nouislider.min.css')
     link(rel='stylesheet', href='css/jstree.min.css')
     link(rel='stylesheet', href='css/files.css')
@@ -51,17 +52,17 @@ html
               div#files
             form#toolsForm
               span.toolbarTitle#toolbarTitle Edit Object
-              button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()") New!
+              button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()" disabled) New!
               input(type="hidden", name="id")#propID
               input(type="hidden", name="type")#propType
               div.form-group#propNameGroup
                 label Name
-                textarea(name="name" onchange="updatePropName(this.value)").form-control#propName
+                textarea(name="name" onchange="updatePropName(this.value)" disabled).form-control#propName
               div.form-group#propColorGroup
                 label Color
                 div.colors
-                    input(type="color", name="fillcolor" onchange="updatePropFillColor(this.value)" value="#017bbb").form-control.propColor#propFillColor
-                    input(type="color", name="strokecolor" onchange="updatePropStrokeColor(this.value)" value="#017bbb").form-control.propColor#propStrokeColor
+                    input(type="color", name="fillcolor" onchange="updatePropFillColor(this.value)" value="#017bbb" disabled).form-control.propColor#propFillColor
+                    input(type="color", name="strokecolor" onchange="updatePropStrokeColor(this.value)" value="#017bbb" disabled).form-control.propColor#propStrokeColor
               div.form-group#propObjectGroup
                 label Icon
                 select.image-picker#propIcon
@@ -70,14 +71,14 @@ html
                   each shape in shapes
                     option(data-img-src="images/shapes/" + shape, data-img-class="first", value=shape) shape
               div.form-group#moveObject
-                  button.propButton.btn.btn-default(type='button' onclick="moveUp()") Up
-                  button.propButton.btn.btn-default(type='button' onclick="moveDown()") Down
-                  button.propButton.btn.btn-default(type='button' onclick="moveToFront()") Front
-                  button.propButton.btn.btn-default(type='button' onclick="moveToBack()") Back
+                  button.propButton.btn.btn-default#moveUp(type='button' onclick="moveUp()" disabled) Up
+                  button.propButton.btn.btn-default#moveDown(type='button' onclick="moveDown()" disabled) Down
+                  button.propButton.btn.btn-default#moveToFront(type='button' onclick="moveToFront()" disabled) Front
+                  button.propButton.btn.btn-default#moveToBack(type='button' onclick="moveToBack()" disabled) Back
               div.form-group#makeObject
-                  button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()") Insert
+                  button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()" disabled) Insert
                   button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
-                  button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()") Delete
+                  button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()" disabled) Delete
                   button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
       div.jumbotron#events
         div#sliderContainer
@@ -89,8 +90,10 @@ html
           button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
         span
           button.btn.btn-primary#downloadEvents(onclick='downloadDiagram()') Download Diagram
+  script var permissions = "#{permissions}".split(',');
   script(src='js/jquery.js')
-  script(src='js/jquery.jqgrid.min.js')
+  script(src='js/grid.locale-en.js')
+  script(src='js/jquery.jqGrid.min.js')
   script(src='js/bootstrap.min.js')
   script(src='js/image-picker.min.js')
   script(src='js/fabric.min.js')

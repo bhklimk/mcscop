@@ -5,7 +5,7 @@ var sharedb = require('sharedb/lib/client');
 StringBinding = require('sharedb-string-binding');
 
 // Open WebSocket connection to ShareDB server
-var wsdb = new WebSocket('ws://' + window.location.host + '/mcscop/');
+var wsdb = new WebSocket('wss://' + window.location.host + '/mcscop/');
 shareDBConnection = new sharedb.Connection(wsdb);
 
 },{"sharedb-string-binding":9,"sharedb/lib/client":12}],2:[function(require,module,exports){

@@ -1,3 +1,33 @@
+if (!permissions)
+    permissions = [];
+var diagram_rw = false;
+if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !== -1) {
+    diagram_rw = true;
+    $("#propName").prop('disabled', false);
+    $("#newObjectButton").prop('disabled', false);
+    $("#propFillColor").prop('disabled', false);
+    $("#propStrokeColor").prop('disabled', false);
+    $("#propIcon").prop('disabled', false);
+    $("#moveUp").prop('disabled', false);
+    $("#moveDown").prop('disabled', false);
+    $("#moveToFront").prop('disabled', false);
+    $("#moveToBack").prop('disabled', false);
+    $("#insertObjectButton").prop('disabled', false);
+    $("#deleteObjectButton").prop('disabled', false);
+}
+var events_rw = false;
+var events_del = false;
+var opnotes_rw = false;
+var opnotes_del = false;
+if (permissions.indexOf('all') !== -1 || permissions.indexOf('create_events') !== -1)
+        events_rw = true;
+if (permissions.indexOf('all') !== -1 || permissions.indexOf('delete_events') !== -1)
+        events_del = true;
+if (permissions.indexOf('all') !== -1 || permissions.indexOf('create_opnotes') !== -1)
+        opnotes_rw = true;
+if (permissions.indexOf('all') !== -1 || permissions.indexOf('delete_opnotes') !== -1)
+        opnotes_del = true;
+
 // ---------------------------- FABRIC CANVASES ----------------------------------
 var canvas = new fabric.Canvas('canvas', {
     selection: false,
@@ -356,7 +386,7 @@ function checkIfObjectsLoaded() {
 
 function editDetails(uuid) {
     if (canvas.getActiveObject()) {
-        $('#modal-title').text('Edit Object');
+        $('#modal-title').text('Edit Object Notes');
         $('#modal-body').html('<input type="hidden" id="object_details_uuid" name="object_details_uuid" value="' + canvas.getActiveObject().uuid + '"><textarea id="object_details" class="object-details"></textarea>');
         $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">Close</button>');
         if (doc) {
@@ -427,8 +457,11 @@ function getOpnoteSubGridData(id) {
 }
 
 function epochToDateString(value){
+    if (isNaN(value))
+        return value;
     var date = new Date(value);
     return (date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds());
+    
 }
 
 function dateStringToEpoch(value) {
@@ -540,6 +573,7 @@ function addObjectToCanvas(o, select) {
             top: line.getCenterPoint().y
         });
         line.children = [name];
+        
         canvas.add(line);
         canvas.add(name);
         line.moveTo(o.z*2);
@@ -570,6 +604,11 @@ function addObjectToCanvas(o, select) {
                 originY: 'center',
                 left: o.x,
                 top: o.y,
+                lockMovementX: !diagram_rw,
+                lockMovementY: !diagram_rw,
+                lockScalingX: !diagram_rw,
+                lockScalingY: !diagram_rw,
+                lockRotation: !diagram_rw
             });
             if (shape.paths) {
                 for (var i = 0; i < shape.paths.length; i++) {
@@ -618,7 +657,12 @@ function addObjectToCanvas(o, select) {
                 originX: 'center',
                 originY: 'center',
                 left: o.x,
-                top: o.y
+                top: o.y,
+                lockMovementX: !diagram_rw,
+                lockMovementY: !diagram_rw,
+                lockScalingX: !diagram_rw,
+                lockScalingY: !diagram_rw,
+                lockRotation: !diagram_rw
             });
         } else if (shape === 'circle') {
             shape = new fabric.Ellipse({
@@ -634,7 +678,12 @@ function addObjectToCanvas(o, select) {
                 originX: 'center',
                 originY: 'center',
                 left: o.x,
-                top: o.y
+                top: o.y,
+                lockMovementX: !diagram_rw,
+                lockMovementY: !diagram_rw,
+                lockScalingX: !diagram_rw,
+                lockScalingY: !diagram_rw,
+                lockRotation: !diagram_rw
             });
         } else
             return;
@@ -873,7 +922,10 @@ function openToolbar(mode) {
     }
     // edit
     if (canvas.getActiveObject()) {
-        $('#toolbarTitle').html('Edit Object');
+        if (diagram_rw)
+            $('#toolbarTitle').html('Edit Object');
+        else
+            $('#toolbarTitle').text('View Object');
         $('#propNameGroup').show();
         $('#propObjectGroup').show();
         if (canvas.getActiveObject().objType && canvas.getActiveObject().objType === 'link')
@@ -1088,15 +1140,43 @@ function startTime() {
     $('#utc').html('UTC: ' + uh + ":" + m + ":" + s);
     var t = setTimeout(startTime, 500);
 }
+
 function checkTime(i) {
     if (i < 10) {i = "0" + i};
     return i;
 }
 
+function deleteRow(table, id) {
+    diagram.send(JSON.stringify({act: 'delete_event', arg: {id: id}}));
+    $(table).jqGrid('delRowData', id);
+}
+
+function saveRow(type, table, id) {
+    var data = {};
+    var act = "update_" + type;
+    if (id.indexOf('jqg') !== -1) {
+        $(table + ' #' + id).find('input, select, textarea').each(function () {
+            data[this.name] = $(this).val();
+        });
+        act = "insert_" + type;
+    }
+    else {
+        $(table).jqGrid('saveRow', id); 
+        data = $(table).getRowData(id);
+    }
+    data.mission = mission;
+    $(table).jqGrid('restoreRow', id, function(){});
+    if (data.event_time)
+        data.event_time = dateStringToEpoch(data.event_time);
+    if (data.discovery_time)
+        data.discovery_time = dateStringToEpoch(data.discovery_time);
+    diagram.send(JSON.stringify({act: act, arg: data}));
+}
+
 $(document).ready(function() {
     startTime();
     // ---------------------------- SOCKETS ----------------------------------
-    diagram = new WebSocket('ws://' + window.location.host + '/mcscop/');
+    diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
     diagram.onopen = function() {
         $('#modal').modal('hide');
         $('#modal-title').text('Please wait...!');
@@ -1361,7 +1441,14 @@ $(document).ready(function() {
     // ---------------------------- IMAGE PICKER ----------------------------------
     $('#propIcon').imagepicker({
         hide_select : true,
+        initialized: function() {
+            if (!diagram_rw)
+                $("#propObjectGroup").find("div").unbind('click');
+        },
         selected : function() {
+            if (!diagram_rw)
+                
+                return;
             if (canvas.getActiveObject() !== null && canvas.getActiveObject() !== undefined && (canvas.getActiveObject().objType === 'icon' || canvas.getActiveObject().objType === 'shape')) {
                 var obj = canvas.getActiveObject();
                 var oldZ = canvas.getObjects().indexOf(canvas.getActiveObject());
@@ -1383,7 +1470,6 @@ $(document).ready(function() {
             }
         }
     });
-
 
     // ---------------------------- DIAGRAM ----------------------------------
     var gridsize = 40
@@ -1516,141 +1602,27 @@ $(document).ready(function() {
     $("#opnotes").jqGrid({
         datatype: 'local',
         cellsubmit: 'clientArray',
+        cellEdit: true,
         editurl: 'clientArray',
+        sortable: true,
         data: [],
         height: 250,
         autowidth: true,
         colModel: [
-            { label: 'E. Id', name: 'id', width: 25, key: true, editable: false },
-            { label: 'Event Time', name: 'event_time', width: 75, editable: true, formatter: epochToDateString, editoptions: {
-                dataInit: function (element) {
-                    $(element).datetimepicker({
-                        dateFormat: "yy-mm-dd",
-                        timeFormat: "HH:mm:ss.l",
-                        controlType: 'select',
-                        showMillisec: true
-                    })
+            { label: 'E. Id', name: 'id', hidden: true, key: true, editable: false },
+            { name: 'Actions', template: 'actions', formatter: function(cell, options, row) {
+                    var buttons = '<div title="Delete row" style="float: left;';
+                    if (!opnotes_del)
+                        buttons += ' display: none;';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    return buttons;
                 },
-                editrules: {
-                    date: true,
-                    minValue: 0
-                },
+                width: 15,
                 formatoptions: {
-                    newformat: 'yy-mm-dd HH:mm:ss.l'
-                },
-                defaultValue: getDate()
-            }},
-            { label: 'E. Id', name: 'event', width: 25, editable: true },
-            { label: 'Host/Device', name: 'source_object', width: 60, editable: true },
-            { label: 'Tool', name: 'tool', width: 20, editable: true },
-            { label: 'Action', name: 'action', width: 65, editable: true },
-            { label: 'Analyst', name: 'analyst', width: 50, editable: false },
-            { name: 'Actions', template: 'actions', width: 70 }
-        ],
-        actionsNavOptions: {
-            delbutton: false,
-            editbutton: false,
-            deleteEventicon: 'ui-icon-trash',
-            deleteEventtitle: 'Delete event',
-            saveEventicon: 'ui-icon-disk',
-            saveEventtitle: 'Save event',
-            cancelEventicon: 'ui-icon-cancel',
-            cancelEventtitle: 'Cancel',
-            isDisplayButtons: function (options, rowData) {
-                if (options.rowData.id === undefined) {
-                    return { saveEvent: { hidden: false }, cancelEvent: { hidden: false }, deleteEvent: { hidden: true } };
-                } else {
-                    return { saveEvent: { hidden: true }, cancelEvent: { hidden: true } };
+                    keys: true,
                 }
             },
-            custom: [
-                { 
-                    action: 'deleteEvent', onClick: function (options) {
-                        diagram.send(JSON.stringify({act: 'delete_opnote', arg: {id: options.rowid}}));
-                        $('#opnotes').jqGrid('delRowData', options.rowid);
-                    }
-                },
-                { 
-                    action: 'cancelEvent', onClick: function (options) {
-                        $('#opnotes').jqGrid('restoreRow', options.rowid, function(){});
-                    }
-                },
-                { 
-                    action: 'saveEvent', onClick: function (options) {
-                        var data = $('#opnotes').getRowData(options.rowid);
-                        data.mission = mission;
-                        $('#opnotes').jqGrid('restoreRow', options.rowid, function(){});
-                        data.event_time = dateStringToEpoch(data.event_time);
-                        diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
-                    }
-                }
-
-            ]
-        },
-        beforeSelectRow: function(row, e) {
-            return false;
-        },
-        inlineNavOptions: {
-            save: false
-        },
-        cellEdit: true,
-        sortable: true,
-        viewrecords: true,
-        beforeSaveCell: function(options, col, value) {
-            var data = $('#opnotes').getRowData(options);
-            data[col] = value;
-            diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
-        },
-        pager: '#opnotesPager',
-        pgbuttons: false,
-        pgtext: null,
-        viewrecords: false
-    });
-    $('#opnotes').navGrid('#opnotesPager', {
-        add: false,
-        edit: false,
-        del: false
-    });
-    $('#opnotes').inlineNav('#opnotesPager', {
-        edit: false,
-        add: true,
-        del: false,
-        cancel: true,
-        addParams: {
-            addRowParams: {
-                keys: true,
-                url: 'clientArray'
-            }
-        }
-    })
-
-    $("#events2").jqGrid({
-        datatype: 'local',
-        cellsubmit: 'clientArray',
-        editurl: 'clientArray',
-        data: [],
-        height: 250,
-        autowidth: true,
-        subGrid: true,
-        subGridRowExpanded: function(subgridId, rowid) {
-            var subgridTableId = subgridId + "_t";
-            $("#" + subgridId).html("<table id='" + subgridTableId + "'></table>");
-            $("#" + subgridTableId).jqGrid({
-                datatype: 'local',
-                autowidth: true,
-                data: getOpnoteSubGridData(rowid),
-                colModel: [
-                    { label: 'E. Id', name: 'id', width: 25, key: true, editable: false },
-                    { label: 'Event Time', name: 'event_time', width: 75, editable: false, formatter: epochToDateString },
-                    { label: 'Host/Device', name: 'source_object', width: 60, editable: false },
-                    { label: 'Tool', name: 'tool', width: 20, editable: false },
-                    { label: 'Action', name: 'action', width: 65, editable: false },
-                    { label: 'Analyst', name: 'analyst', width: 50, editable: false },
-                ],
-            });
-        },
-        colModel: [
-            { label: 'E. Id', name: 'id', width: 15, key: true, editable: false },
+            { label: 'E. Id', name: 'event', width: 10, editable: true },
             { label: 'Event Time', name: 'event_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
@@ -1669,6 +1641,141 @@ $(document).ready(function() {
                 },
                 defaultValue: getDate()
             }},
+            { label: 'Host/Device', name: 'source_object', width: 50, editable: true },
+            { label: 'Tool', name: 'tool', width: 20, editable: true },
+            { label: 'Action', name: 'action', width: 75, editable: true },
+            { label: 'Analyst', name: 'analyst', width: 40, editable: false },
+        ],
+        beforeEditCell: function (id) {
+            if (lastselection && lastselection !== id) {
+                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
+                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
+                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+            }
+            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
+            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
+            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+            lastselection = id;
+        },
+        beforeSaveCell: function(options, col, value) {
+            var data = $('#opnotes').getRowData(options);
+            data[col] = value;
+            if (data.event_time)
+                data.event_time = dateStringToEpoch(data.event_time);
+            diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
+        },
+        pager: '#opnotesPager',
+        pgbuttons: false,
+        pgtext: null,
+        viewrecords: false
+    });
+    $('#opnotes').jqGrid('navGrid', '#opnotesPager', {
+        add: false,
+        edit: false,
+        del: false,
+    })
+    if (opnotes_rw) {
+        $('#opnotes').jqGrid('navGrid').jqGrid('navButtonAdd', '#opnotesPager',{
+            position:"last",
+            caption:"",
+            buttonicon:"ui-icon-plus",
+            onClickButton: function(){
+                $('#opnotes').jqGrid('addRow', {addRowParams: {
+                        keys: true,
+                        beforeSaveRow: function(options, id) {
+                            data = {};
+                            $(this).find('input, select, textarea').each(function () {
+                                data[this.name] = $(this).val();
+                            });
+                            data.mission = mission;
+                            $('#opnotes').jqGrid('restoreRow', id, function(){});
+                            data.event_time = dateStringToEpoch(data.event_time);
+                            diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
+                            console.log(data.event_time);
+                        },
+                        oneditfunc: function(id) {
+                            console.log('oef');
+                            if (lastselection && lastselection !== id) {
+                                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
+                                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
+                                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+                            }
+                            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
+                            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
+                            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+                            lastselection = id;
+                        }
+                    }
+               });
+            }
+        });
+    }
+
+    var lastSelection;
+    var lastselection;
+    $("#events2").jqGrid({
+        datatype: 'local',
+        cellsubmit: 'clientArray',
+        editurl: 'clientArray',
+        data: [],
+        height: 250,
+        autowidth: true,
+        subGrid: true,
+        cellEdit: true,
+        pager: '#eventsPager',
+        pgbuttons: false,
+        pgtext: null,
+        viewrecords: false,
+        hoverrows: false,
+        subGridRowExpanded: function(subgridId, rowid) {
+            var subgridTableId = subgridId + "_t";
+            $("#" + subgridId).html("<table id='" + subgridTableId + "'></table>");
+            $("#" + subgridTableId).jqGrid({
+                datatype: 'local',
+                autowidth: true,
+                data: getOpnoteSubGridData(rowid),
+                colModel: [
+                    { label: 'E. Id', name: 'id', width: 10, key: true, editable: false },
+                    { label: 'Event Time', name: 'event_time', width: 60, editable: false, formatter: epochToDateString },
+                    { label: 'Host/Device', name: 'source_object', width: 50, editable: false },
+                    { label: 'Tool', name: 'tool', width: 50, editable: false },
+                    { label: 'Action', name: 'action', width: 100, editable: false },
+                    { label: 'Analyst', name: 'analyst', width: 30, editable: false },
+                ],
+            });
+        },
+        colModel: [
+            { label: 'E. Id', name: 'id', width: 15, key: true, editable: false },
+            { label: 'Actions', name: 'actions', formatter: function(cell, options, row) {
+                    var buttons = '<div title="Delete row" style="float: left;';
+                    if (!events_del)
+                        buttons += ' display: none;';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    return buttons;
+                },
+                width: 15,
+                formatoptions: {
+                    keys: true,
+                }
+            },
+            { label: 'Event Time', name: 'event_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
+                dataInit: function (element) {
+                    $(element).datetimepicker({
+                        dateFormat: "yy-mm-dd",
+                        timeFormat: "HH:mm:ss.l",
+                        controlType: 'select',
+                        showMillisec: true
+                    })
+                },
+                defaultValue: getDate(),
+                editrules: {
+                    date: true,
+                    minValue: 0
+                },
+                formatoptions: {
+                    newformat: 'yy-mm-dd HH:mm:ss.l'
+                }
+            }},
             { label: 'Discovery Time', name: 'discovery_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
@@ -1679,14 +1786,14 @@ $(document).ready(function() {
                         vertical: 'top'
                     })
                 },
+                defaultValue: getDate(),
                 editrules: {
                     date: true,
                     minValue: 0
                 },
                 formatoptions: {
                     newformat: 'yy-mm-dd HH:mm:ss.l'
-                },
-                defaultValue: getDate()
+                }
             }},
             { label: 'Source', name: 'source_object', width: 45, editable: true, formatter: 'select', edittype: 'select', editoptions: {
                 value: getObjectSelect()
@@ -1699,87 +1806,75 @@ $(document).ready(function() {
             { label: 'Event Type', name: 'event_type', width: 50, editable: true },
             { label: 'Event Description', name: 'short_desc', width: 150, edittype: 'textarea', editable: true },
             { label: 'Analyst', name: 'analyst', width: 30, editable: false },
-            { name: 'Actions', template: 'actions', width: 70 }
         ],
-        actionsNavOptions: {
-            delbutton: false,
-            editbutton: false,
-            deleteEventicon: 'ui-icon-trash',
-            deleteEventtitle: 'Delete event',
-            saveEventicon: 'ui-icon-disk',
-            saveEventtitle: 'Save event',
-            cancelEventicon: 'ui-icon-cancel',
-            cancelEventtitle: 'Cancel',
-            isDisplayButtons: function (options, rowData) {
-                if (options.rowData.id === undefined) { // or rowData.closed
-                    return { saveEvent: { hidden: false }, cancelEvent: { hidden: false }, deleteEvent: { hidden: true } };
-                } else {
-                    return { saveEvent: { hidden: true }, cancelEvent: { hidden: true } };
-                }
-            },
-            custom: [
-                { 
-                    action: 'deleteEvent', onClick: function (options) {
-                        diagram.send(JSON.stringify({act: 'delete_event', arg: {id: options.rowid}}));
-                        $('#events2').jqGrid('delRowData', options.rowid);
-                    }
-                },
-                { 
-                    action: 'cancelEvent', onClick: function (options) {
-                        $('#events2').jqGrid('restoreRow', options.rowid, function(){});
-                    }
-                },
-                { 
-                    action: 'saveEvent', onClick: function (options) {
-                        var data = $('#events2').getRowData(options.rowid);
-                        data.mission = mission;
-                        $('#events2').jqGrid('restoreRow', options.rowid, function(){});
-                        data.event_time = dateStringToEpoch(data.event_time);
-                        data.discovery_time = dateStringToEpoch(data.discovery_time);
-                        diagram.send(JSON.stringify({act: 'insert_event', arg: data}));
-                    }
-                }
-
-            ]
-        },
-        beforeSelectRow: function(row, e) {
+        onSelectRow: function() {
             return false;
         },
-        inlineNavOptions: {
-            save: false
+        beforeSelectRow: function(rowid, e) {
+            return false;
         },
-        cellEdit: true,
-        sortable: true,
-        viewrecords: true,
-        beforeSaveCell: function(options, col, value) {
+        beforeEditCell: function (id) {
+            if (lastselection && lastselection !== id) {
+                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
+                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
+                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+            }                
+            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
+            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
+            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+            lastselection = id;
+        },
+        beforeSaveCell: function (options, col, value) {
             var data = $('#events2').getRowData(options);
             data[col] = value;
-            data.event_time = dateStringToEpoch(data.event_time);
-            data.discovery_time = dateStringToEpoch(data.discovery_time);
+            if (data.event_time)
+                data.event_time = dateStringToEpoch(data.event_time);
+            if (data.discovery_time)
+                data.discovery_time = dateStringToEpoch(data.discovery_time);
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
-        },
-        pager: '#eventsPager',
-        pgbuttons: false,
-        pgtext: null,
-        viewrecords: false,
+        }
     });
-    $('#events2').navGrid('#eventsPager', {
+    $('#events2').jqGrid('navGrid', '#eventsPager', {
         add: false,
         edit: false,
-        del: false
-    });
-    $('#events2').inlineNav('#eventsPager', {
-        edit: false,
-        add: true,
         del: false,
-        cancel: true,
-        addParams: {
-            addRowParams: {
-                keys: true,
-                url: 'clientArray'
-            }
-        }
     })
+    if (events_rw) {
+        $('#events2').jqGrid('navGrid').jqGrid('navButtonAdd', '#eventsPager', {
+            position:"last",
+            caption:"", 
+            buttonicon:"ui-icon-plus", 
+            onClickButton: function(){
+                $('#events2').jqGrid('addRow', {addRowParams: {
+                        keys: true,
+                        beforeSaveRow: function(options, id) {
+                            data = {};
+                            $(this).find('input, select, textarea').each(function () {
+                                data[this.name] = $(this).val();
+                            });
+                            data.mission = mission;
+                            $('#events2').jqGrid('restoreRow', id, function(){});
+                            data.event_time = dateStringToEpoch(data.event_time);
+                            data.discovery_time = dateStringToEpoch(data.discovery_time);
+                            diagram.send(JSON.stringify({act: 'insert_event', arg: data}));
+                        },
+                        oneditfunc: function(id) {
+                            console.log('oef');
+                            if (lastselection && lastselection !== id) {
+                                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
+                                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
+                                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+                            }
+                            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
+                            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
+                            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+                            lastselection = id;
+                        }
+                    }
+               });
+            }
+        });
+    }
 
     // ---------------------------- MISC ----------------------------------
     $("#diagram_jumbotron").resizable();

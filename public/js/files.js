@@ -24,7 +24,7 @@ var f = function(e)
             });
             formData.append('mission', mission);
             $.ajax({
-                url: '/upload',
+                url: 'upload',
                 type: 'POST',
                 data: formData,
                 dataType: 'json',
