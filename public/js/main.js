@@ -17,6 +17,8 @@ function dateStringToEpoch(value) {
 }
 
 function epochToDateString(value){
+    if (isNaN(value))
+        return value;
     var date = new Date(value);
     return (date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds());
 }
@@ -32,8 +34,6 @@ $(document).ready(function() {
     var missions_rw = false;
     if (permissions.indexOf('all') !== -1 || permissions.indexOf('manage_missions') !== -1)
         missions_rw = true;
-
-console.log(missions_rw);
 
     $("#missions").jqGrid({
         datatype: 'json',
@@ -52,7 +52,7 @@ console.log(missions_rw);
                     delbutton: missions_rw
                 }
             },
-            { label: 'Misison Id', name: 'id', width: 15, key: true, editable: false },
+            { label: 'Mission Id', name: 'id', width: 15, key: true, editable: false },
             { label: 'Mission Name', name: 'name', width: 45, editable: missions_rw, edittype: 'text', formatter: 'showlink', formatoptions: {
                     baseLinkUrl: 'cop',
                     idName: 'mission'
@@ -121,6 +121,9 @@ console.log(missions_rw);
         addParams: {
             addRowParams: {
                 keys: true,
+                successfunc: function() {
+                    $("#missions").trigger("reloadGrid");
+                },
                 url: 'api/missions'
             },
         }

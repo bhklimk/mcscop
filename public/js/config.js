@@ -71,6 +71,9 @@ $(document).ready(function() {
         addParams: {
             addRowParams: {
                 keys: true,
+                successfunc: function() {
+                    $("#roles").trigger("reloadGrid");
+                },
                 url: 'api/roles'
             },
         }
@@ -90,9 +93,9 @@ $(document).ready(function() {
         url: 'api/users',
         editurl: 'api/users',
         autowidth: true,
-        gridview: true,
         maxHeight: 600,
         height: 300,
+        reloadAfterSubmit: true,
         colModel: [
             { label: ' ', name: 'actions', formatter: 'actions', width: 15, formatoptions: {
                     keys: true,
@@ -154,11 +157,13 @@ $(document).ready(function() {
         addParams: {
             addRowParams: {
                 keys: true,
+                successfunc: function() {
+                    $("#users").trigger("reloadGrid");
+                },
                 url: 'api/users'
             },
         }
     });
-
     $(window).bind("resize", function () {
         $("#users").jqGrid("setGridWidth", $("#users").closest(".jumbotron").width());
     }).triggerHandler("resize")
