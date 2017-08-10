@@ -45,7 +45,7 @@ Array.prototype.move = function (old_index, new_index) {
     return this;
 };
 
-var permissions = ['all', 'manage_missions', 'manage_users', 'manage_roles', 'modify_diagram', 'create_events', 'delete_events', 'modify_notes', 'create_opnotes', 'delete_opnotes', 'upload_files'];
+var permissions = ['all', 'manage_missions', 'manage_users', 'manage_roles', 'modify_diagram', 'create_events', 'delete_events', 'modify_notes', 'create_opnotes', 'delete_opnotes', 'modify_files'];
 
 app.set('view engine', 'pug');
 app.use(express.static('public'));
@@ -75,7 +75,7 @@ function sendToRoom(room, msg, selfSocket, roleFilter) {
 }
 
 function hasPermission(sessionPermissions, permission) {
-    if (sessionPermissions.split(',').indexOf(permission) > -1 || sessionPermissions.split(',').indexOf('all') > -1)
+    if (sessionPermissions !== undefined && (sessionPermissions.split(',').indexOf(permission) > -1 || sessionPermissions.split(',').indexOf('all') > -1))
         return true;
     return false;
 }
@@ -218,12 +218,13 @@ ws.on('connection', function(socket) {
                 case 'get_opnotes':
                     var mission = JSON.parse(msg.arg);
                     var analyst = socket.user_id;
-                    var query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND (analyst = ? OR role IN (?)) ORDER BY event_time ASC'
-                    var args = [mission, analyst, socket.sub_roles];
-                    if (socket.sub_roles.length === 0) {
-                        query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC'
+//                    var query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND (analyst = ? OR role IN (?)) ORDER BY event_time ASC'
+  //                  var args = [mission, analyst, socket.sub_roles];
+    //                if (socket.sub_roles.length === 0) {
+                        //query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC';
+                    var query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? ORDER BY event_time ASC';
                         args = [mission, analyst];
-                    }
+                    //}
                     connection.query(query, args, function(err, rows, fields) {
                         if (!err) {
                             socket.send(JSON.stringify({act:'all_opnotes', arg:rows}));
@@ -233,7 +234,7 @@ ws.on('connection', function(socket) {
                     break;
                 case 'change_object':
                     var o = msg.arg;
-                    if (o.type !== undefined && hasPermission(socket.permission, 'modify_diagram')) {
+                    if (o.type !== undefined && hasPermission(socket.permissions, 'modify_diagram')) {
                         if (o.type === 'icon' || o.type === 'shape') {
                             connection.query('UPDATE objects SET name = ?, fill_color = ?, stroke_color = ?, image = ? WHERE uuid = ?', [o.name, o.fill_color, o.stroke_color, o.image, o.uuid], function (err, results) {
                                 if (!err) {
@@ -429,13 +430,14 @@ ws.on('connection', function(socket) {
                         var o = msg.arg;
                         if (o.type && o.uuid) {
                             if (o.type === 'icon' || o.type === 'shape') {
+                                console.log(o.uuid);
                                 connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
                                     if (!err) {
                                         sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:o.uuid}));
                                         connection.query('SELECT uuid FROM objects WHERE obj_a = ? OR obj_b = ?', [o.uuid, o.uuid], function(err, rows, results) {
                                             if (!err) {
                                                 async.each(rows, function(row, callback) {
-                                                    connection.query('DELETE FROM objects WHERE uuid = ?', [rows.uuid], function(err, results) {
+                                                    connection.query('DELETE FROM objects WHERE uuid = ?', [row.uuid], function(err, results) {
                                                         if (err) {
                                                             console.log(err);
                                                             socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
@@ -844,7 +846,7 @@ app.use('/download', express.static(path.join(__dirname, 'mission-files'), {
 }))
 
 app.post('/mkdir', function (req, res) {
-    if (!req.session.loggedin) {
+    if (!req.session.loggedin || !hasPermission(req.session.permissions, 'modify_files')) {
         res.end('ERR');
         return;
     }
@@ -876,7 +878,7 @@ app.post('/mkdir', function (req, res) {
 });
 
 app.post('/mv', function (req, res) {
-    if (!req.session.loggedin) {
+    if (!req.session.loggedin || !hasPermission(req.session.permissions, 'modify_files')) {
         res.end('ERR');
         return;
     }
@@ -911,7 +913,7 @@ app.post('/mv', function (req, res) {
 });
 
 app.post('/delete', function (req, res) {
-    if (!req.session.loggedin) {
+    if (!req.session.loggedin || !hasPermission(req.session.permissions, 'modify_files')) {
         res.end('ERR');
         return;
     }
@@ -948,7 +950,7 @@ app.post('/delete', function (req, res) {
 });
 
 app.post('/upload', upload.any(), function (req, res) {
-    if (!req.session.loggedin) {
+    if (!req.session.loggedin || !hasPermission(req.session.permissions, 'modify_files')) {
         res.end('ERR');
         return;
     }
