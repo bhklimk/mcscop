@@ -355,6 +355,8 @@ input[type="password"] {
 }
 
 .zoomIn {
+    width: 21px;
+    height: 21px;
     position: relative;
     left: 0px;
     bottom: 0px;
@@ -362,6 +364,8 @@ input[type="password"] {
 }
 
 .zoomOut {
+    width: 21px;
+    height: 21px;
     position: relative;
     left: 0px;
     bottom: 0px;
