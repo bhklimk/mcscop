@@ -787,7 +787,6 @@ function moveDown() {
     var o = canvas.getActiveObject();
     if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) > 0) {
         var z = canvas.getObjects().indexOf(o) / 2 - 1;
-        console.log(canvas.getObjects().indexOf(o), z);
         moveToZ(o, z);
     }
 }
@@ -1321,7 +1320,6 @@ $(document).ready(function() {
                         }
                         if (i !== o.z*2) {
                             if (i < o.z*2) {
-                                console.log(o.z);
                                 obj.moveTo((o.z)*2 + 1);
                                 for (var k = 0; k < obj.children.length; k++)
                                     obj.children[k].moveTo(canvas.getObjects().indexOf(obj));
@@ -1647,7 +1645,7 @@ $(document).ready(function() {
             }},
             { label: 'Host/Device', name: 'source_object', width: 50, editable: true },
             { label: 'Tool', name: 'tool', width: 20, editable: true },
-            { label: ' ', name: 'action', width: 75, editable: true },
+            { label: 'Action', name: 'action', width: 75, editable: true },
             { label: 'Analyst', name: 'analyst', width: 40, editable: false },
         ],
         beforeEditCell: function (id) {
@@ -1695,10 +1693,8 @@ $(document).ready(function() {
                             $('#opnotes').jqGrid('restoreRow', id, function(){});
                             data.event_time = dateStringToEpoch(data.event_time);
                             diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
-                            console.log(data.event_time);
                         },
                         oneditfunc: function(id) {
-                            console.log('oef');
                             if (lastselection && lastselection !== id) {
                                 $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
                                 $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
@@ -1863,7 +1859,6 @@ $(document).ready(function() {
                             diagram.send(JSON.stringify({act: 'insert_event', arg: data}));
                         },
                         oneditfunc: function(id) {
-                            console.log('oef');
                             if (lastselection && lastselection !== id) {
                                 $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
                                 $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();

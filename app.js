@@ -199,7 +199,7 @@ ws.on('connection', function(socket) {
                     break;
                 case 'get_objects':
                     var mission = msg.arg;
-                    connection.query('SELECT * FROM objects WHERE mission = ? ORDER BY z ASC', [mission], function(err, rows, fields) {
+                    connection.query('SELECT * FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [mission], function(err, rows, fields) {
                         if (!err) {
                             socket.send(JSON.stringify({act:'all_objects', arg:rows}));
                         } else
@@ -208,7 +208,7 @@ ws.on('connection', function(socket) {
                     break;
                 case 'get_events':
                     var mission = JSON.parse(msg.arg);
-                    connection.query('SELECT id, uuid, event_time, discovery_time, event_type, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
+                    connection.query('SELECT id, uuid, event_time, discovery_time, event_type, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE deleted = 0 AND mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
                         if (!err) {
                             socket.send(JSON.stringify({act:'all_events', arg:rows}));
                         } else
@@ -222,7 +222,7 @@ ws.on('connection', function(socket) {
   //                  var args = [mission, analyst, socket.sub_roles];
     //                if (socket.sub_roles.length === 0) {
                         //query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? AND analyst = ? ORDER BY event_time ASC';
-                    var query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM opnotes WHERE mission = ? ORDER BY event_time ASC';
+                    var query = 'SELECT id, event_time, event, source_object, tool, action, (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) as analyst FROM opnotes WHERE deleted = 0 AND mission = ? ORDER BY event_time ASC';
                         args = [mission, analyst];
                     //}
                     connection.query(query, args, function(err, rows, fields) {
@@ -256,7 +256,7 @@ ws.on('connection', function(socket) {
                     if (hasPermission(socket.permissions, 'modify_diagram')) {
                         var o = msg.arg;
                         o.z = Math.floor(o.z);
-                        connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                        connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                             var zs = [];
                             for (var i = 0; i < results.length; i++)
                                 zs.push(results[i].uuid);
@@ -292,6 +292,10 @@ ws.on('connection', function(socket) {
                 case 'update_event':
                     if (hasPermission(socket.permissions, 'create_events')) {
                         var evt = msg.arg;
+                        if (evt.source_port === '')
+                            evt.source_port = null;
+                        if (evt.dest_port === '')
+                            evt.dest_port = null;
                         connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.id], function (err, results) {
                             if (!err) {
                                 sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}), socket);
@@ -303,6 +307,10 @@ ws.on('connection', function(socket) {
                 case 'insert_event':
                     if (hasPermission(socket.permissions, 'create_events')) {
                         var evt = msg.arg;
+                        if (evt.source_port === '')
+                            evt.source_port = null;
+                        if (evt.dest_port === '')
+                            evt.dest_port = null;
                         evt.analyst = socket.user_id;
                         connection.query('INSERT INTO events (mission, event_time, discovery_time, source_object, source_port, dest_object, dest_port, event_type, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst], function (err, results) {
                             if (!err) {
@@ -317,7 +325,7 @@ ws.on('connection', function(socket) {
                 case 'delete_event':
                     if (hasPermission(socket.permissions, 'delete_events')) {
                         var evt = msg.arg;
-                        connection.query('DELETE FROM events WHERE id = ?', [evt.id], function (err, results) {
+                        connection.query('UPDATE events SET deleted = 1 WHERE id = ?', [evt.id], function (err, results) {
                             if (!err) {
                                 sendToRoom(socket.room, JSON.stringify({act: 'delete_event', arg: msg.arg}), socket);
                             } else
@@ -345,6 +353,8 @@ ws.on('connection', function(socket) {
                         connection.query('SELECT role FROM users WHERE id = ?', [socket.user_id], function (err, results) {
                             if (!err) {
                                 var role = results[0].role;
+                                if (evt.event === '')
+                                    evt.event = null;
                                 connection.query('INSERT INTO opnotes (mission, event, role, event_time, source_object, tool, action, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event, role, evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst], function (err, results) {
                                     if (!err) {
                                         evt.id = results.insertId;
@@ -362,7 +372,7 @@ ws.on('connection', function(socket) {
                 case 'delete_opnote':
                     if (hasPermission(socket.permissions, 'delete_opnotes')) {
                         var evt = msg.arg;
-                        connection.query('DELETE FROM opnotes WHERE id = ?', [evt.id], function (err, results) {
+                        connection.query('UPDATE opnotes SET deleted = 1 WHERE id = ?', [evt.id], function (err, results) {
                             if (!err) {
                                 sendToRoom(socket.room, JSON.stringify({act: 'delete_opnote', arg: evt}), socket, socket.role);
                             } else
@@ -377,7 +387,7 @@ ws.on('connection', function(socket) {
                             socket.send(JSON.stringify({act: 'error', arg: 'Error: Missing image!'}));
                             break;
                         }
-                        connection.query('SELECT count(*) AS z FROM objects WHERE mission = ?', [o.mission], function (err, results) {
+                        connection.query('SELECT count(*) AS z FROM objects WHERE deleted = 0 AND mission = ?', [o.mission], function (err, results) {
                             var x = 32;
                             var y = 32;
                             if (!isNaN(parseFloat(o.x)) && isFinite(o.x) && !isNaN(parseFloat(o.y)) && isFinite(o.y)) {
@@ -395,7 +405,7 @@ ws.on('connection', function(socket) {
                                 connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, x, y, o.z], function (err, results) {
                                     if (!err) {
                                         o.id = results.insertId;
-                                        connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
+                                        connection.query('SELECT * FROM objects WHERE deleted = 0 AND id = ?', [o.id], function(err, rows, fields) {
                                             if (!err) {
                                                 sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
                                             } else
@@ -408,7 +418,7 @@ ws.on('connection', function(socket) {
                                 connection.query('INSERT INTO objects (mission, type, name, stroke_color, image, obj_a, obj_b, z) values (?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.image, o.obj_a, o.obj_b, o.z], function (err, results) {
                                     if (!err) {
                                         o.id = results.insertId;
-                                        connection.query('SELECT * FROM objects WHERE id = ?', [o.id], function(err, rows, fields) {
+                                        connection.query('SELECT * FROM objects WHERE deleted = 0 AND id = ?', [o.id], function(err, rows, fields) {
                                             if (!err) {
                                                 sendToRoom(socket.room, JSON.stringify({act: 'insert_object', arg:rows[0]}));
                                             } else {
@@ -430,14 +440,13 @@ ws.on('connection', function(socket) {
                         var o = msg.arg;
                         if (o.type && o.uuid) {
                             if (o.type === 'icon' || o.type === 'shape') {
-                                console.log(o.uuid);
-                                connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
+                                connection.query('UPDATE objects SET deleted = 1 WHERE uuid = ?', [o.uuid], function (err, results) {
                                     if (!err) {
                                         sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:o.uuid}));
-                                        connection.query('SELECT uuid FROM objects WHERE obj_a = ? OR obj_b = ?', [o.uuid, o.uuid], function(err, rows, results) {
+                                        connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND (obj_a = ? OR obj_b = ?)', [o.uuid, o.uuid], function(err, rows, results) {
                                             if (!err) {
                                                 async.each(rows, function(row, callback) {
-                                                    connection.query('DELETE FROM objects WHERE uuid = ?', [row.uuid], function(err, results) {
+                                                    connection.query('UPDATE objects SET deleted = 1 WHERE uuid = ?', [row.uuid], function(err, results) {
                                                         if (err) {
                                                             console.log(err);
                                                             socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
@@ -445,7 +454,7 @@ ws.on('connection', function(socket) {
                                                             sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:row.uuid}));
                                                     });
                                                 }, function() {
-                                                    connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                                                    connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                                                         for (var i = 0; i < results.length; i++) {
                                                             connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
                                                                 if (err) {
@@ -463,10 +472,10 @@ ws.on('connection', function(socket) {
                                         console.log(err);
                                 });
                             } else if (o.type === 'link') {
-                                connection.query('DELETE FROM objects WHERE uuid = ?', [o.uuid], function (err, results) {
+                                connection.query('UPDATE objects SET deleted = 1 WHERE uuid = ?', [o.uuid], function (err, results) {
                                     if (!err) {
                                         sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg: o.uuid}));
-                                        connection.query('SELECT uuid FROM objects WHERE mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                                        connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                                             if (!err) {
                                                 for (var i = 0; i < results.length; i++) {
                                                     connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
@@ -531,7 +540,7 @@ app.post('/api/:table', function (req, res) {
 // MISSIONS
     if (req.params.table !== undefined && req.params.table === 'missions') {
         if (req.body.oper === undefined) {
-            connection.query("SELECT id, name, start_date, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM missions", function(err, rows, fields) {
+            connection.query("SELECT id, name, start_date, (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) as analyst FROM missions WHERE deleted = 0", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
                 } else {
@@ -563,9 +572,9 @@ app.post('/api/:table', function (req, res) {
             });
         } else if (req.body.oper === 'del' && req.body.id !== undefined) {
             var id = JSON.parse(req.body.id);
-            connection.query('DELETE FROM missions WHERE id = ?', [id], function (err, results) {
+            connection.query('UPDATE missions SET deleted = 1 WHERE id = ?', [id], function (err, results) {
                 if (!err) {
-                    connection.query('DELETE FROM objects WHERE id = ?', [id], function (err, results) {
+                    connection.query('UPDATE objects SET deleted = 1 WHERE mission = ?', [id], function (err, results) {
                         if (!err) {
                             res.end(JSON.stringify('success'));
                         } else {
@@ -580,7 +589,7 @@ app.post('/api/:table', function (req, res) {
 // USERS
     } else if (req.params.table !== undefined && req.params.table === 'users') {
         if (req.body.oper === undefined) {
-            connection.query("SELECT id, username, name, '********' as password, permissions, (SELECT name FROM roles WHERE roles.id = users.role LIMIT 1) AS role FROM users", function(err, rows, fields) {
+            connection.query("SELECT id, username, name, '********' as password, permissions, (SELECT name FROM roles WHERE deleted = 0 AND roles.id = users.role LIMIT 1) AS role FROM users WHERE deleted = 0", function(err, rows, fields) {
                 if (!err) {
                     res.end(JSON.stringify(rows));
                 } else {
@@ -588,7 +597,7 @@ app.post('/api/:table', function (req, res) {
                     console.log(err);
                 }
             });
-        } else if (req.body.oper !== undefined && req.body.oper === 'edit' && req.body.name && req.body.role && req.body.permissions && req.body.id) {
+        } else if (req.body.oper !== undefined && req.body.oper === 'edit' && req.body.name !== undefined && req.body.role !== undefined && req.body.permissions !== undefined && req.body.id) {
             if (req.body.id === '1')
                 req.body.permissions = 'all'; // make sure admin always has all permissions
             else {
@@ -623,7 +632,7 @@ app.post('/api/:table', function (req, res) {
                     }
                 });
             }
-        } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.username && req.body.name && req.body.role && req.body.permissions) {
+        } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.username && req.body.name !== undefined && req.body.role !== undefined && req.body.permissions !== undefined) {
             bcrypt.hash(req.body.password, null, null, function(err, hash) {
                 connection.query('INSERT INTO users (username, name, password, role, permissions) values (?, ?, ?, ?, ?)', [req.body.username, req.body.name, hash, req.body.role, req.body.permissions], function (err, results) {
                     if (!err) {
@@ -640,7 +649,7 @@ app.post('/api/:table', function (req, res) {
                 res.end(JSON.stringify('ERR'));
             else {
                 if (id != 0) {
-                    connection.query('DELETE FROM users WHERE id = ?', [id], function (err, results) {
+                    connection.query('UPDATE users SET deleted = 1 WHERE id = ?', [id], function (err, results) {
                         if (!err) {
                             res.end(JSON.stringify('success'));
                         } else {
@@ -650,6 +659,8 @@ app.post('/api/:table', function (req, res) {
                     });
                 }
             }
+        } else {
+            res.end(JSON.stringify('ERR'));
         }
 // ROLES
     } else if (req.params.table !== undefined && req.params.table === 'roles') {
@@ -743,7 +754,6 @@ app.post('/api/:table', function (req, res) {
 
 app.get('/config', function (req, res) {
     if (req.session.loggedin) {
-        console.log(req.session.permissions);
         res.render('config', { title: 'MCSCOP', permissions: req.session.permissions});
     } else {
        res.redirect('login');
@@ -769,7 +779,7 @@ app.get('/cop', function (req, res) {
 
 app.post('/login', function (req, res) {
     if (req.body.username !== undefined && req.body.username !== '' && req.body.password !== undefined && req.body.password !== '') {
-        connection.query('SELECT id, username, password, permissions, role FROM users WHERE username = ?', [req.body.username], function (err, rows, fields) {
+        connection.query('SELECT id, username, password, permissions, role FROM users WHERE deleted = 0 AND username = ?', [req.body.username], function (err, rows, fields) {
             if (!err) {
                 if (rows.length === 1) {
                     bcrypt.compare(req.body.password, rows[0].password, function(err, bres) {
