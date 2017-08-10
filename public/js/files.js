@@ -26,20 +26,42 @@ var f = function(e)
             $.ajax({
                 url: 'upload',
                 type: 'POST',
+                xhr: function() {
+                    var mxhr = $.ajaxSettings.xhr();
+                    if (mxhr.upload) {
+                        $("#progressbar")
+                            .progressbar({ value: 0 })
+                            .children('.ui-progressbar-value')
+                            .html('0%')
+                            .css("display", "block");
+                        mxhr.upload.addEventListener('progress', progressHandler, false);
+                    }
+                    return mxhr;
+                },
                 data: formData,
                 dataType: 'json',
                 cache: false,
                 contentType: false,
                 processData: false,
                 success: function() {
+                    $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload successful!');
                 },
                 error: function() {
+                    $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload error!');
                     console.log('upload error');
                 }
             });
         }
     }
 };
+
+function progressHandler(e) {
+    if (e.lengthComputable) {
+        var p = Math.floor((e.loaded/e.total)*100);
+        $("#progressbar").progressbar('value', p).children('.ui-progressbar-value').html(p.toPrecision(3) + '%');
+
+    }
+}
 
 $(document).ready(function() {
     var mission = getParameterByName('mission');

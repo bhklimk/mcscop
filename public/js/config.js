@@ -19,7 +19,7 @@ $(document).ready(function() {
         height: 300,
         reloadAfterSubmit: true,
         colModel: [
-            { label: 'Actions', name: 'actions', formatter: 'actions', width: 10, formatoptions: {
+            { label: ' ', name: 'actions', formatter: 'actions', width: 10, formatoptions: {
                     keys: true,
                     editbutton: false,
                     delbutton: roles_rw
@@ -45,8 +45,15 @@ $(document).ready(function() {
                 $("table#roles tr#"+$.jgrid.jqID(id)+ " div.ui-inline-edit").hide();
                 $("table#roles tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
                 $("table#roles tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
-                grid.jqGrid('editRow', id, {keys: true, oneditfunc: function () { console.log('blark') } });
                 lastSelection = id;
+                grid.jqGrid('editRow', id, {keys: true, aftersavefunc: function () {
+                        $("table#roles tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-del").show();
+                        $("table#roles tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-edit").show();
+                        $("table#roles tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-save").hide();
+                        $("table#roles tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-cancel").hide();
+                        lastSelection = null;
+                    }
+                });
             }
         }
     });
@@ -87,7 +94,7 @@ $(document).ready(function() {
         maxHeight: 600,
         height: 300,
         colModel: [
-            { label: 'Actions', name: 'actions', formatter: 'actions', width: 15, formatoptions: {
+            { label: ' ', name: 'actions', formatter: 'actions', width: 15, formatoptions: {
                     keys: true,
                     editbutton: false,
                     delbutton: users_rw
@@ -103,7 +110,7 @@ $(document).ready(function() {
                 }
             },
             { label: 'Permissions', name: 'permissions', width: 200, editable: users_rw, edittype: 'select', formatter: 'select', editoptions: {
-                    value: {none: 'None', all:'All', manage_missions:'Manage Missions', manage_users:'Manage Users', manage_roles:'Manage Roles', modify_diagram: 'Modify Diagram', create_events: 'Create Events', delete_events: 'Delete Events', modify_notes: 'Modify Notes', create_opnotes: 'Create Opnotes', delete_opnotes: 'Delete Opnotes'},
+                    value: {none: 'None', all:'All', manage_missions:'Manage Missions', manage_users:'Manage Users', manage_roles:'Manage Roles', modify_diagram: 'Modify Diagram', create_events: 'Create Events', delete_events: 'Delete Events', modify_notes: 'Modify Notes', create_opnotes: 'Create Opnotes', delete_opnotes: 'Delete Opnotes', modify_files: 'Modify Files'},
                     multiple: true,
                 }
             }
@@ -121,8 +128,15 @@ $(document).ready(function() {
                 $("table#users tr#"+$.jgrid.jqID(id)+ " div.ui-inline-edit").hide();
                 $("table#users tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
                 $("table#users tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
-                grid.jqGrid('editRow', id, {keys: true, oneditfunc: function () { console.log('blark') } });
                 lastSelection = id;
+                grid.jqGrid('editRow', id, {keys: true, aftersavefunc: function () {
+                        $("table#users tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-del").show();
+                        $("table#users tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-edit").show();
+                        $("table#users tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-save").hide();
+                        $("table#users tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-cancel").hide();
+                        lastSelection = null;
+                    }
+                });
             }
         }
     });

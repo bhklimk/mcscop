@@ -17,7 +17,6 @@ function dateStringToEpoch(value) {
 }
 
 function epochToDateString(value){
-    console.log(value);
     var date = new Date(value);
     return (date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds());
 }
@@ -47,7 +46,7 @@ console.log(missions_rw);
         height: 400,
         reloadAfterSubmit: true,
         colModel: [
-            { label: 'Actions', name: 'actions', formatter: 'actions', width: 10, formatoptions: {
+            { label: ' ', name: 'actions', formatter: 'actions', width: 10, formatoptions: {
                     keys: true,
                     editbutton: false,
                     delbutton: missions_rw
@@ -92,8 +91,15 @@ console.log(missions_rw);
                 $("table#missions tr#"+$.jgrid.jqID(id)+ " div.ui-inline-edit").hide();
                 $("table#missions tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
                 $("table#missions tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
-                grid.jqGrid('editRow', id, {keys: true, oneditfunc: function () { console.log('blark') } });
                 lastSelection = id;
+                grid.jqGrid('editRow', id, {keys: true, aftersavefunc: function () {
+                        $("table#missions tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-del").show();
+                        $("table#missions tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-edit").show();
+                        $("table#missions tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-save").hide();
+                        $("table#missions tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-cancel").hide();
+                        lastSelection = null;
+                    }
+                });
             }
         },
         pager: '#missionPager',

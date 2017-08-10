@@ -4,16 +4,16 @@ var diagram_rw = false;
 if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !== -1) {
     diagram_rw = true;
     $("#propName").prop('disabled', false);
-    $("#newObjectButton").prop('disabled', false);
+    $("#newObjectButton").prop('disabled', false).click(newObject);
     $("#propFillColor").prop('disabled', false);
     $("#propStrokeColor").prop('disabled', false);
     $("#propIcon").prop('disabled', false);
-    $("#moveUp").prop('disabled', false);
-    $("#moveDown").prop('disabled', false);
-    $("#moveToFront").prop('disabled', false);
-    $("#moveToBack").prop('disabled', false);
-    $("#insertObjectButton").prop('disabled', false);
-    $("#deleteObjectButton").prop('disabled', false);
+    $("#moveUp").prop('disabled', false).click(moveUp);
+    $("#moveDown").prop('disabled', false).click(moveDown);
+    $("#moveToFront").prop('disabled', false).click(moveToFront);
+    $("#moveToBack").prop('disabled', false).click(moveToBack);
+    $("#insertObjectButton").prop('disabled', false).click(insertObject);
+    $("#deleteObjectButton").prop('disabled', false).click(deleteObject);;
 }
 var events_rw = false;
 var events_del = false;
@@ -501,7 +501,7 @@ function startPan(event) {
 };
 
 function newObject() {
-    toggleToolbar('tools');
+    canvas.deactivateAllWithDispatch().renderAll();
     toggleToolbar('tools');
 }
 
@@ -908,8 +908,10 @@ function openToolbar(mode) {
         $('#tasksForm').hide();
         $('#notesForm').hide();
         $('#opsForm').show();
-        setTimeout(function() { $("#opnotes").setGridWidth($('#opsForm').width()); }, 10);
-        //setTimeout(function() { $("#ops").jsGrid("refresh") }, 10);
+        setTimeout(function() {
+            $("#opnotes").setGridHeight($('#opsForm').height()-65);
+            $("#opnotes").setGridWidth($('#opsForm').width()-5); 
+        }, 10);
         $('#filesForm').hide();
     } else if (mode === 'files') {
         activeToolbar = 'files';
@@ -1124,19 +1126,19 @@ function resizeCanvas() {
         background.setHeight($('#diagram').height());
         background.setWidth($('#diagram').width());
         canvas.renderAll();
+        $("#events2").setGridWidth($('#events').width()-5);
     }, 50);
-    $("#events2").setGridWidth($('#events').width()-20);
 }
 
 function startTime() {
     var today = new Date();
-    var eh = today.getHours() - 4;
-    var uh = today.getHours();
+    var eh = today.getHours();
+    var uh = today.getUTCHours();
     var m = today.getMinutes();
     var s = today.getSeconds();
     m = checkTime(m);
     s = checkTime(s);
-    $('#est').html('EST: ' + eh + ":" + m + ":" + s);
+    $('#est').html('Local: ' + eh + ":" + m + ":" + s);
     $('#utc').html('UTC: ' + uh + ":" + m + ":" + s);
     var t = setTimeout(startTime, 500);
 }
@@ -1176,7 +1178,10 @@ function saveRow(type, table, id) {
 $(document).ready(function() {
     startTime();
     // ---------------------------- SOCKETS ----------------------------------
-    diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
+    if (location.protocol === 'https:')
+        diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
+    else
+        diagram = new WebSocket('ws://' + window.location.host + '/mcscop/');
     diagram.onopen = function() {
         $('#modal').modal('hide');
         $('#modal-title').text('Please wait...!');
@@ -1606,11 +1611,10 @@ $(document).ready(function() {
         editurl: 'clientArray',
         sortable: true,
         data: [],
-        height: 250,
-        autowidth: true,
+        height: 300,
         colModel: [
-            { label: 'E. Id', name: 'id', hidden: true, key: true, editable: false },
-            { name: 'Actions', template: 'actions', formatter: function(cell, options, row) {
+            { label: 'Id', name: 'id', hidden: true, key: true, editable: false },
+            { label: ' ', template: 'actions', formatter: function(cell, options, row) {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!opnotes_del)
                         buttons += ' display: none;';
@@ -1622,7 +1626,7 @@ $(document).ready(function() {
                     keys: true,
                 }
             },
-            { label: 'E. Id', name: 'event', width: 10, editable: true },
+            { label: 'Id', name: 'event', width: 10, editable: true },
             { label: 'Event Time', name: 'event_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
@@ -1643,7 +1647,7 @@ $(document).ready(function() {
             }},
             { label: 'Host/Device', name: 'source_object', width: 50, editable: true },
             { label: 'Tool', name: 'tool', width: 20, editable: true },
-            { label: 'Action', name: 'action', width: 75, editable: true },
+            { label: ' ', name: 'action', width: 75, editable: true },
             { label: 'Analyst', name: 'analyst', width: 40, editable: false },
         ],
         beforeEditCell: function (id) {
@@ -1719,7 +1723,6 @@ $(document).ready(function() {
         editurl: 'clientArray',
         data: [],
         height: 250,
-        autowidth: true,
         subGrid: true,
         cellEdit: true,
         pager: '#eventsPager',
@@ -1727,6 +1730,7 @@ $(document).ready(function() {
         pgtext: null,
         viewrecords: false,
         hoverrows: false,
+        toolbar: [true, "top"],
         subGridRowExpanded: function(subgridId, rowid) {
             var subgridTableId = subgridId + "_t";
             $("#" + subgridId).html("<table id='" + subgridTableId + "'></table>");
@@ -1735,18 +1739,17 @@ $(document).ready(function() {
                 autowidth: true,
                 data: getOpnoteSubGridData(rowid),
                 colModel: [
-                    { label: 'E. Id', name: 'id', width: 10, key: true, editable: false },
+                    { label: 'E-Id', name: 'id', width: 10, key: true, editable: false },
                     { label: 'Event Time', name: 'event_time', width: 60, editable: false, formatter: epochToDateString },
                     { label: 'Host/Device', name: 'source_object', width: 50, editable: false },
                     { label: 'Tool', name: 'tool', width: 50, editable: false },
-                    { label: 'Action', name: 'action', width: 100, editable: false },
+                    { label: ' ', name: 'action', width: 100, editable: false },
                     { label: 'Analyst', name: 'analyst', width: 30, editable: false },
                 ],
             });
         },
         colModel: [
-            { label: 'E. Id', name: 'id', width: 15, key: true, editable: false },
-            { label: 'Actions', name: 'actions', formatter: function(cell, options, row) {
+            { label: ' ', name: 'actions', formatter: function(cell, options, row) {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!events_del)
                         buttons += ' display: none;';
@@ -1758,6 +1761,7 @@ $(document).ready(function() {
                     keys: true,
                 }
             },
+            { label: 'Id', name: 'id', width: 15, key: true, editable: false },
             { label: 'Event Time', name: 'event_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
@@ -1876,18 +1880,56 @@ $(document).ready(function() {
         });
     }
 
+    $('#t_events2').append($("<div><input id=\"globalSearchText\" type=\"text\"></input>&nbsp;" +
+        "<button id=\"globalSearch\" type=\"button\">Search</button></div>"));
+
+    $("#globalSearchText").keypress(function (e) {
+        var key = e.charCode || e.keyCode || 0;
+        if (key === $.ui.keyCode.ENTER) { // 13
+            $("#globalSearch").click();
+        }
+    });
+    $("#globalSearch").button({
+    }).click(function () {
+        var $grid = $('#events2');
+        var rules = [], i, cm, postData = $grid.jqGrid("getGridParam", "postData"),
+            colModel = $grid.jqGrid("getGridParam", "colModel"),
+            searchText = $("#globalSearchText").val(),
+            l = colModel.length;
+        for (i = 0; i < l; i++) {
+            cm = colModel[i];
+            if (cm.search !== false && (cm.stype === undefined || cm.stype === "text")) {
+                rules.push({
+                    field: cm.name,
+                    op: "cn",
+                    data: searchText
+                });
+            }
+        }
+        postData.filters = JSON.stringify({
+            groupOp: "OR",
+            rules: rules
+        });
+        $grid.jqGrid("setGridParam", { search: true });
+        $grid.trigger("reloadGrid", [{page: 1, current: true}]);
+        return false;
+    });
+
     // ---------------------------- MISC ----------------------------------
-    $("#diagram_jumbotron").resizable();
+    $("#diagram_jumbotron").resizable({ handles: 's', minHeight: 100 });
     $("#toolbar-body").resizable({ handles: 'w', maxWidth: $('#diagram_jumbotron').width()-60 });
     $("#toolbar-body").on("resize", function(event, ui) {
         settings[activeToolbar] = Math.round($('#toolbar-body').width());
+        $("#opnotes").setGridWidth($('#opsForm').width()-5);
         updateSettings();
     }); 
     $('#diagram_jumbotron').on('resize', function(event, ui) {
         settings.diagram = Math.round($('#diagram_jumbotron').height());
+        $("#opnotes").setGridHeight($('#opsForm').height()-65);
         updateSettings();
         resizeCanvas();
     });
+    $("#events2").setGridWidth($('#events').width()-5);
     window.addEventListener('resize', resizeCanvas, false);
     resizeCanvas();
     loadSettings();

@@ -3,16 +3,17 @@ html
     title= title
     link(rel='stylesheet', href='css/bootstrap.min.css')
     link(rel='stylesheet', href='css/image-picker.css')
-    link(rel='stylesheet', href='css/jquery-ui.min.css')
-    link(rel='stylesheet', href='css/jquery-ui.theme.min.css')
-    link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
     link(rel='stylesheet', href='css/ui.jqgrid.css')
     link(rel='stylesheet', href='css/ui.jqgrid-bootstrap-ui.css')
     link(rel='stylesheet', href='css/ui.jqgrid-bootstrap.css')
+    link(rel='stylesheet', href='css/jquery-ui.min.css')
+    link(rel='stylesheet', href='css/jquery-ui.theme.min.css')
+    link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
     link(rel='stylesheet', href='css/nouislider.min.css')
     link(rel='stylesheet', href='css/jstree.min.css')
     link(rel='stylesheet', href='css/files.css')
     link(rel='stylesheet', href='css/style.css')
+    link(rel='https://fonts.googleapis.com/css?family=Roboto:400,500|Inconsolata:400,700')
   body
     div.container
       div.clockBar#clockBar
@@ -27,8 +28,8 @@ html
           canvas#canvas
           div#message
           div#zoom-buttons
-            button.zoomIn#zoomIn(onclick='zoomIn()') +
-            button.zoomOut#zoomOut(onclick='zoomOut()') -
+            button.zoomIn#zoomIn.ui-icon.ui-icon-zoomin(onclick='zoomIn()')
+            button.zoomOut#zoomOut.ui-icon.ui-icon-zoomout(onclick='zoomOut()')
             button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
         div.toolbar#toolbar
           div.toolbar-nav#toolbar-nav
@@ -50,9 +51,11 @@ html
               textarea.tasks#ccirs
             div#filesForm
               div#files
+              div#progressbar-container
+                div#progressbar
             form#toolsForm
               span.toolbarTitle#toolbarTitle Edit Object
-              button.propButton.btn.btn-success#newObjectButton(type='button' onclick="newObject()" disabled) New!
+              button.propButton.btn.btn-success#newObjectButton(type='button' disabled) New!
               input(type="hidden", name="id")#propID
               input(type="hidden", name="type")#propType
               div.form-group#propNameGroup
@@ -71,18 +74,18 @@ html
                   each shape in shapes
                     option(data-img-src="images/shapes/" + shape, data-img-class="first", value=shape) shape
               div.form-group#moveObject
-                  button.propButton.btn.btn-default#moveUp(type='button' onclick="moveUp()" disabled) Up
-                  button.propButton.btn.btn-default#moveDown(type='button' onclick="moveDown()" disabled) Down
-                  button.propButton.btn.btn-default#moveToFront(type='button' onclick="moveToFront()" disabled) Front
-                  button.propButton.btn.btn-default#moveToBack(type='button' onclick="moveToBack()" disabled) Back
+                  button.propButton.btn.btn-default#moveUp(type='button' disabled) Up
+                  button.propButton.btn.btn-default#moveDown(type='button' disabled) Down
+                  button.propButton.btn.btn-default#moveToFront(type='button' disabled) Front
+                  button.propButton.btn.btn-default#moveToBack(type='button' disabled) Back
               div.form-group#makeObject
-                  button.propButton.btn.btn-primary#insertObjectButton(type='button' onclick="insertObject()" disabled) Insert
+                  button.propButton.btn.btn-primary#insertObjectButton(type='button' disabled) Insert
                   button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
-                  button.propButton.btn.btn-danger#deleteObjectButton(type='button' onclick="deleteObject()" disabled) Delete
+                  button.propButton.btn.btn-danger#deleteObjectButton(type='button') Delete
                   button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
       div.jumbotron#events
         div#sliderContainer
-          button#play(onclick='toggleAnimateSlider()') >
+          button#play.ui-icon.ui-icon-play(onclick='toggleAnimateSlider()')
           div#slider
         table#events2
         div#eventsPager
@@ -90,18 +93,18 @@ html
           button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
         span
           button.btn.btn-primary#downloadEvents(onclick='downloadDiagram()') Download Diagram
-  script var permissions = "#{permissions}".split(',');
-  script(src='js/jquery.js')
-  script(src='js/grid.locale-en.js')
-  script(src='js/jquery.jqGrid.min.js')
-  script(src='js/bootstrap.min.js')
-  script(src='js/image-picker.min.js')
-  script(src='js/fabric.min.js')
-  script(src='js/jquery-ui.min.js')
-  script(src='js/jquery-ui-timepicker-addon.min.js')
-  script(src='js/nouislider.min.js')
-  script(src='js/sharedbclient.js')
-  script(src='js/jstree.min.js')
-  script(src='js/files.js')
-  script(src='js/bootbox.min.js')
-  script(src='js/cop.js')
+script var permissions = "#{permissions}".split(',');
+script(src='js/jquery.js')
+script(src='js/grid.locale-en.js')
+script(src='js/jquery.jqGrid.min.js')
+script(src='js/bootstrap.min.js')
+script(src='js/image-picker.min.js')
+script(src='js/fabric.min.js')
+script(src='js/jquery-ui.min.js')
+script(src='js/jquery-ui-timepicker-addon.min.js')
+script(src='js/nouislider.min.js')
+script(src='js/sharedbclient.js')
+script(src='js/jstree.min.js')
+script(src='js/files.js')
+script(src='js/bootbox.min.js')
+script(src='js/cop.js')
