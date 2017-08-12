@@ -8,7 +8,7 @@ cd mcscop/
 node app.js
 ```
 
-Open up your browser to http://<ip>:3000
+Open up your browser to http://mcscop-ip:3000
 
 ## Getting Started with Docker
 
