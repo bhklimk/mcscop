@@ -1,6 +1,14 @@
 # mcscop
 
-## Getting Started /w the Docker Container
+## Installation
+```bash
+git clone https://github.com/psmitty7373/mcscop.git
+cd mcscop/
+./install.sh
+node app.js
+```
+
+## Getting Started with Docker
 
 ```bash
 cd mcscop/
