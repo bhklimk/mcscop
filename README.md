@@ -4,9 +4,11 @@
 ```bash
 git clone https://github.com/psmitty7373/mcscop.git
 cd mcscop/
-./install.sh
+./install-cop.sh
 node app.js
 ```
+
+Open up your browser to http://<ip>:3000
 
 ## Getting Started with Docker
 
