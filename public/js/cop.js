@@ -76,6 +76,10 @@ var updateSettingsTimer = null;
 var sliderTimer = null;
 var doc;
 var activeToolbar = null;
+var lastselection;
+var gridsize = 40;
+var lastFillColor = '#000000';
+var lastStrokeColor = '#ffffff';
 
 // Rescale stroke widths based on object size
 // http://jsfiddle.net/davidtorroija/nawLjtn8/
@@ -221,10 +225,6 @@ fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
             }
             $('#propType').val(o.objType);
             $('#prop-' + o.objType).val(o.image);
-            $('#propObjectGroup').tabs('disable');
-            var index = $('#propObjectGroup a[href="#tabs-' + o.objType + '"]').parent().index();
-            $('#propObjectGroup').tabs('enable', index);
-            $('#propObjectGroup').tabs('option', 'active', index);
             $('#prop-' + o.objType).data('picker').sync_picker_with_select();
             openToolbar('tools');
         }
@@ -249,6 +249,8 @@ canvas.on('object:selected', function(options) {
                             var z = canvas.getObjects().indexOf(firstNode) - 1;
                             if (canvas.getObjects().indexOf(o) < z)
                                 z = canvas.getObjects().indexOf(o) - 1;
+                            lastFillColor = $('#propFillColor').val();
+                            lastStrokeColor = $('#propStrokeColor').val();
                             diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val(), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
                             firstNode = null;
                             creatingLink = false;
@@ -268,10 +270,6 @@ canvas.on('object:selected', function(options) {
                     $('#propType').val(o.objType);
                     $('#prop-' + o.objType).val(o.image);
                     $('#prop-' + o.objType).data('picker').sync_picker_with_select();
-                    $('#propObjectGroup').tabs('disable');
-                    var index = $('#propObjectGroup a[href="#tabs-' + o.objType + '"]').parent().index();
-                    $('#propObjectGroup').tabs('enable', index);
-                    $('#propObjectGroup').tabs('option', 'active', index);
                     openToolbar('tools');
                 }
             }
@@ -753,10 +751,6 @@ function getParameterByName(name, url) {
     return decodeURIComponent(results[2].replace(/\+/g, " "));
 }
 
-function blink(div) {
-    $(div).effect('highlight','slow');
-}
-
 function insertLink() {
     creatingLink = true;
     showMessage('Click on a node to start a new link.');
@@ -776,6 +770,8 @@ function insertObject() {
         insertLink();
     else {
         var center = new fabric.Point(canvas.width / 2, canvas.height / 2);
+        lastFillColor = $('#propFillColor').val();
+        lastStrokeColor = $('#propStrokeColor').val();
         diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#prop-' + $('#propType').val()).val(), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
     }
 }
@@ -931,22 +927,22 @@ function openToolbar(mode) {
                     $('#toolbarTitle').text('View Object');
                 $('#propNameGroup').show();
                 $('#propObjectGroup').show();
-                if (canvas.getActiveObject().objType && canvas.getActiveObject().objType === 'link') {
-                    $('#propFillColor').hide();
-                } else
-                    $('#propFillColor').show();
                 $('#editDetailsButton').show();
                 $('#deleteObjectButton').show();
                 $('#insertObjectButton').hide();
                 $('#newObjectButton').show();
+                $('#propObjectGroup').tabs('disable');
+                var objType = $('#propType').val();
+                var index = $('#propObjectGroup a[href="#tabs-' + objType + '"]').parent().index();
+                $('#propObjectGroup').tabs('enable', index);
+                $('#propObjectGroup').tabs('option', 'active', index);
             } else if (canvas.getActiveObject() === undefined || canvas.getActiveObject() === null) {
                 $('#toolbarTitle').html('New Object');
                 $('#propID').val('');
                 $('#propNameGroup').show();
                 $('#propName').val('');
-                $('#propFillColor').show();
-                $('#propFillColor').val('#000000');
-                $('#propStrokeColor').val('#ffffff');
+                $('#propFillColor').val(lastFillColor);
+                $('#propStrokeColor').val(lastStrokeColor);
                 $('#propType').val('icon');
                 $('#prop-icon').val('00-000-icon-hub.svg');
                 $('#prop-icon').data('picker').sync_picker_with_select();
@@ -1531,11 +1527,6 @@ $(document).ready(function() {
                     updatingObject = false;
                 } else {
                     var type = $(this).val().split('-')[2];
-                    if (type === 'link') {
-                        $('#propFillColor').hide();
-                        $('#propStrokeColor').val('#1f1f1f1f');
-                    } else
-                        $('#propFillColor').show();
                     $('#propType').val(type)
                 }
             }
@@ -1543,7 +1534,6 @@ $(document).ready(function() {
     });
 
     // ---------------------------- DIAGRAM ----------------------------------
-    var gridsize = 40
     for(var x=1;x<(MAXWIDTH/gridsize);x++)
     {
         background.add(new fabric.Line([gridsize*x - MAXWIDTH/2, 0 - MAXHEIGHT/2, gridsize*x - MAXWIDTH/2, MAXHEIGHT/2],{ stroke: "#bfbfbf", strokeWidth: 1, selectable:false, strokeDashArray: [2, 2]}));
@@ -1670,7 +1660,6 @@ $(document).ready(function() {
         }
     });
     // ---------------------------- JQGRIDS ----------------------------------
-    var lastselection;
     $("#opnotes").jqGrid({
         datatype: 'local',
         cellsubmit: 'clientArray',

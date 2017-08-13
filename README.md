@@ -1,4 +1,4 @@
-# mcscop
+# MCSCOP
 
 ## About MCSCOP
 
