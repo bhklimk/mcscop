@@ -1148,7 +1148,11 @@ function JSONToCSVConvertor(JSONData, fileName) {
 function toggleAnimateSlider() {
     if (sliderTimer) {
         window.clearTimeout(sliderTimer);
+        $('#play').addClass('ui-icon-play');
+        $('#play').removeClass('ui-icon-stop');
     } else {
+        $('#play').removeClass('ui-icon-play');
+        $('#play').addClass('ui-icon-stop');
         animateSlider(0);
     }
 }
