@@ -16,6 +16,10 @@ do
   sleep 1
 done
 echo
+echo "Please provide your mysql root password.  This is used to"
+echo "create the MCSCOP database."
 mysql -u root -e "CREATE DATABASE mcscop;" 2>&1
+echo "Please provide your mysql root password.  This is used to"
+echo "create the MCSCOP schema."
 mysql -u root mcscop < mysql/mcscop-schema.sql 2>&1
 /usr/bin/node /home/mcscop/app.js

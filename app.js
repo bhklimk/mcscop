@@ -371,7 +371,8 @@ ws.on('connection', function(socket) {
                         connection.query('INSERT INTO events (mission, event_time, discovery_time, source_object, source_port, dest_object, dest_port, event_type, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst], function (err, results) {
                             if (!err) {
                                 evt.id = results.insertId;
-                                connection.query('INSERT INTO log (mission, text, analyst) values (?, ?, ?)', [evt.mission, 'Created event ID: ' + evt.id + '.', evt.analyst]);
+                                var timestamp = (new Date).getTime();
+                                connection.query('INSERT INTO log (mission, text, analyst, timestamp) values (?, ?, ?, ?)', [evt.mission, 'Created event ID: ' + evt.id + '.', evt.analyst, timestamp]);
                                 evt.analyst = socket.username;
                                 sendToRoom(socket.room, JSON.stringify({act: 'insert_event', arg: evt}));
                             } else
