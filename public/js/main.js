@@ -19,7 +19,7 @@ function dateStringToEpoch(value) {
 function epochToDateString(value){
     if (isNaN(value))
         return value;
-    var date = new Date(value);
+    var date = new Date(parseInt(value));
     return (date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds());
 }
 
