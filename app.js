@@ -7,7 +7,6 @@ var WebSocketJSONStream = require('websocket-json-stream');
 var http = require('http').Server(app);
 var session = require('express-session');
 var MySQLStore = require('express-mysql-session')(session);
-var validator = require('express-validator');
 var xssFilters = require('xss-filters');
 var cookieParser = require('cookie-parser');
 var bcrypt = require('bcrypt-nodejs');
@@ -53,13 +52,6 @@ app.set('view engine', 'pug');
 app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(validator());
-app.use(function(req, res, next) {
-    for (var item in req.body) {
-        req.sanitize(item).escape();
-    }
-    next();
-});
 app.use(sessionMiddleware);
 
 connection.connect();
