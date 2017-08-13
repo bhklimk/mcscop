@@ -61,7 +61,6 @@ var opnoteTableData = [];
 var objectsLoaded = null;
 var updatingObject = false;
 var diagram;
-var toolbarMode = null;
 var toolbarState = false;
 var firstNode = null;
 var zoom = 1.0;
@@ -224,7 +223,7 @@ fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
                 }
             }
             $('#propType').val(o.objType);
-            $('#prop-' + o.objType).val(o.image);
+            $('#prop-' + o.objType).val(o.image.replace('.svg','.png'));
             $('#prop-' + o.objType).data('picker').sync_picker_with_select();
             openToolbar('tools');
         }
@@ -251,7 +250,7 @@ canvas.on('object:selected', function(options) {
                                 z = canvas.getObjects().indexOf(o) - 1;
                             lastFillColor = $('#propFillColor').val();
                             lastStrokeColor = $('#propStrokeColor').val();
-                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val(), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
+                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
                             firstNode = null;
                             creatingLink = false;
                         }
@@ -268,7 +267,7 @@ canvas.on('object:selected', function(options) {
                         }
                     }
                     $('#propType').val(o.objType);
-                    $('#prop-' + o.objType).val(o.image);
+                    $('#prop-' + o.objType).val(o.image.replace('.svg','.png'));
                     $('#prop-' + o.objType).data('picker').sync_picker_with_select();
                     openToolbar('tools');
                 }
@@ -533,8 +532,8 @@ function startPan(event) {
 };
 
 function newObject() {
-    canvas.deactivateAllWithDispatch().renderAll();
-    toggleToolbar('tools');
+    canvas.deactivateAll().renderAll();
+    openToolbar('tools');
 }
 
 function cancelMenu() {
@@ -772,7 +771,7 @@ function insertObject() {
         var center = new fabric.Point(canvas.width / 2, canvas.height / 2);
         lastFillColor = $('#propFillColor').val();
         lastStrokeColor = $('#propStrokeColor').val();
-        diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#prop-' + $('#propType').val()).val(), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
+        diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#prop-' + $('#propType').val()).val().replace('.png','.svg'), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
     }
 }
 
@@ -897,10 +896,11 @@ function changeObject(o) {
 }
 
 function toggleToolbar(mode) {
-    if ($('#toolbar-body').is(':hidden')) {
+ //   if ($('#toolbar-body').is(':hidden')) {
+    if ($('#toolbar-body').width() === 0) {
         openToolbar(mode);
     } else {
-        if (toolbarMode === mode)
+        if (activeToolbar === mode)
             closeToolbar();
         else
             openToolbar(mode);
@@ -908,12 +908,17 @@ function toggleToolbar(mode) {
 }
 
 function openToolbar(mode) {
+    if (!toolbarState || mode !== activeToolbar)
+        $('#toolbar-body').animate({width: Math.min($('#diagram_jumbotron').width()-60, settings[mode])}, {duration: 200, step: function() {
+                if (mode === 'opnotes')
+                    $("#opnotes").setGridWidth(Math.max($('#opsForm').width()-5, 400));
+            }
+        });
     toolbarState = true;
-    toolbarMode = mode;
+    activeToolbar = mode;
     switch(mode) {
         case 'tools':
-            activeToolbar = 'tools';
-            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tools']));
+            //$('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tools']));
             $('#toolsForm').show();
             $('#tasksForm').hide();
             $('#notesForm').hide();
@@ -944,7 +949,7 @@ function openToolbar(mode) {
                 $('#propFillColor').val(lastFillColor);
                 $('#propStrokeColor').val(lastStrokeColor);
                 $('#propType').val('icon');
-                $('#prop-icon').val('00-000-icon-hub.svg');
+                $('#prop-icon').val('00-000-icon-hub.png');
                 $('#prop-icon').data('picker').sync_picker_with_select();
                 $('#propObjectGroup').tabs('enable');
                 $('#propObjectGroup').tabs('option', 'active', 0);
@@ -955,8 +960,6 @@ function openToolbar(mode) {
             }
             break;
         case 'tasks':
-            activeToolbar = 'tasks';
-            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tasks']));
             $('#toolsForm').hide();
             $('#tasksForm').show();
             $('#notesForm').hide();
@@ -965,8 +968,6 @@ function openToolbar(mode) {
             $('#logForm').hide();
             break;
         case 'notes':
-            activeToolbar = 'notes';
-            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['notes']));
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').show();
@@ -974,23 +975,19 @@ function openToolbar(mode) {
             $('#filesForm').hide();
             $('#logForm').hide();
             break;
-        case 'ops':
-            activeToolbar = 'opnotes';
-            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['opnotes']));
+        case 'opnotes':
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').hide();
             $('#opsForm').show();
             $('#logForm').hide();
             setTimeout(function() {
-                $("#opnotes").setGridHeight($('#opsForm').height()-65);
+                $("#opnotes").setGridHeight($('#opsForm').height()-70);
                 $("#opnotes").setGridWidth($('#opsForm').width()-5); 
             }, 10);
             $('#filesForm').hide();
             break;
         case 'files':
-            activeToolbar = 'files';
-            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['files']));
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').hide();
@@ -999,8 +996,6 @@ function openToolbar(mode) {
             $('#logForm').hide();
             break;
         case 'log':
-            activeToolbar = 'log';
-            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['log']));
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').hide();
@@ -1009,15 +1004,12 @@ function openToolbar(mode) {
             $('#logForm').show();
         break;
     }
-    // edit
-    if ($('#toolbar-body').is(':hidden')) {
-        $('#toolbar-body').show();
-    }
 }
 
 function closeToolbar() {
     toolbarState = false;
-    $('#toolbar-body').hide();
+    //$('#toolbar-body').hide();
+    $('#toolbar-body').animate({width: "0px"}, 200);
 }
 
 function timestamp(str){
@@ -1081,8 +1073,9 @@ function startTasks() {
     }
 }
 
-function downloadDiagram() {
-    window.open(canvas.toDataURL('png'));
+function downloadDiagram(link) {
+    link.href = canvas.toDataURL('png');
+    link.download = 'diagram.png';
 }
 
 function downloadOpnotes() {
@@ -1522,7 +1515,7 @@ $(document).ready(function() {
                 if (canvas.getActiveObject() !== null && canvas.getActiveObject() !== undefined && (canvas.getActiveObject().objType === 'icon' || canvas.getActiveObject().objType === 'shape')) {
                     var obj = canvas.getActiveObject();
                     var oldZ = canvas.getObjects().indexOf(canvas.getActiveObject());
-                    obj.image = $(this).val();
+                    obj.image = $(this).val().replace('.png','.svg');
                     var type = $(this).val().split('-')[2];
                     if (obj.objType !== type)
                         return;
@@ -1988,12 +1981,12 @@ $(document).ready(function() {
     $("#toolbar-body").resizable({ handles: 'w', maxWidth: $('#diagram_jumbotron').width()-60 });
     $("#toolbar-body").on("resize", function(event, ui) {
         settings[activeToolbar] = Math.round($('#toolbar-body').width());
-        $("#opnotes").setGridWidth($('#opsForm').width()-5);
+        $("#opnotes").setGridWidth(Math.max($('#opsForm').width()-5, 800));
         updateSettings();
     }); 
     $('#diagram_jumbotron').on('resize', function(event, ui) {
         settings.diagram = Math.round($('#diagram_jumbotron').height());
-        $("#opnotes").setGridHeight($('#opsForm').height()-65);
+        $("#opnotes").setGridHeight($('#opsForm').height()-70);
         updateSettings();
         resizeCanvas();
     });

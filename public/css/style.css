@@ -152,12 +152,6 @@ td a {
     display: none;
 }
 
-#downloadOpnotes {
-    position: absolute;
-    left: 15px;
-    bottom: 15px;
-}
-
 .noUi-handle:after, .noUi-handle:before {
     background: none;
 }
@@ -346,9 +340,8 @@ td a {
 }
 
 #newObjectButton {
-    position: absolute;
-    top: 10px;
-    right: 5px;
+    position: relative;
+    margin-left: 75px;
 }
 
 #taskGroup {
@@ -389,7 +382,7 @@ input[type="password"] {
 }
 
 #propObjectGroup {
-    height:300px;
+    height: 300px;
     overflow-x: hidden;
 }
 
@@ -478,6 +471,7 @@ input[type="password"] {
 }
 
 .nav-button {
+    line-height: 16px;
     background-color: darkgray;
     margin-top: 4px;
     border-radius: 4px 0px 0px 4px;
@@ -510,12 +504,14 @@ input[type="password"] {
   left:0 !important;
 }
 
-.toolbar-body {
-    width: 400px;
-    min-width: 250px;
-    height: 100%;
+.toolbar-form {
     padding: 10px;
-    display: none;
+    min-width: 300px;
+}
+
+.toolbar-body {
+    width: 0px;
+    height: 100%;
     border-left: 1px black solid;
     background-color: #efefef;
 }
@@ -526,10 +522,10 @@ input[type="password"] {
     height: 40px;
 }
 
-.thumbnails.image_picker_selector img {
+/*.thumbnails.image_picker_selector img {
     width: 36px;
     height: 36px;
-}
+}*/
 
 table {
     font-size: 14px;

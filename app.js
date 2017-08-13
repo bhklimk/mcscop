@@ -832,6 +832,10 @@ app.get('/config', function (req, res) {
     }
 });
 
+function getPNGs(name) {
+    return name.endsWith('.png');
+}
+
 app.get('/cop', function (req, res) {
     var icons = [];
     var shapes = [];
@@ -841,7 +845,7 @@ app.get('/cop', function (req, res) {
             fs.readdir('./public/images/icons', function(err, icons) {
                 fs.readdir('./public/images/shapes', function(err, shapes) {
                     fs.readdir('./public/images/links', function(err, links) {
-                        res.render('cop', { title: 'MCSCOP', permissions: req.session.permissions, icons: icons, shapes: shapes, links: links});
+                        res.render('cop', { title: 'MCSCOP', permissions: req.session.permissions, icons: icons.filter(getPNGs), shapes: shapes.filter(getPNGs), links: links.filter(getPNGs)});
                     });
                 });
             });

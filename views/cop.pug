@@ -36,25 +36,25 @@ html
             div.nav-button#toolsButton(onclick='toggleToolbar("tools")') T<br>O<br>O<br>L<br>S
             div.nav-button#tasksButton(onclick='toggleToolbar("tasks")') T<br>A<br>S<br>K<br>S
             div.nav-button#notesButton(onclick='toggleToolbar("notes")') N<br>O<br>T<br>E<br>S
-            div.nav-button#opsButton(onclick='toggleToolbar("ops")') O<br>P<br>S
+            div.nav-button#opsButton(onclick='toggleToolbar("opnotes")') O<br>P<br>S
             div.nav-button#filesButton(onclick='toggleToolbar("files")') F<br>I<br>L<br>E<br>S
             div.nav-button#logButton(onclick='toggleToolbar("log")') L<br>O<br>G
           div.toolbar-body#toolbar-body
-            div#opsForm
+            div#opsForm.toolbar-form
               table#opnotes
               div#opnotesPager
               button.btn.btn-primary#downloadOpnotes(onclick='downloadOpnotes()') Download
-            div#notesForm
+            div#notesForm.toolbar-form
               textarea#notes
-            div#tasksForm
+            div#tasksForm.toolbar-form
               textarea.tasks#hostTasks
               textarea.tasks#networkTasks
               textarea.tasks#ccirs
-            div#filesForm
+            div#filesForm.toolbar-form
               div#files
               div#progressbar-container
                 div#progressbar
-            form#toolsForm
+            form#toolsForm.toolbar-form
               span.toolbarTitle#toolbarTitle Edit Object
               button.propButton.btn.btn-success#newObjectButton(type='button' disabled) New!
               input(type="hidden", name="id")#propID
@@ -97,7 +97,7 @@ html
                   button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
                   button.propButton.btn.btn-danger#deleteObjectButton(type='button') Delete
                   button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
-            div#logForm
+            div#logForm.toolbar-form
               div#log
               input(type="text", name="message-input-box")#message-input-box.message-input-box
       div.jumbotron#events
@@ -109,7 +109,7 @@ html
         span(style='margin-right: 10px;')
           button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
         span
-          button.btn.btn-primary#downloadEvents(onclick='downloadDiagram()') Download Diagram
+          a.btn.btn-primary#downloadEvents(onclick='downloadDiagram(this)') Download Diagram
 script var permissions = "#{permissions}".split(',');
 script(src='js/jquery.js')
 script(src='js/grid.locale-en.js')
