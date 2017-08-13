@@ -1,5 +1,6 @@
 if (!permissions)
     permissions = [];
+var earliest_message = 2147483647000;
 var diagram_rw = false;
 if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !== -1) {
     diagram_rw = true;
@@ -7,7 +8,6 @@ if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !
     $("#newObjectButton").prop('disabled', false).click(newObject);
     $("#propFillColor").prop('disabled', false);
     $("#propStrokeColor").prop('disabled', false);
-    $("#propIcon").prop('disabled', false);
     $("#moveUp").prop('disabled', false).click(moveUp);
     $("#moveDown").prop('disabled', false).click(moveDown);
     $("#moveToFront").prop('disabled', false).click(moveToFront);
@@ -46,7 +46,7 @@ var background = new fabric.Canvas('background', {
 MAXWIDTH=4000;
 MAXHEIGHT=4000;
 
-var settings = {'zoom': 1.0, 'x': 0, 'y': 0, 'diagram': 700, 'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400};
+var settings = {'zoom': 1.0, 'x': 0, 'y': 0, 'diagram': 700, 'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400, 'log': 400};
 var creatingLink = false;
 var firstObject = null;
 var scale = 1;
@@ -220,8 +220,12 @@ fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
                 }
             }
             $('#propType').val(o.objType);
-            $('#propIcon').val(o.image);
-            $('#propIcon').data('picker').sync_picker_with_select();
+            $('#prop-' + o.objType).val(o.image);
+            $('#propObjectGroup').tabs('disable');
+            var index = $('#propObjectGroup a[href="#tabs-' + o.objType + '"]').parent().index();
+            $('#propObjectGroup').tabs('enable', index);
+            $('#propObjectGroup').tabs('option', 'active', index);
+            $('#prop-' + o.objType).data('picker').sync_picker_with_select();
             openToolbar('tools');
         }
     } else {
@@ -245,7 +249,7 @@ canvas.on('object:selected', function(options) {
                             var z = canvas.getObjects().indexOf(firstNode) - 1;
                             if (canvas.getObjects().indexOf(o) < z)
                                 z = canvas.getObjects().indexOf(o) - 1;
-                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#propIcon').val(), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
+                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val(), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
                             firstNode = null;
                             creatingLink = false;
                         }
@@ -262,8 +266,12 @@ canvas.on('object:selected', function(options) {
                         }
                     }
                     $('#propType').val(o.objType);
-                    $('#propIcon').val(o.image);
-                    $('#propIcon').data('picker').sync_picker_with_select();
+                    $('#prop-' + o.objType).val(o.image);
+                    $('#prop-' + o.objType).data('picker').sync_picker_with_select();
+                    $('#propObjectGroup').tabs('disable');
+                    var index = $('#propObjectGroup a[href="#tabs-' + o.objType + '"]').parent().index();
+                    $('#propObjectGroup').tabs('enable', index);
+                    $('#propObjectGroup').tabs('option', 'active', index);
                     openToolbar('tools');
                 }
             }
@@ -347,6 +355,31 @@ function checkIfShapesCached(msg) {
             checkIfShapesCached(msg);
         }, 50);
     }
+}
+
+// ---------------------------- CHAT / LOG WINDOW  ----------------------------------
+function addLogMessage(msg) {
+    var lf = $('#log');
+    if (msg.more && !msg.prepend)
+        lf.append('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
+    for (var i = 0; i < msg.messages.length; i++) {
+        var ts = msg.messages[i].timestamp;
+        if (ts < earliest_message) {
+            earliest_message = ts;
+        }
+        if (msg.prepend)
+            lf.prepend('<div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
+        else
+            lf.append('<div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
+    }
+    if (msg.more && msg.prepend)
+        lf.prepend('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
+    $('#log').scrollTop($('#log')[0].scrollHeight);
+}
+
+function getMoreMessages() {
+    $('#get-more-messages').remove();
+    diagram.send(JSON.stringify({act:'get_log', arg: {mission: mission, start_from: earliest_message}}));
 }
 
 // ---------------------------- SETTINGS COOKIE ----------------------------------
@@ -457,9 +490,10 @@ function getOpnoteSubGridData(id) {
 }
 
 function epochToDateString(value){
-    if (isNaN(value))
+    if (isNaN(value)) {
         return value;
-    var date = new Date(value);
+    }
+    var date = new Date(parseInt(value));
     return (date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds());
     
 }
@@ -742,8 +776,12 @@ function insertObject() {
         insertLink();
     else {
         var center = new fabric.Point(canvas.width / 2, canvas.height / 2);
-        diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#propIcon').val(), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
+        diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#prop-' + $('#propType').val()).val(), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
     }
+}
+
+function sendLogMessage(msg) {
+    diagram.send(JSON.stringify({act: 'insert_log', arg: {text: msg}}));
 }
 
 function deleteObject() {
@@ -876,87 +914,106 @@ function toggleToolbar(mode) {
 function openToolbar(mode) {
     toolbarState = true;
     toolbarMode = mode;
-    if (mode === 'tools') {
-        activeToolbar = 'tools';
-        $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tools']));
-        $('#toolsForm').show();
-        $('#tasksForm').hide();
-        $('#notesForm').hide();
-        $('#opsForm').hide();
-        $('#filesForm').hide();
-    } else if (mode === 'tasks') {
-        activeToolbar = 'tasks';
-        $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tasks']));
-        $('#toolsForm').hide();
-        $('#tasksForm').show();
-        $('#notesForm').hide();
-        $('#opsForm').hide();
-        $('#filesForm').hide();
-    } else if (mode === 'notes') {
-        activeToolbar = 'notes';
-        $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['notes']));
-        $('#toolsForm').hide();
-        $('#tasksForm').hide();
-        $('#notesForm').show();
-        $('#opsForm').hide();
-        $('#filesForm').hide();
-    } else if (mode === 'ops') {
-        activeToolbar = 'opnotes';
-        $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['opnotes']));
-        $('#toolsForm').hide();
-        $('#tasksForm').hide();
-        $('#notesForm').hide();
-        $('#opsForm').show();
-        setTimeout(function() {
-            $("#opnotes").setGridHeight($('#opsForm').height()-65);
-            $("#opnotes").setGridWidth($('#opsForm').width()-5); 
-        }, 10);
-        $('#filesForm').hide();
-    } else if (mode === 'files') {
-        activeToolbar = 'files';
-        $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['files']));
-        $('#toolsForm').hide();
-        $('#tasksForm').hide();
-        $('#notesForm').hide();
-        $('#opsForm').hide();
-        $('#filesForm').show();
+    switch(mode) {
+        case 'tools':
+            activeToolbar = 'tools';
+            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tools']));
+            $('#toolsForm').show();
+            $('#tasksForm').hide();
+            $('#notesForm').hide();
+            $('#opsForm').hide();
+            $('#filesForm').hide();
+            $('#logForm').hide();
+            if (canvas.getActiveObject()) {
+                if (diagram_rw)
+                    $('#toolbarTitle').html('Edit Object');
+                else
+                    $('#toolbarTitle').text('View Object');
+                $('#propNameGroup').show();
+                $('#propObjectGroup').show();
+                if (canvas.getActiveObject().objType && canvas.getActiveObject().objType === 'link') {
+                    $('#propFillColor').hide();
+                } else
+                    $('#propFillColor').show();
+                $('#editDetailsButton').show();
+                $('#deleteObjectButton').show();
+                $('#insertObjectButton').hide();
+                $('#newObjectButton').show();
+            } else if (canvas.getActiveObject() === undefined || canvas.getActiveObject() === null) {
+                $('#toolbarTitle').html('New Object');
+                $('#propID').val('');
+                $('#propNameGroup').show();
+                $('#propName').val('');
+                $('#propFillColor').show();
+                $('#propFillColor').val('#000000');
+                $('#propStrokeColor').val('#ffffff');
+                $('#propType').val('icon');
+                $('#prop-icon').val('00-000-icon-hub.svg');
+                $('#prop-icon').data('picker').sync_picker_with_select();
+                $('#propObjectGroup').tabs('enable');
+                $('#propObjectGroup').tabs('option', 'active', 0);
+                $('#newObjectButton').hide();
+                $('#editDetailsButton').hide();
+                $('#deleteObjectButton').hide();
+                $('#insertObjectButton').show();
+            }
+            break;
+        case 'tasks':
+            activeToolbar = 'tasks';
+            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tasks']));
+            $('#toolsForm').hide();
+            $('#tasksForm').show();
+            $('#notesForm').hide();
+            $('#opsForm').hide();
+            $('#filesForm').hide();
+            $('#logForm').hide();
+            break;
+        case 'notes':
+            activeToolbar = 'notes';
+            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['notes']));
+            $('#toolsForm').hide();
+            $('#tasksForm').hide();
+            $('#notesForm').show();
+            $('#opsForm').hide();
+            $('#filesForm').hide();
+            $('#logForm').hide();
+            break;
+        case 'ops':
+            activeToolbar = 'opnotes';
+            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['opnotes']));
+            $('#toolsForm').hide();
+            $('#tasksForm').hide();
+            $('#notesForm').hide();
+            $('#opsForm').show();
+            $('#logForm').hide();
+            setTimeout(function() {
+                $("#opnotes").setGridHeight($('#opsForm').height()-65);
+                $("#opnotes").setGridWidth($('#opsForm').width()-5); 
+            }, 10);
+            $('#filesForm').hide();
+            break;
+        case 'files':
+            activeToolbar = 'files';
+            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['files']));
+            $('#toolsForm').hide();
+            $('#tasksForm').hide();
+            $('#notesForm').hide();
+            $('#opsForm').hide();
+            $('#filesForm').show();
+            $('#logForm').hide();
+            break;
+        case 'log':
+            activeToolbar = 'log';
+            $('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['log']));
+            $('#toolsForm').hide();
+            $('#tasksForm').hide();
+            $('#notesForm').hide();
+            $('#opsForm').hide();
+            $('#filesForm').hide();
+            $('#logForm').show();
+        break;
     }
     // edit
-    if (canvas.getActiveObject()) {
-        if (diagram_rw)
-            $('#toolbarTitle').html('Edit Object');
-        else
-            $('#toolbarTitle').text('View Object');
-        $('#propNameGroup').show();
-        $('#propObjectGroup').show();
-        if (canvas.getActiveObject().objType && canvas.getActiveObject().objType === 'link')
-            $('#propFillColor').hide();
-        else
-            $('#propFillColor').show();
-        $('#editDetailsButton').show();
-        $('#deleteObjectButton').show();
-        $('#insertObjectButton').hide();
-        $('#newObjectButton').show();
-    } else if (canvas.getActiveObject() === undefined || canvas.getActiveObject() === null) {
-        $('#toolbarTitle').html('New Object');
-        $('#propID').val('');
-        $('#propNameGroup').show();
-        $('#propName').val('');
-        $('#propFillColor').show();
-        $('#propFillColor').val('#000000');
-        $('#propStrokeColor').val('#ffffff');
-        $('#propShapeGroup').hide();
-        $('#propIconGroup').show();
-        $('#propType').val('icon');
-        $('#propIcon').val('00-000-icon-hub.svg');
-        $('#propIcon').data('picker').sync_picker_with_select();
-        $('#newObjectButton').hide();
-        $('#editDetailsButton').hide();
-        $('#deleteObjectButton').hide();
-        $('#insertObjectButton').show();
-    } else {
-        return;
-    }
     if ($('#toolbar-body').is(':hidden')) {
         $('#toolbar-body').show();
     }
@@ -1147,8 +1204,8 @@ function checkTime(i) {
     return i;
 }
 
-function deleteRow(table, id) {
-    diagram.send(JSON.stringify({act: 'delete_event', arg: {id: id}}));
+function deleteRow(type, table, id) {
+    diagram.send(JSON.stringify({act: 'delete_' + type, arg: {id: id}}));
     $(table).jqGrid('delRowData', id);
 }
 
@@ -1195,10 +1252,15 @@ $(document).ready(function() {
         diagram.send(JSON.stringify({act:'get_events', arg: mission}));
         console.log('get opnotes');
         diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
+        console.log('get log history');
+        diagram.send(JSON.stringify({act:'get_log', arg: {mission: mission}}));
     };
     diagram.onmessage = function(msg) {
         msg = JSON.parse(msg.data);
         switch(msg.act) {
+            case 'log':
+                addLogMessage(msg.arg);
+                break;
             case 'disco':
                 canvas.clear();
                 canvas.renderAll();
@@ -1442,36 +1504,42 @@ $(document).ready(function() {
     startTasks();
 
     // ---------------------------- IMAGE PICKER ----------------------------------
-    $('#propIcon').imagepicker({
-        hide_select : true,
-        initialized: function() {
-            if (!diagram_rw)
-                $("#propObjectGroup").find("div").unbind('click');
-        },
-        selected : function() {
-            if (!diagram_rw)
-                
-                return;
-            if (canvas.getActiveObject() !== null && canvas.getActiveObject() !== undefined && (canvas.getActiveObject().objType === 'icon' || canvas.getActiveObject().objType === 'shape')) {
-                var obj = canvas.getActiveObject();
-                var oldZ = canvas.getObjects().indexOf(canvas.getActiveObject());
-                obj.image = $(this).val();
-                var type = $(this).val().split('-')[2];
-                if (obj.objType !== type)
-                    return;
-                updatingObject = true;
-                updatingObject = false;
-                changeObject(obj);
-            } else {
-                var type = $(this).val().split('-')[2];
-                if (type === 'link') {
-                    $('#propFillColor').hide();
-                    $('#propStrokeColor').val('#1f1f1f1f');
-                } else
-                    $('#propFillColor').show();
-                $('#propType').val(type)
-            }
+    $('#propObjectGroup').tabs({
+        beforeActivate: function(e, u) {
+            $('#propType').val(u.newPanel.attr('id').split('-')[1]);
         }
+    });
+    $.each(['icon','shape','link'], function(i, v) {
+        $('#prop-' + v).imagepicker({
+            hide_select : true,
+            initialized: function() {
+                if (!diagram_rw)
+                    $("#propObjectGroup").find("div").unbind('click');
+            },
+            selected : function() {
+                if (!diagram_rw)
+                    return;
+                if (canvas.getActiveObject() !== null && canvas.getActiveObject() !== undefined && (canvas.getActiveObject().objType === 'icon' || canvas.getActiveObject().objType === 'shape')) {
+                    var obj = canvas.getActiveObject();
+                    var oldZ = canvas.getObjects().indexOf(canvas.getActiveObject());
+                    obj.image = $(this).val();
+                    var type = $(this).val().split('-')[2];
+                    if (obj.objType !== type)
+                        return;
+                    updatingObject = true;
+                    changeObject(obj);
+                    updatingObject = false;
+                } else {
+                    var type = $(this).val().split('-')[2];
+                    if (type === 'link') {
+                        $('#propFillColor').hide();
+                        $('#propStrokeColor').val('#1f1f1f1f');
+                    } else
+                        $('#propFillColor').show();
+                    $('#propType').val(type)
+                }
+            }
+        });
     });
 
     // ---------------------------- DIAGRAM ----------------------------------
@@ -1602,21 +1670,26 @@ $(document).ready(function() {
         }
     });
     // ---------------------------- JQGRIDS ----------------------------------
+    var lastselection;
     $("#opnotes").jqGrid({
         datatype: 'local',
         cellsubmit: 'clientArray',
-        cellEdit: true,
         editurl: 'clientArray',
-        sortable: true,
         data: [],
         height: 300,
+        cellEdit: true,
+        sortable: true,
+        pager: '#opnotesPager',
+        pgbuttons: false,
+        pgtext: null,
+        viewrecords: false,
         colModel: [
             { label: 'Id', name: 'id', hidden: true, key: true, editable: false },
             { label: ' ', template: 'actions', formatter: function(cell, options, row) {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!opnotes_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
                 width: 15,
@@ -1648,6 +1721,12 @@ $(document).ready(function() {
             { label: 'Action', name: 'action', width: 75, editable: true },
             { label: 'Analyst', name: 'analyst', width: 40, editable: false },
         ],
+        onSelectRow: function() {
+            return false;
+        },
+        beforeSelectRow: function(rowid, e) {
+            return false;
+        },
         beforeEditCell: function (id) {
             if (lastselection && lastselection !== id) {
                 $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
@@ -1660,16 +1739,17 @@ $(document).ready(function() {
             lastselection = id;
         },
         beforeSaveCell: function(options, col, value) {
+            $("table#opnotes tr#"+$.jgrid.jqID(options)+ " div.ui-inline-del").show();
+            $("table#opnotes tr#"+$.jgrid.jqID(options)+ " div.ui-inline-save").hide();
+            $("table#opnotes tr#"+$.jgrid.jqID(options)+ " div.ui-inline-cancel").hide();
+            lastselection = null;
             var data = $('#opnotes').getRowData(options);
             data[col] = value;
             if (data.event_time)
                 data.event_time = dateStringToEpoch(data.event_time);
+            delete data.actions;
             diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
-        },
-        pager: '#opnotesPager',
-        pgbuttons: false,
-        pgtext: null,
-        viewrecords: false
+        }
     });
     $('#opnotes').jqGrid('navGrid', '#opnotesPager', {
         add: false,
@@ -1692,6 +1772,7 @@ $(document).ready(function() {
                             data.mission = mission;
                             $('#opnotes').jqGrid('restoreRow', id, function(){});
                             data.event_time = dateStringToEpoch(data.event_time);
+                            delete data.actions;
                             diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
                         },
                         oneditfunc: function(id) {
@@ -1710,9 +1791,6 @@ $(document).ready(function() {
             }
         });
     }
-
-    var lastSelection;
-    var lastselection;
     $("#events2").jqGrid({
         datatype: 'local',
         cellsubmit: 'clientArray',
@@ -1725,7 +1803,6 @@ $(document).ready(function() {
         pgbuttons: false,
         pgtext: null,
         viewrecords: false,
-        hoverrows: false,
         toolbar: [true, "top"],
         subGridRowExpanded: function(subgridId, rowid) {
             var subgridTableId = subgridId + "_t";
@@ -1749,7 +1826,7 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!events_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
                 width: 15,
@@ -1825,12 +1902,17 @@ $(document).ready(function() {
             lastselection = id;
         },
         beforeSaveCell: function (options, col, value) {
+            $("table#events2 tr#"+$.jgrid.jqID(options)+ " div.ui-inline-del").show();
+            $("table#events2 tr#"+$.jgrid.jqID(options)+ " div.ui-inline-save").hide();
+            $("table#events2 tr#"+$.jgrid.jqID(options)+ " div.ui-inline-cancel").hide();
+            lastselection = null;
             var data = $('#events2').getRowData(options);
             data[col] = value;
             if (data.event_time)
                 data.event_time = dateStringToEpoch(data.event_time);
             if (data.discovery_time)
                 data.discovery_time = dateStringToEpoch(data.discovery_time);
+            delete data.actions;
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
         }
     });
@@ -1856,6 +1938,7 @@ $(document).ready(function() {
                             $('#events2').jqGrid('restoreRow', id, function(){});
                             data.event_time = dateStringToEpoch(data.event_time);
                             data.discovery_time = dateStringToEpoch(data.discovery_time);
+                            delete data.actions;
                             diagram.send(JSON.stringify({act: 'insert_event', arg: data}));
                         },
                         oneditfunc: function(id) {
@@ -1874,13 +1957,11 @@ $(document).ready(function() {
             }
         });
     }
-
     $('#t_events2').append($("<div><input id=\"globalSearchText\" type=\"text\"></input>&nbsp;" +
         "<button id=\"globalSearch\" type=\"button\">Search</button></div>"));
-
     $("#globalSearchText").keypress(function (e) {
         var key = e.charCode || e.keyCode || 0;
-        if (key === $.ui.keyCode.ENTER) { // 13
+        if (key === $.ui.keyCode.ENTER) {
             $("#globalSearch").click();
         }
     });
@@ -1909,7 +1990,6 @@ $(document).ready(function() {
         $grid.trigger("reloadGrid", [{page: 1, current: true}]);
         return false;
     });
-
     // ---------------------------- MISC ----------------------------------
     $("#diagram_jumbotron").resizable({ handles: 's', minHeight: 100 });
     $("#toolbar-body").resizable({ handles: 'w', maxWidth: $('#diagram_jumbotron').width()-60 });
@@ -1926,6 +2006,13 @@ $(document).ready(function() {
     });
     $("#events2").setGridWidth($('#events').width()-5);
     window.addEventListener('resize', resizeCanvas, false);
+    $("#message-input-box").keypress(function (e) {
+        var key = e.charCode || e.keyCode || 0;
+        if (key === $.ui.keyCode.ENTER) {
+            sendLogMessage($("#message-input-box").val());
+            $("#message-input-box").val('');
+        }
+    });
     resizeCanvas();
     loadSettings();
 });

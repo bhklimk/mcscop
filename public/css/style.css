@@ -25,6 +25,37 @@ td a {
 
 }
 
+.message-sender {
+    font-weight: 900;
+    color: #2C2D30;
+    line-height: 18px;
+    margin-right: 4px;
+}
+
+.message-time {
+    color: #9e9ea6;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.message-input-box {
+    border-color: #717274;
+    border-radius: 6px !important;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+    width: 95%;
+    position: absolute;
+    bottom: 10px;
+}
+
+#get-more-messages {
+    cursor: pointer;
+    text-align: center;
+    margin-bottom: 5px;
+    text-decoration: underline;
+}
+
 #globalSearchText {
     height: 23px;
 }
@@ -92,13 +123,6 @@ td a {
     color: #444444;
 }
 
-.ui-state-highlight, .ui-state-hover {
-    border: none !important;
-    background: rgb(237, 237, 237) !important;
-    border-color: rgb(221, 221, 221) !important;
-    color: #333 !important;
-}
-
 .ui-state-highlight a, .ui-widget-content .ui-state-highlight a, .ui-widget-header .ui-state-highlight a {
     color: #333;
 }
@@ -132,6 +156,14 @@ td a {
     position: absolute;
     left: 15px;
     bottom: 15px;
+}
+
+.noUi-handle:after, .noUi-handle:before {
+    background: none;
+}
+
+.noUi-handle {
+    border: 1px solid #000;
 }
 
 .noUi-connect {
@@ -172,6 +204,17 @@ td a {
     min-height:32px !important
 }
 
+#log {
+    padding: 4px;
+    height: 100%;
+    overflow-y: scroll;
+}
+
+#logForm {
+    height: 100%;
+    padding-bottom: 30px;
+}
+
 #opsForm {
     height: 100%;
     padding-bottom: 50px;
@@ -196,7 +239,7 @@ td a {
     margin-left: 1px;
     margin-top: 5px;
     margin-bottom: 10px;
-    margin-right: 12px;
+    margin-right: 18px;
 }
 
 #toolsButton {
@@ -213,6 +256,10 @@ td a {
 
 #filesButton {
     background-color: #baa700;
+}
+
+#logButton {
+    background-color: #42a987;
 }
 
 .canvas-container {
@@ -343,7 +390,6 @@ input[type="password"] {
 
 #propObjectGroup {
     height:300px;
-    overflow: scroll;
     overflow-x: hidden;
 }
 
@@ -453,6 +499,7 @@ input[type="password"] {
 }
 
 .toolbar {
+    background-color: #fff;
     position: absolute;
     right: 0px;
     top: 0px;
@@ -470,7 +517,7 @@ input[type="password"] {
     padding: 10px;
     display: none;
     border-left: 1px black solid;
-    background-color: lightgray;
+    background-color: #efefef;
 }
 
 .thumbnail {

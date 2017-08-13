@@ -7,6 +7,8 @@ var WebSocketJSONStream = require('websocket-json-stream');
 var http = require('http').Server(app);
 var session = require('express-session');
 var MySQLStore = require('express-mysql-session')(session);
+var validator = require('express-validator');
+var xssFilters = require('xss-filters');
 var cookieParser = require('cookie-parser');
 var bcrypt = require('bcrypt-nodejs');
 var bodyParser = require('body-parser');
@@ -17,7 +19,7 @@ var path = require('path');
 var mysqlOptions = {
     host : 'localhost',
     user : 'mcscop',
-    password : 'mcscoppassword123',
+    password : 'MCScoppass123!@#',
     database: 'mcscop',
 };
 var sessionStore = new MySQLStore(mysqlOptions);
@@ -51,6 +53,13 @@ app.set('view engine', 'pug');
 app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(validator());
+app.use(function(req, res, next) {
+    for (var item in req.body) {
+        req.sanitize(item).escape();
+    }
+    next();
+});
 app.use(sessionMiddleware);
 
 connection.connect();
@@ -197,6 +206,39 @@ ws.on('connection', function(socket) {
                         rooms.set(msg.arg, new Set());
                     rooms.get(msg.arg).add(socket);
                     break;
+                case 'insert_log':
+                    msg.arg.analyst = socket.username;
+                    msg.arg.text = xssFilters.inHTMLData(msg.arg.text);
+                    msg.arg.timestamp = (new Date).getTime();
+                    connection.query('INSERT INTO log (mission, analyst, text, timestamp) values (?, ?, ?, ?)', [socket.mission, socket.user_id, msg.arg.text, msg.arg.timestamp], function (err, results) {
+                        if (!err) {
+                            sendToRoom(socket.room, JSON.stringify({act:'log', arg:{prepend:false, more:false, messages:[msg.arg]}}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'get_log':
+                    var mission = msg.arg.mission;
+                    var start_from = 0;
+                    var args = [mission];
+                    var prepend = false;
+                    var more = false;
+                    var query = 'SELECT * FROM (SELECT (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, text, timestamp FROM log WHERE deleted = 0 AND mission = ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp ASC';
+                    if (msg.arg.start_from !== undefined && !isNaN(msg.arg.start_from)) {
+                        console.log(msg, msg.arg.start_from);
+                        prepend = true;
+                        args = [mission, parseInt(msg.arg.start_from)];
+                        query = 'SELECT * FROM (SELECT (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, text, timestamp FROM log WHERE deleted = 0 AND mission = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp DESC';
+                    }
+                    connection.query(query, args, function(err, rows, fields) {
+                        if (rows.length == 50)
+                            more = true;
+                        if (!err) {
+                            socket.send(JSON.stringify({act:'log', arg:{prepend:prepend, more: more, messages:rows}}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
                 case 'get_objects':
                     var mission = msg.arg;
                     connection.query('SELECT * FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [mission], function(err, rows, fields) {
@@ -234,6 +276,8 @@ ws.on('connection', function(socket) {
                     break;
                 case 'change_object':
                     var o = msg.arg;
+                    o.name = xssFilters.inHTMLData(o.name);
+                    o.image = xssFilters.inHTMLData(o.image);
                     if (o.type !== undefined && hasPermission(socket.permissions, 'modify_diagram')) {
                         if (o.type === 'icon' || o.type === 'shape') {
                             connection.query('UPDATE objects SET name = ?, fill_color = ?, stroke_color = ?, image = ? WHERE uuid = ?', [o.name, o.fill_color, o.stroke_color, o.image, o.uuid], function (err, results) {
@@ -290,15 +334,21 @@ ws.on('connection', function(socket) {
                     }
                     break;
                 case 'update_event':
-                    if (hasPermission(socket.permissions, 'create_events')) {
+                    if (hasPermission(socket.permissions, 'modify_events')) {
                         var evt = msg.arg;
+                        evt.event_time = xssFilters.inHTMLData(evt.event_time);
+                        evt.discovery_time = xssFilters.inHTMLData(evt.discovery_time);
+                        evt.source_port = xssFilters.inHTMLData(evt.source_port);
+                        evt.dest_port = xssFilters.inHTMLData(evt.dest_port);
+                        evt.event_type = xssFilters.inHTMLData(evt.event_type);
+                        evt.short_desc = xssFilters.inHTMLData(evt.short_desc);
                         if (evt.source_port === '')
                             evt.source_port = null;
                         if (evt.dest_port === '')
                             evt.dest_port = null;
                         connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.id], function (err, results) {
                             if (!err) {
-                                sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: msg.arg}), socket);
+                                sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: evt}), socket);
                             } else
                                 console.log(err);
                         });
@@ -307,6 +357,12 @@ ws.on('connection', function(socket) {
                 case 'insert_event':
                     if (hasPermission(socket.permissions, 'create_events')) {
                         var evt = msg.arg;
+                        evt.event_time = xssFilters.inHTMLData(evt.event_time);
+                        evt.discovery_time = xssFilters.inHTMLData(evt.discovery_time);
+                        evt.source_port = xssFilters.inHTMLData(evt.source_port);
+                        evt.dest_port = xssFilters.inHTMLData(evt.dest_port);
+                        evt.event_type = xssFilters.inHTMLData(evt.event_type);
+                        evt.short_desc = xssFilters.inHTMLData(evt.short_desc);
                         if (evt.source_port === '')
                             evt.source_port = null;
                         if (evt.dest_port === '')
@@ -315,6 +371,7 @@ ws.on('connection', function(socket) {
                         connection.query('INSERT INTO events (mission, event_time, discovery_time, source_object, source_port, dest_object, dest_port, event_type, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst], function (err, results) {
                             if (!err) {
                                 evt.id = results.insertId;
+                                connection.query('INSERT INTO log (mission, text, analyst) values (?, ?, ?)', [evt.mission, 'Created event ID: ' + evt.id + '.', evt.analyst]);
                                 evt.analyst = socket.username;
                                 sendToRoom(socket.room, JSON.stringify({act: 'insert_event', arg: evt}));
                             } else
@@ -337,10 +394,12 @@ ws.on('connection', function(socket) {
                     if (hasPermission(socket.permissions, 'create_opnotes')) {
                         var evt = msg.arg;
                         evt.analyst = socket.user_id;
+                        evt.short_tool = xssFilters.inHTMLData(evt.short_tool);
+                        evt.short_action = xssFilters.inHTMLData(evt.short_action);
                         connection.query('UPDATE opnotes SET event_time = ?, event = ?, source_object = ?, tool = ?, action = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.event, evt.source_object, evt.tool, evt.action, evt.analyst, evt.id], function (err, results) {
                             if (!err) {
                                 evt.analyst = socket.username;
-                                sendToRoom(socket.room, JSON.stringify({act: 'update_opnote', arg: msg.arg}), socket, socket.role);
+                                sendToRoom(socket.room, JSON.stringify({act: 'update_opnote', arg: evt}), socket, socket.role);
                             } else
                                 console.log(err);
                         });
@@ -355,6 +414,8 @@ ws.on('connection', function(socket) {
                                 var role = results[0].role;
                                 if (evt.event === '')
                                     evt.event = null;
+                                evt.short_tool = xssFilters.inHTMLData(evt.short_tool);
+                                evt.short_action = xssFilters.inHTMLData(evt.short_action);
                                 connection.query('INSERT INTO opnotes (mission, event, role, event_time, source_object, tool, action, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event, role, evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst], function (err, results) {
                                     if (!err) {
                                         evt.id = results.insertId;
@@ -402,6 +463,11 @@ ws.on('connection', function(socket) {
                                     scale_x = 64;
                                     scale_y = 64;
                                 }
+                                o.type = xssFilters.inHTMLData(o.type);
+                                o.name = xssFilters.inHTMLData(o.name);
+                                o.fill_color = xssFilters.inHTMLData(o.fill_color);
+                                o.stroke_color = xssFilters.inHTMLData(o.stroke_color);
+                                o.image = xssFilters.inHTMLData(o.image);
                                 connection.query('INSERT INTO objects (mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, x, y, o.z], function (err, results) {
                                     if (!err) {
                                         o.id = results.insertId;
@@ -415,6 +481,11 @@ ws.on('connection', function(socket) {
                                         console.log(err);
                                 });
                             } else if (o.type === 'link') {
+                                o.type = xssFilters.inHTMLData(o.type);
+                                o.name = xssFilters.inHTMLData(o.name);
+                                o.fill_color = xssFilters.inHTMLData(o.fill_color);
+                                o.stroke_color = xssFilters.inHTMLData(o.stroke_color);
+                                o.image = xssFilters.inHTMLData(o.image);
                                 connection.query('INSERT INTO objects (mission, type, name, stroke_color, image, obj_a, obj_b, z) values (?, ?, ?, ?, ?, ?, ?, ?)', [o.mission, o.type, o.name, o.stroke_color, o.image, o.obj_a, o.obj_b, o.z], function (err, results) {
                                     if (!err) {
                                         o.id = results.insertId;
@@ -761,11 +832,16 @@ app.get('/config', function (req, res) {
 });
 
 app.get('/cop', function (req, res) {
+    var icons = [];
+    var shapes = [];
+    var links = [];
     if (req.session.loggedin) {
         if (req.query.mission !== undefined && req.query.mission > 0) {
             fs.readdir('./public/images/icons', function(err, icons) {
                 fs.readdir('./public/images/shapes', function(err, shapes) {
-                    res.render('cop', { title: 'MCSCOP', permissions: req.session.permissions, icons: icons, shapes: shapes});
+                    fs.readdir('./public/images/links', function(err, links) {
+                        res.render('cop', { title: 'MCSCOP', permissions: req.session.permissions, icons: icons, shapes: shapes, links: links});
+                    });
                 });
             });
 
