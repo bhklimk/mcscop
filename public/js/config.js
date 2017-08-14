@@ -3,9 +3,44 @@ var lastSelection;
 if (!permissions)
     permissions = [];
 
+var f = function(e)
+{
+    var srcElement = e.srcElement? e.srcElement : e.target;
+    if ($.inArray('Files', e.dataTransfer.types) > -1)
+    {
+        e.stopPropagation();
+        e.preventDefault();
+        e.dataTransfer.dropEffect = ($(srcElement).hasClass('droppable')) ? 'copy' : 'none';
+        if (e.type == 'drop') {
+            var formData = new FormData();
+            $.each(e.dataTransfer.files, function(i, file) {
+                formData.append('file',file);
+            });
+            formData.append('id',e.target.id.split('_')[1]);
+            $.ajax({
+                url: 'avatar',
+                type: 'POST',
+                data: formData,
+                dataType: 'json',
+                cache: false,
+                contentType: false,
+                processData: false,
+                success: function() {
+                    $("#users").trigger("reloadGrid");
+                },
+                error: function() {
+                    console.log('upload error');
+                }
+            });
+        }
+    }
+};
+
 $(document).ready(function() {
+    document.body.addEventListener('dragleave', f, false);
+    document.body.addEventListener('dragover', f, false);
+    document.body.addEventListener('drop', f, false);
     var roles_rw = false;
-    console.log(permissions);
     if (permissions.indexOf('all') !== -1 || permissions.indexOf('manage_roles') !== -1)
         roles_rw = true;
 
@@ -104,6 +139,14 @@ $(document).ready(function() {
                 }
             },
             { label: 'id', name: 'id', key: true, editable: false, hidden: true },
+            { label: 'Avatar', name: 'avatar', width: 25, editable: false, formatter: function (c, o, r) {
+                    if (r.avatar !== null)
+                        return '<img class="droppable avatar" id="avatar_' + r.id + '" src="images/avatars/' + r.id + '.png"/>';
+                    else
+                        return '<img class="droppable avatar" id="avatar_' + r.id + '" src="images/avatars/blank.png"/>';
+//                    return '<img src="images/avatars/' + o.rowId + '.png"/>';
+                }
+            },
             { label: 'Username', name: 'username', width: 50, editable: users_rw, edittype: 'text' },
             { label: 'Name', name: 'name', width: 50, editable: users_rw, edittype: 'text' },
             { label: 'Set Password', name: 'password', width: 50, editable: users_rw, edittype: 'password' },

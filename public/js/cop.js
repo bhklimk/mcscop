@@ -365,9 +365,9 @@ function addLogMessage(msg) {
             earliest_message = ts;
         }
         if (msg.prepend)
-            lf.prepend('<div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
+            lf.prepend('<div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
         else
-            lf.append('<div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
+            lf.append('<div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div>');
     }
     if (msg.more && msg.prepend)
         lf.prepend('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
@@ -1734,6 +1734,7 @@ $(document).ready(function() {
             if (data.event_time)
                 data.event_time = dateStringToEpoch(data.event_time);
             delete data.actions;
+            data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
         }
     });
@@ -1899,6 +1900,7 @@ $(document).ready(function() {
             if (data.discovery_time)
                 data.discovery_time = dateStringToEpoch(data.discovery_time);
             delete data.actions;
+            data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
         }
     });

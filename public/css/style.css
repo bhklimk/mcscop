@@ -25,6 +25,27 @@ td a {
 
 }
 
+.avatar {
+    width: 48px;
+    height: 48px;
+}
+
+.message {
+    display: flex;
+}
+
+.message-gutter {
+    width: 36px;
+    left: 0px;
+    margin-right: 5px;
+    float: left;
+}
+
+.message-avatar {
+    width: 36px;
+    height: 36px;
+}
+
 .message-sender {
     font-weight: 900;
     color: #2C2D30;
@@ -206,7 +227,7 @@ td a {
 
 #logForm {
     height: 100%;
-    padding-bottom: 30px;
+    padding-bottom: 40px;
 }
 
 #opsForm {
