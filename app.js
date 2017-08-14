@@ -723,6 +723,8 @@ app.post('/api/:table', function (req, res) {
             }
         } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.username && req.body.name !== undefined && req.body.role !== undefined && req.body.permissions !== undefined) {
             bcrypt.hash(req.body.password, null, null, function(err, hash) {
+                if (req.body.role === '')
+                    req.body.role = null;
                 connection.query('INSERT INTO users (username, name, password, role, permissions) values (?, ?, ?, ?, ?)', [req.body.username, req.body.name, hash, req.body.role, req.body.permissions], function (err, results) {
                     if (!err) {
                         res.end(JSON.stringify('success'));
