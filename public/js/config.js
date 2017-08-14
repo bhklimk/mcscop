@@ -57,7 +57,10 @@ $(document).ready(function() {
             { label: ' ', name: 'actions', formatter: 'actions', width: 10, formatoptions: {
                     keys: true,
                     editbutton: false,
-                    delbutton: roles_rw
+                    delbutton: roles_rw,
+                    afterSave: function() {
+                        $("#roles").trigger("reloadGrid");           
+                    }
                 }
             },
             { label: 'Role Id', name: 'id', key: true, editable: false, hidden: true},
@@ -135,7 +138,10 @@ $(document).ready(function() {
             { label: ' ', name: 'actions', formatter: 'actions', width: 15, formatoptions: {
                     keys: true,
                     editbutton: false,
-                    delbutton: users_rw
+                    delbutton: users_rw,
+                    afterSave: function() {
+                        $("#users").trigger("reloadGrid");
+                    }
                 }
             },
             { label: 'id', name: 'id', key: true, editable: false, hidden: true },

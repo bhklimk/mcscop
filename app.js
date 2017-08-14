@@ -250,9 +250,17 @@ ws.on('connection', function(socket) {
                     break;
                 case 'get_events':
                     var mission = JSON.parse(msg.arg);
-                    connection.query('SELECT id, uuid, event_time, discovery_time, event_type, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst FROM events WHERE deleted = 0 AND mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
+                    connection.query('SELECT id, uuid, event_time, discovery_time, event_type, source_object, source_port, dest_object, dest_port, short_desc, (SELECT username FROM users WHERE users.id = analyst) as analyst, assignment FROM events WHERE deleted = 0 AND mission = ? ORDER BY event_time ASC', [mission], function(err, rows, fields) {
                         if (!err) {
                             socket.send(JSON.stringify({act:'all_events', arg:rows}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
+                case 'get_users':
+                    connection.query('SELECT id, username FROM users WHERE deleted = 0', [], function(err, rows, fields) {
+                        if (!err) {
+                            socket.send(JSON.stringify({act:'all_users', arg:rows}));
                         } else
                             console.log(err);
                     });
@@ -347,7 +355,7 @@ ws.on('connection', function(socket) {
                             evt.source_port = null;
                         if (evt.dest_port === '')
                             evt.dest_port = null;
-                        connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.id], function (err, results) {
+                        connection.query('UPDATE events SET event_time = ?, discovery_time = ?, source_object = ?, source_port = ?, dest_object = ?, dest_port = ?, event_type = ?, short_desc = ?, assignment = ? WHERE id = ?', [evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.assignment, evt.id], function (err, results) {
                             if (!err) {
                                 insertLogEvent(socket, 'Modified event: ' + evt.event_type + ' ID: ' + evt.id + '.');
                                 sendToRoom(socket.room, JSON.stringify({act: 'update_event', arg: evt}), socket);
@@ -370,7 +378,7 @@ ws.on('connection', function(socket) {
                         if (evt.dest_port === '')
                             evt.dest_port = null;
                         evt.analyst = socket.user_id;
-                        connection.query('INSERT INTO events (mission, event_time, discovery_time, source_object, source_port, dest_object, dest_port, event_type, short_desc, analyst) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst], function (err, results) {
+                        connection.query('INSERT INTO events (mission, event_time, discovery_time, source_object, source_port, dest_object, dest_port, event_type, short_desc, analyst, assignment) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst, evt.assignment], function (err, results) {
                             if (!err) {
                                 evt.id = results.insertId;
                                 insertLogEvent(socket, 'Created event: ' + evt.event_type + ' ID: ' + evt.id + '.');

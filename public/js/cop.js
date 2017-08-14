@@ -54,6 +54,7 @@ var offsetX = 0;
 var offsetY = 0;
 var mission = getParameterByName('mission');
 var objectSelect = [{id:0, name:'none/unknown'}];
+var userSelect = [{id:null, username:'none'}];
 var dateSlider = null;
 var images = {};
 var eventTableData = [];
@@ -463,6 +464,17 @@ function zoomOut() {
 function getDate() {
     var date = new Date();
     return date.getFullYear() + '-' + addZero(date.getMonth()+1) + '-' + addZero(date.getDate()) + ' ' + addZero(date.getHours()) + ':' + addZero(date.getMinutes()) + ':' + addZero(date.getSeconds()) + '.' + date.getMilliseconds();
+}
+
+function getUserSelect() {
+    userSelect.sort(function(a, b) {
+        return a.username.localeCompare(b.name);
+    });
+    var userString = '';
+    for (var i = 0; i < userSelect.length; i++) {
+        userString += userSelect[i].id + ':' + userSelect[i].username + ';';
+    }
+    return userString.substr(0, userString.length - 1)
 }
 
 function getObjectSelect() {
@@ -1239,6 +1251,8 @@ $(document).ready(function() {
         $('#modal').modal('show')
         console.log('connect');
         diagram.send(JSON.stringify({act:'join', arg: mission}));
+        console.log('get users list');
+        diagram.send(JSON.stringify({act:'get_users', arg: mission}));
         console.log('get objects');
         diagram.send(JSON.stringify({act:'get_objects', arg: mission}));
         console.log('get events');
@@ -1308,6 +1322,10 @@ $(document).ready(function() {
                     step: 1
                 });
                 break;
+            case 'all_users':
+                userSelect = userSelect.concat(msg.arg);
+                $('#events2').jqGrid('setColProp', 'assignment', { editoptions: { value: getUserSelect() }});
+                break; 
             case 'all_opnotes':
                 opnoteTableData = [];
                 for (var evt in msg.arg) {
@@ -1799,30 +1817,30 @@ $(document).ready(function() {
                 autowidth: true,
                 data: getOpnoteSubGridData(rowid),
                 colModel: [
-                    { label: 'E-Id', name: 'id', width: 10, key: true, editable: false },
-                    { label: 'Event Time', name: 'event_time', width: 60, editable: false, formatter: epochToDateString },
-                    { label: 'Host/Device', name: 'source_object', width: 50, editable: false },
-                    { label: 'Tool', name: 'tool', width: 50, editable: false },
-                    { label: ' ', name: 'action', width: 100, editable: false },
-                    { label: 'Analyst', name: 'analyst', width: 30, editable: false },
+                    { label: 'OpId', name: 'id', width: 40, fixed: true, key: true, editable: false },
+                    { label: 'Event Time', name: 'event_time', width: 180, fixed: true, editable: false, formatter: epochToDateString },
+                    { label: 'Host/Device', name: 'source_object', editable: false },
+                    { label: 'Tool', name: 'tool', editable: false },
+                    { label: 'Action', name: 'action', editable: false },
+                    { label: 'Analyst', name: 'analyst', width: 100, fixed: true, editable: false },
                 ],
             });
         },
         colModel: [
-            { label: ' ', name: 'actions', formatter: function(cell, options, row) {
+            { label: ' ', name: 'actions', fixed: true, formatter: function(cell, options, row) {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!events_del)
                         buttons += ' display: none;';
                     buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
-                width: 15,
+                width: 45,
                 formatoptions: {
                     keys: true,
                 }
             },
-            { label: 'Id', name: 'id', width: 15, key: true, editable: false },
-            { label: 'Event Time', name: 'event_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
+            { label: 'Id', name: 'id', width: 40, fixed: true, key: true, editable: false },
+            { label: 'Event Time', name: 'event_time', width: 180, fixed: true, resizable: false, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
                         dateFormat: "yy-mm-dd",
@@ -1840,7 +1858,7 @@ $(document).ready(function() {
                     newformat: 'yy-mm-dd HH:mm:ss.l'
                 }
             }},
-            { label: 'Discovery Time', name: 'discovery_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
+            { label: 'Discovery Time', name: 'discovery_time', width: 180, fixed: true, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
                         dateFormat: "yy-mm-dd",
@@ -1859,17 +1877,20 @@ $(document).ready(function() {
                     newformat: 'yy-mm-dd HH:mm:ss.l'
                 }
             }},
-            { label: 'Source', name: 'source_object', width: 45, editable: true, formatter: 'select', edittype: 'select', editoptions: {
+            { label: 'Source', name: 'source_object', width: 100, editable: true, formatter: 'select', edittype: 'select', editoptions: {
                 value: getObjectSelect()
             }},
-            { label: 'SPort', name: 'source_port', width: 15, editable: true },
-            { label: 'Destination', name: 'dest_object', width: 45, editable: true, formatter: 'select', edittype: 'select', editoptions: {
+            { label: 'SPort', name: 'source_port', width: 60, fixed: true, editable: true },
+            { label: 'Destination', name: 'dest_object', width: 100, editable: true, formatter: 'select', edittype: 'select', editoptions: {
                 value: getObjectSelect()
             }},
-            { label: 'DPort', name: 'dest_port', width: 15, editable: true },
-            { label: 'Event Type', name: 'event_type', width: 50, editable: true },
-            { label: 'Event Description', name: 'short_desc', width: 150, edittype: 'textarea', editable: true },
-            { label: 'Analyst', name: 'analyst', width: 30, editable: false },
+            { label: 'DPort', name: 'dest_port', width: 60, fixed: true, editable: true },
+            { label: 'Event Type', name: 'event_type', width: 150, editable: true },
+            { label: 'Event Description', name: 'short_desc', width: 200, edittype: 'textarea', editable: true },
+            { label: 'Assignment', name: 'assignment', width: 100, editable: true, formatter: 'select', edittype: 'select', editoptions: {
+                value: getUserSelect()
+            }},
+            { label: 'Analyst', name: 'analyst', width: 100, fixed: true, editable: false },
         ],
         onSelectRow: function() {
             return false;
