@@ -721,7 +721,7 @@ app.post('/api/:table', function (req, res) {
                     }
                 });
             }
-        } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.username && req.body.name !== undefined && req.body.role !== undefined && req.body.permissions !== undefined) {
+        } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.username && req.body.name !== undefined && req.body.permissions !== undefined) {
             bcrypt.hash(req.body.password, null, null, function(err, hash) {
                 if (req.body.role === undefined || req.body.role === '')
                     req.body.role = null;
