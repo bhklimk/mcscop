@@ -226,7 +226,7 @@ CREATE TABLE `users` (
   `deleted` tinyint(4) NOT NULL DEFAULT '0',
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`),
+  UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -243,7 +243,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'admin','$2a$10$SW9AmmAlVCM3OSkzMzCEb.NpYXQ67qG5lBmk7U85YbXWhTkTZwEXi','admin',0,'all','0','2016-10-06 23:21:50');
+INSERT INTO `users` VALUES (1,'admin','$2a$10$SW9AmmAlVCM3OSkzMzCEb.NpYXQ67qG5lBmk7U85YbXWhTkTZwEXi','admin','',0,'all','0','2016-10-06 23:21:50');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
