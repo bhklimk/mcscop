@@ -1733,19 +1733,20 @@ $(document).ready(function() {
         },
         beforeEditCell: function (id) {
             if (lastselection && lastselection !== id) {
-                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
-                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
-                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
+                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
+                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
             }
-            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
-            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
-            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
+            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
             lastselection = id;
         },
         beforeSaveCell: function(options, col, value) {
-            $("table#opnotes tr#"+$.jgrid.jqID(options)+ " div.ui-inline-del").show();
-            $("table#opnotes tr#"+$.jgrid.jqID(options)+ " div.ui-inline-save").hide();
-            $("table#opnotes tr#"+$.jgrid.jqID(options)+ " div.ui-inline-cancel").hide();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#opnotes').jqGrid('resetSelection');
             lastselection = null;
             var data = $('#opnotes').getRowData(options);
             data[col] = value;
@@ -1754,7 +1755,14 @@ $(document).ready(function() {
             delete data.actions;
             data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
+        },
+        afterRestoreCell: function (options) {
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
+            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#opnotes').jqGrid('resetSelection');
         }
+
     });
     $('#opnotes').jqGrid('navGrid', '#opnotesPager', {
         add: false,
@@ -1779,16 +1787,17 @@ $(document).ready(function() {
                             data.event_time = dateStringToEpoch(data.event_time);
                             delete data.actions;
                             diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
+                            $('#opnotes').jqGrid('resetSelection');
                         },
                         oneditfunc: function(id) {
                             if (lastselection && lastselection !== id) {
-                                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
-                                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
-                                $("table#opnotes tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+                                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
+                                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
+                                $('#opnotes tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
                             }
-                            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
-                            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
-                            $("table#opnotes tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
+                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
                             lastselection = id;
                         }
                     }
@@ -1900,19 +1909,20 @@ $(document).ready(function() {
         },
         beforeEditCell: function (id) {
             if (lastselection && lastselection !== id) {
-                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
-                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
-                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
+                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
+                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
             }                
-            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
-            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
-            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
+            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
             lastselection = id;
         },
         beforeSaveCell: function (options, col, value) {
-            $("table#events2 tr#"+$.jgrid.jqID(options)+ " div.ui-inline-del").show();
-            $("table#events2 tr#"+$.jgrid.jqID(options)+ " div.ui-inline-save").hide();
-            $("table#events2 tr#"+$.jgrid.jqID(options)+ " div.ui-inline-cancel").hide();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#events2').jqGrid('resetSelection');
             lastselection = null;
             var data = $('#events2').getRowData(options);
             data[col] = value;
@@ -1923,6 +1933,12 @@ $(document).ready(function() {
             delete data.actions;
             data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
+        },
+        afterRestoreCell: function (options) {
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save').hide();
+            $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel').hide();
+            $('#events2').jqGrid('resetSelection');
         }
     });
     $('#events2').jqGrid('navGrid', '#eventsPager', {
@@ -1949,16 +1965,17 @@ $(document).ready(function() {
                             data.discovery_time = dateStringToEpoch(data.discovery_time);
                             delete data.actions;
                             diagram.send(JSON.stringify({act: 'insert_event', arg: data}));
+                            $('#events2').jqGrid('resetSelection');
                         },
                         oneditfunc: function(id) {
                             if (lastselection && lastselection !== id) {
-                                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-del").show();
-                                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-save").hide();
-                                $("table#events2 tr#"+$.jgrid.jqID(lastselection)+ " div.ui-inline-cancel").hide();
+                                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-del').show();
+                                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-save').hide();
+                                $('#events2 tr#'+$.jgrid.jqID(lastselection)+ ' div.ui-inline-cancel').hide();
                             }
-                            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-del").hide();
-                            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-save").show();
-                            $("table#events2 tr#"+$.jgrid.jqID(id)+ " div.ui-inline-cancel").show();
+                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save').show();
+                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel').show();
                             lastselection = id;
                         }
                     }

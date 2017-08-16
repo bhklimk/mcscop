@@ -403,12 +403,11 @@ ws.on('connection', function(socket) {
                 case 'update_opnote':
                     if (hasPermission(socket.permissions, 'create_opnotes')) {
                         var evt = msg.arg;
-                        evt.analyst = socket.user_id;
-                        evt.short_tool = xssFilters.inHTMLData(evt.short_tool);
-                        evt.short_action = xssFilters.inHTMLData(evt.short_action);
-                        connection.query('UPDATE opnotes SET event_time = ?, event = ?, source_object = ?, tool = ?, action = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.event, evt.source_object, evt.tool, evt.action, evt.analyst, evt.id], function (err, results) {
+                        evt.tool = xssFilters.inHTMLData(evt.tool);
+                        evt.action = xssFilters.inHTMLData(evt.action);
+                        connection.query('UPDATE opnotes SET event_time = ?, event = ?, source_object = ?, tool = ?, action = ?, analyst = ? WHERE id = ?', [evt.event_time, evt.event, evt.source_object, evt.tool, evt.action, socket.user_id, evt.id], function (err, results) {
                             if (!err) {
-                                evt.analyst = socket.user_id;
+                                evt.analyst = socket.username;
                                 insertLogEvent(socket, 'Modified opnote: ' + evt.action + ' ID: ' + evt.id + '.');
                                 sendToRoom(socket.room, JSON.stringify({act: 'update_opnote', arg: evt}), socket, socket.role);
                             } else
@@ -425,12 +424,12 @@ ws.on('connection', function(socket) {
                                 var role = results[0].role;
                                 if (evt.event === '')
                                     evt.event = null;
-                                evt.short_tool = xssFilters.inHTMLData(evt.short_tool);
-                                evt.short_action = xssFilters.inHTMLData(evt.short_action);
-                                connection.query('INSERT INTO opnotes (mission, event, role, event_time, source_object, tool, action, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event, role, evt.event_time, evt.source_object, evt.tool, evt.action, evt.analyst], function (err, results) {
+                                evt.tool = xssFilters.inHTMLData(evt.tool);
+                                evt.action = xssFilters.inHTMLData(evt.action);
+                                connection.query('INSERT INTO opnotes (mission, event, role, event_time, source_object, tool, action, analyst) values (?, ?, ?, ?, ?, ?, ?, ?)', [evt.mission, evt.event, role, evt.event_time, evt.source_object, evt.tool, evt.action, socket.user_id], function (err, results) {
                                     if (!err) {
                                         evt.id = results.insertId; 
-                                        evt.analyst = socket.user_id; 
+                                        evt.analyst = socket.username; 
                                         insertLogEvent(socket, 'Created opnote: ' + evt.action + ' ID: ' + evt.id + '.');
                                         sendToRoom(socket.room, JSON.stringify({act: 'insert_opnote', arg: evt}), null, socket.role);
                                     } else
@@ -642,7 +641,7 @@ app.post('/api/:table', function (req, res) {
                 req.body.analyst = req.session.user_id;
             connection.query('UPDATE missions SET name = ?, start_date = ?, analyst = ? WHERE id = ?', [req.body.name, req.body.start_date, req.body.analyst, req.body.id], function (err, results) {
                 if (!err) {
-                    res.end(JSON.stringify('success'));
+                    res.end(JSON.stringify('OK'));
                 } else {
                     console.log(err);
                     res.end(JSON.stringify('ERR'));
@@ -653,7 +652,7 @@ app.post('/api/:table', function (req, res) {
                 req.body.analyst = req.session.user_id;
             connection.query('INSERT INTO missions (name, start_date, analyst) values (?, ?, ?)', [req.body.name, req.body.start_date, req.body.analyst], function (err, results) {
                 if (!err) {
-                    res.end(JSON.stringify('success'));
+                    res.end(JSON.stringify('OK'));
                 } else {
                     console.log(err);
                     res.end(JSON.stringify('ERR'));
@@ -665,7 +664,7 @@ app.post('/api/:table', function (req, res) {
                 if (!err) {
                     connection.query('UPDATE objects SET deleted = 1 WHERE mission = ?', [id], function (err, results) {
                         if (!err) {
-                            res.end(JSON.stringify('success'));
+                            res.end(JSON.stringify('OK'));
                         } else {
                             res.end(JSON.stringify('ERR'));
                             console.log(err);
@@ -686,10 +685,12 @@ app.post('/api/:table', function (req, res) {
                     console.log(err);
                 }
             });
-        } else if (req.body.oper !== undefined && req.body.oper === 'edit' && req.body.name !== undefined && req.body.role !== undefined && req.body.permissions !== undefined && req.body.id) {
+        } else if (req.body.oper !== undefined && req.body.oper === 'edit' && req.body.name !== undefined && req.body.id) {
             if (req.body.id === '1')
                 req.body.permissions = 'all'; // make sure admin always has all permissions
             else {
+                if (req.body.role === undefined || req.body.role === '')
+                    req.body.role = null;
                 var new_perms = [];
                 req.body.permissions = req.body.permissions.split(',');
                 for (var i = 0; i < req.body.permissions.length; i++) {
@@ -702,7 +703,7 @@ app.post('/api/:table', function (req, res) {
                 bcrypt.hash(req.body.password, null, null, function(err, hash) {
                     connection.query('UPDATE users SET name = ?, password = ?, role = ?, permissions = ? WHERE id = ?', [req.body.name, hash, req.body.role, req.body.permissions, req.body.id], function (err, results) {
                         if (!err) {
-                            res.end(JSON.stringify('success'));
+                            res.end(JSON.stringify('OK'));
                         } else {
                             res.end(JSON.stringify('ERR'));
                             console.log(err);
@@ -714,20 +715,22 @@ app.post('/api/:table', function (req, res) {
                 var args = [req.body.name, req.body.role, req.body.permissions, req.body.id];
                 connection.query(query, args, function (err, results) {
                     if (!err) {
-                        res.end(JSON.stringify('success'));
+                        res.end(JSON.stringify('OK'));
                     } else {
                         res.end(JSON.stringify('ERR'));
                         console.log(err);
                     }
                 });
             }
-        } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.username && req.body.name !== undefined && req.body.permissions !== undefined) {
+        } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.username && req.body.name !== undefined) {
             bcrypt.hash(req.body.password, null, null, function(err, hash) {
                 if (req.body.role === undefined || req.body.role === '')
                     req.body.role = null;
+                if (req.body.permissions === undefined || req.body.permissions === '')
+                    req.body.permissions = null;
                 connection.query('INSERT INTO users (username, name, password, role, permissions) values (?, ?, ?, ?, ?)', [req.body.username, req.body.name, hash, req.body.role, req.body.permissions], function (err, results) {
                     if (!err) {
-                        res.end(JSON.stringify('success'));
+                        res.end(JSON.stringify('OK'));
                     } else {
                         res.end(JSON.stringify('ERR'));
                         console.log(err);
@@ -742,7 +745,7 @@ app.post('/api/:table', function (req, res) {
                 if (id != 0) {
                     connection.query('UPDATE users SET deleted = 1 WHERE id = ?', [id], function (err, results) {
                         if (!err) {
-                            res.end(JSON.stringify('success'));
+                            res.end(JSON.stringify('OK'));
                         } else {
                             console.log(err);
                             res.end(JSON.stringify('ERR'));
@@ -794,7 +797,7 @@ app.post('/api/:table', function (req, res) {
                                     res.end(JSON.stringify('ERR'));
                                 } else {
                                     if (additions.length === 0)
-                                        res.end(JSON.stringify('success'));
+                                        res.end(JSON.stringify('OK'));
                                     else {
                                         for (i = 0; i < additions.length; i++) {
                                             connection.query('INSERT INTO sub_role_rel (role_id, sub_role_id) values (?, ?)', [req.body.id, additions[i]], function (err, results) {
@@ -802,7 +805,7 @@ app.post('/api/:table', function (req, res) {
                                                     res.end(JSON.stringify('ERR'));
                                                     console.log(err);
                                                 } else if (i === additions.length) {
-                                                    res.end(JSON.stringify('success'));
+                                                    res.end(JSON.stringify('OK'));
                                                 }
                                             });
                                         }
@@ -819,7 +822,7 @@ app.post('/api/:table', function (req, res) {
         } else if (req.body.oper !== undefined && req.body.oper === 'add' && req.body.name) {
             connection.query('INSERT INTO roles (name) values (?)', [req.body.name], function (err, results) {
                 if (!err) {
-                    res.end(JSON.stringify('success'));
+                    res.end(JSON.stringify('OK'));
                 } else {
                     res.end(JSON.stringify('ERR'));
                     console.log(err);
@@ -830,7 +833,7 @@ app.post('/api/:table', function (req, res) {
             if (id != 0) {
                 connection.query('DELETE FROM roles WHERE id = ?', [id], function (err, results) {
                     if (!err) {
-                        res.end(JSON.stringify('success'));
+                        res.end(JSON.stringify('OK'));
                     } else {
                         console.log(err);
                         res.end(JSON.stringify('ERR'));
@@ -1100,7 +1103,7 @@ app.post('/avatar', upload.any(), function (req, res) {
         }, function() {
             connection.query('UPDATE users SET avatar = ? WHERE id = ?', [req.body.id + '.png', req.body.id], function (err, results) {
                 if (!err) {
-                    res.end(JSON.stringify('success'));
+                    res.end(JSON.stringify('OK'));
                 } else {
                     res.end(JSON.stringify('ERR'));
                     console.log(err);

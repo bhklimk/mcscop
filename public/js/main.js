@@ -45,6 +45,10 @@ $(document).ready(function() {
         maxHeingt: 600,
         height: 400,
         reloadAfterSubmit: true,
+        pager: '#missionPager',
+        pgbuttons: false,
+        pgtext: null,
+        viewrecords: false,
         colModel: [
             { label: ' ', name: 'actions', formatter: 'actions', width: 10, formatoptions: {
                     keys: true,
@@ -98,14 +102,14 @@ $(document).ready(function() {
                         $("table#missions tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-save").hide();
                         $("table#missions tr#"+$.jgrid.jqID(lastSelection)+ " div.ui-inline-cancel").hide();
                         lastSelection = null;
+                    },
+                    afterrestorefunc: function (options) {
+                        lastSelection = null;
+                        $('#missions').jqGrid('resetSelection');
                     }
                 });
             }
         },
-        pager: '#missionPager',
-        pgbuttons: false,
-        pgtext: null,
-        viewrecords: false
     });
     $('#missions').navGrid('#missionPager', {
         add: false,

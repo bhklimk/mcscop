@@ -81,6 +81,14 @@ td a {
     height: 23px;
 }
 
+.ui-jqdialog .ui-jqdialog-titlebar {
+    border: 1px solid #ddd;
+}
+
+.ui-jqdialog .ui-jqdialog-titlebar-close, .ui-jqdialog .ui-jqdialog-titlebar-close:hover {
+    padding: 0px;
+}
+
 .ui-jqgrid .ui-userdata {
     height: auto;
     border-width: 0px 0px 1px 0px;
