@@ -21,5 +21,5 @@ echo "create the MCSCOP database."
 mysql -u root -e "CREATE DATABASE mcscop;" 2>&1
 echo "Please provide your mysql root password.  This is used to"
 echo "create the MCSCOP schema."
-mysql -u root mcscop < mysql/mcscop-schema.sql 2>&1
+cat mysql/mcscop-schema.sql mysql/user.sql | mysql -u root -p mcscop
 /usr/bin/node /home/mcscop/app.js

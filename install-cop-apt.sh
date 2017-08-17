@@ -14,6 +14,6 @@ echo "create the MCSCOP database."
 mysql -u root -p -e "CREATE DATABASE mcscop;"
 echo "Please provide your mysql root password.  This is used to"
 echo "import the MCSCOP database schema."
-mysql -u root -p mcscop < mysql/mcscop-schema.sql
+cat mysql/mcscop-schema.sql mysql/user.sql | mysql -u root -p mcscop
 echo "The initial username and password for MCSCOP are:"
 echo "admin / password"

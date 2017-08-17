@@ -1768,6 +1768,7 @@ $(document).ready(function() {
         add: false,
         edit: false,
         del: false,
+        refresh: false
     })
     if (opnotes_rw) {
         $('#opnotes').jqGrid('navGrid').jqGrid('navButtonAdd', '#opnotesPager',{
@@ -1945,6 +1946,7 @@ $(document).ready(function() {
         add: false,
         edit: false,
         del: false,
+        refresh: false
     })
     if (events_rw) {
         $('#events2').jqGrid('navGrid').jqGrid('navButtonAdd', '#eventsPager', {
