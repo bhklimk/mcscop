@@ -164,6 +164,19 @@ function insertLogEvent(socket, message) {
     sendToRoom(socket.room, JSON.stringify({act:'log', arg:{prepend:false, more:false, messages:[{analyst: socket.username, user_id: socket.user_id, text: message, timestamp: timestamp}]}}));
 }
 
+function patch() {
+    connection.query('SELECT obj_b FROM objects WHERE obj_b != 1', [], function (err, results) {
+        for (var i = 0; i < results.length; i++) {
+            connection.query('select id, uuid from objects where uuid = ?', [results[i].obj_b], function (err, results2) {
+                console.log(results2[0].id, results2[0].uuid);
+                connection.query('update objects set obj_b = ? where obj_b = ?', [results2[0].id, results2[0].uuid]);
+            });
+            //connection.query('update objects set obj_a = id where uuid = (select id from objects where uuid = ?)', [results[i].obj_a);
+        }
+   });
+}
+
+
 ws.on('connection', function(socket) {
     socket.loggedin = false;
     socket.session = '';
@@ -477,27 +490,27 @@ ws.on('connection', function(socket) {
                 case 'delete_object':
                     if (hasPermission(socket.permissions, 'modify_diagram')) {
                         var o = msg.arg;
-                        if (o.type && o.uuid) {
+                        if (o.type && o.id) {
                             if (o.type === 'icon' || o.type === 'shape') {
-                                connection.query('UPDATE objects SET deleted = 1 WHERE uuid = ?', [o.uuid], function (err, results) {
+                                connection.query('UPDATE objects SET deleted = 1 WHERE id = ?', [o.id], function (err, results) {
                                     if (!err) {
-                                        sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:o.uuid}));
-                                        connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND (obj_a = ? OR obj_b = ?)', [o.uuid, o.uuid], function(err, rows, results) {
+                                        sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:o.id}));
+                                        connection.query('SELECT id FROM objects WHERE deleted = 0 AND (obj_a = ? OR obj_b = ?)', [o.id, o.id], function(err, rows, results) {
                                             if (!err) {
                                                 async.each(rows, function(row, callback) {
-                                                    connection.query('UPDATE objects SET deleted = 1 WHERE uuid = ?', [row.uuid], function(err, results) {
+                                                    connection.query('UPDATE objects SET deleted = 1 WHERE id = ?', [row.id], function(err, results) {
                                                         if (err) {
                                                             console.log(err);
                                                             socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
                                                         } else {
                                                             insertLogEvent(socket, 'Deleted object: ' + o.name + '.');
-                                                            sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:row.uuid}));
+                                                            sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg:row.id}));
                                                         }
                                                     });
                                                 }, function() {
-                                                    connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                                                    connection.query('SELECT id FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                                                         for (var i = 0; i < results.length; i++) {
-                                                            connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
+                                                            connection.query('UPDATE objects SET z = ? WHERE id = ?', [i, results[i].id], function (err, results) {
                                                                 if (err) {
                                                                     console.log(err);
                                                                     socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
@@ -513,14 +526,14 @@ ws.on('connection', function(socket) {
                                         console.log(err);
                                 });
                             } else if (o.type === 'link') {
-                                connection.query('UPDATE objects SET deleted = 1 WHERE uuid = ?', [o.uuid], function (err, results) {
+                                connection.query('UPDATE objects SET deleted = 1 WHERE id = ?', [o.id], function (err, results) {
                                     if (!err) {
-                                        sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg: o.uuid}));
-                                        connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                                        sendToRoom(socket.room, JSON.stringify({act: 'delete_object', arg: o.id}));
+                                        connection.query('SELECT id FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                                             if (!err) {
                                                 insertLogEvent(socket, 'Deleted link: ' + o.name + '.');
                                                 for (var i = 0; i < results.length; i++) {
-                                                    connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [i, results[i].uuid], function (err, results) {
+                                                    connection.query('UPDATE objects SET z = ? WHERE id = ?', [i, results[i].id], function (err, results) {
                                                         if (err) {
                                                             console.log(err);
                                                             socket.send(JSON.stringify({act: 'error', arg: 'Error: ' + err}));
@@ -549,17 +562,17 @@ ws.on('connection', function(socket) {
                     o.image = xssFilters.inHTMLData(o.image);
                     if (o.type !== undefined && hasPermission(socket.permissions, 'modify_diagram')) {
                         if (o.type === 'icon' || o.type === 'shape') {
-                            connection.query('UPDATE objects SET name = ?, fill_color = ?, stroke_color = ?, image = ? WHERE uuid = ?', [o.name, o.fill_color, o.stroke_color, o.image, o.uuid], function (err, results) {
+                            connection.query('UPDATE objects SET name = ?, fill_color = ?, stroke_color = ?, image = ? WHERE id = ?', [o.name, o.fill_color, o.stroke_color, o.image, o.id], function (err, results) {
                                 if (!err) {
-                                    insertLogEvent(socket, 'Modified object: ' + o.name + ' ID: ' + o.uuid + '.');
+                                    insertLogEvent(socket, 'Modified object: ' + o.name + ' ID: ' + o.id + '.');
                                     sendToRoom(socket.room, JSON.stringify({act: 'change_object', arg: msg.arg}));
                                 } else
                                     console.log(err);
                             });
                         } else if (o.type === 'link') {
-                            connection.query('UPDATE objects SET name = ?, stroke_color = ? WHERE uuid = ?', [o.name, o.stroke_color, o.uuid], function (err, results) {
+                            connection.query('UPDATE objects SET name = ?, stroke_color = ? WHERE id = ?', [o.name, o.stroke_color, o.id], function (err, results) {
                                 if (!err) {
-                                    insertLogEvent(socket, 'Modified link: ' + o.name + ' ID: ' + o.uuid + '.');
+                                    insertLogEvent(socket, 'Modified link: ' + o.name + ' ID: ' + o.id + '.');
                                     sendToRoom(socket.room, JSON.stringify({act: 'change_object', arg: msg.arg}));
                                 } else
                                     console.log(err);
@@ -571,14 +584,14 @@ ws.on('connection', function(socket) {
                     if (hasPermission(socket.permissions, 'modify_diagram')) {
                         var o = msg.arg;
                         o.z = Math.floor(o.z);
-                        connection.query('SELECT uuid FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
+                        connection.query('SELECT id FROM objects WHERE deleted = 0 AND mission = ? ORDER BY z ASC', [socket.mission], function (err, results) {
                             var zs = [];
                             for (var i = 0; i < results.length; i++)
-                                zs.push(results[i].uuid);
-                            if (o.z !== zs.indexOf(o.uuid)) {
-                                zs.move(zs.indexOf(o.uuid), o.z);
+                                zs.push(results[i].id);
+                            if (o.z !== zs.indexOf(o.id)) {
+                                zs.move(zs.indexOf(o.id), o.z);
                                 async.forEachOf(zs, function(item, index, callback) {
-                                    connection.query('UPDATE objects SET z = ? WHERE uuid = ?', [index, item], function (err, results) {
+                                    connection.query('UPDATE objects SET z = ? WHERE id = ?', [index, item], function (err, results) {
                                         if (err)
                                             console.log(err);
                                         callback();
@@ -588,7 +601,7 @@ ws.on('connection', function(socket) {
                                 });
                             } else  {
                                 if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
-                                    connection.query('UPDATE objects SET x = ?, y = ?, scale_x = ?, scale_y = ? WHERE uuid = ?', [o.x, o.y, o.scale_x, o.scale_y, o.uuid], function (err, results) {
+                                    connection.query('UPDATE objects SET x = ?, y = ?, scale_x = ?, scale_y = ? WHERE id = ?', [o.x, o.y, o.scale_x, o.scale_y, o.id], function (err, results) {
                                         if (!err) {
                                             sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}));
                                         } else

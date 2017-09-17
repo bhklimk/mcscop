@@ -79,7 +79,7 @@ var activeToolbar = null;
 var lastselection;
 var gridsize = 40;
 var lastFillColor = '#000000';
-var lastStrokeColor = '#ffffff';
+var lastStrokeColor = '#000000';
 
 // Rescale stroke widths based on object size
 // http://jsfiddle.net/davidtorroija/nawLjtn8/
@@ -201,11 +201,11 @@ canvas.on('object:modified', function(options) {
     if (o !== null) {
         var z = canvas.getObjects().indexOf(o)/2;
         if (o.objType === 'link')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, z: z}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, z: z}}));
         else if (o.objType === 'icon')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
         else if (o.objType === 'shape')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
     }
 });
 
@@ -213,7 +213,7 @@ fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
     var o = canvas.findTarget(e);
     if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null && !creatingLink) {
         if (o.objType !== undefined) {
-            $('#propID').val(o.uuid);
+            $('#propID').val(o.id);
             $('#propFillColor').val(o.fill);
             $('#propStrokeColor').val(o.stroke);
             $('#propName').val('');
@@ -251,13 +251,13 @@ canvas.on('object:selected', function(options) {
                                 z = canvas.getObjects().indexOf(o) - 1;
                             lastFillColor = $('#propFillColor').val();
                             lastStrokeColor = $('#propStrokeColor').val();
-                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.uuid, obj_b: o.uuid, z: z}}));
+                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.id, obj_b: o.id, z: z}}));
                             firstNode = null;
                             creatingLink = false;
                         }
                     }
                 } else if (toolbarState) {
-                    $('#propID').val(o.uuid);
+                    $('#propID').val(o.id);
                     $('#propFillColor').val(o.fill);
                     $('#propStrokeColor').val(o.stroke);
                     $('#propName').val('');
@@ -291,10 +291,10 @@ canvas.on('before:render', function(e) {
                 var fromObj = null;
                 var toObj = null;
                 for (var j = 0; j < canvas.getObjects().length; j++) {
-                    if (canvas.item(j).uuid === from) {
+                    if (canvas.item(j).id == from) {
                         fromObj = canvas.item(j);
                     }
-                    if (canvas.item(j).uuid === to) {
+                    if (canvas.item(j).id == to) {
                         toObj = canvas.item(j);
                     }
                 }
@@ -385,7 +385,7 @@ function loadSettings() {
     if (decodeURIComponent(document.cookie) === '')
         document.cookie = "mcscop-settings=" + JSON.stringify(settings);
     var dc = decodeURIComponent(document.cookie);
-    settings = JSON.parse(dc.split('=')[1]);
+    settings = JSON.parse(dc.split('mcscop-settings=')[1]);
     $('#diagram_jumbotron').height(settings.diagram);
     canvas.setZoom(settings.zoom);
     background.setZoom(settings.zoom);
@@ -415,17 +415,17 @@ function checkIfObjectsLoaded() {
     }
 }
 
-function editDetails(uuid) {
+function editDetails(id) {
     if (canvas.getActiveObject()) {
         $('#modal-title').text('Edit Object Notes');
-        $('#modal-body').html('<input type="hidden" id="object_details_uuid" name="object_details_uuid" value="' + canvas.getActiveObject().uuid + '"><textarea id="object_details" class="object-details"></textarea>');
+        $('#modal-body').html('<input type="hidden" id="object_details_id" name="object_details_id" value="' + canvas.getActiveObject().id + '"><textarea id="object_details" class="object-details"></textarea>');
         $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">Close</button>');
         if (doc) {
             console.log('unsubscribing');
             doc.destroy();
             doc = undefined;
         }
-        doc = shareDBConnection.get('mcscop', canvas.getActiveObject().uuid);
+        doc = shareDBConnection.get('mcscop', canvas.getActiveObject().id);
         doc.subscribe(function(err) {
             if (doc.type === null) {
                 doc.create('');
@@ -483,7 +483,7 @@ function getObjectSelect() {
     });
     var objString = '';
     for (var i = 0; i < objectSelect.length; i++) {
-        objString += objectSelect[i].uuid + ':' + objectSelect[i].name + ';';
+        objString += objectSelect[i].id + ':' + objectSelect[i].name + ';';
     }
     return objString.substr(0, objString.length - 1);
 }
@@ -565,10 +565,10 @@ function addObjectToCanvas(o, select) {
         var fromObject = null;
         var toObject = null;
         for (var i = 0; i < canvas.getObjects().length; i++) {
-            if (canvas.item(i).uuid == o.obj_a) {
+            if (canvas.item(i).id == o.obj_a) {
                 fromObject = canvas.item(i);
             }
-            if (canvas.item(i).uuid == o.obj_b) {
+            if (canvas.item(i).id == o.obj_b) {
                 toObject = canvas.item(i);
             }
         }
@@ -582,7 +582,7 @@ function addObjectToCanvas(o, select) {
         }
         var line = new fabric.Line([from.x, from.y, to.x, to.y], {
             pending: pending,
-            uuid: o.uuid,
+            id: o.id,
             objType: 'link',
             image: o.image,
             from: o.obj_a,
@@ -602,7 +602,7 @@ function addObjectToCanvas(o, select) {
             if(Math.abs(angle) > 90)
                 angle += 180;
         var name = new fabric.Text(o.name, {
-            parent_uuid: o.uuid,
+            parent_id: o.id,
             parent: line,
             objType: 'name',
             selectable: false,
@@ -639,7 +639,7 @@ function addObjectToCanvas(o, select) {
                 strokeWidth: 1,
                 scaleX: o.scale_x,
                 scaleY: o.scale_y,
-                uuid: o.uuid,
+                id: o.id,
                 objType: o.type,
                 image: o.image,
                 name_val: o.name,
@@ -664,7 +664,7 @@ function addObjectToCanvas(o, select) {
                 }
             }
             name = new fabric.Text(o.name, {
-                parent_uuid: o.uuid,
+                parent_id: o.id,
                 parent: shape,
                 objType: 'name',
                 selectable: false,
@@ -693,7 +693,7 @@ function addObjectToCanvas(o, select) {
                 fill: o.fill_color,
                 stroke: o.stroke_color,
                 strokeWidth: 2,
-                uuid: o.uuid,
+                id: o.id,
                 objType: o.type,
                 image: o.image,
                 name: name,
@@ -714,7 +714,7 @@ function addObjectToCanvas(o, select) {
                 fill: o.fill_color,
                 stroke: o.stroke_color,
                 strokeWidth: 2,
-                uuid: o.uuid,
+                id: o.id,
                 objType: o.type,
                 image: o.image,
                 name: name,
@@ -731,7 +731,7 @@ function addObjectToCanvas(o, select) {
         } else
             return;
         name = new fabric.Text(o.name, {
-            parent_uuid: o.uuid,
+            parent_id: o.id,
             parent: shape,
             objType: 'name',
             selectable: false,
@@ -792,19 +792,19 @@ function sendLogMessage(msg) {
 }
 
 function deleteObject() {
-    if (canvas.getActiveObject().uuid) {
-        diagram.send(JSON.stringify({act: 'delete_object', arg: {uuid:canvas.getActiveObject().uuid, type:canvas.getActiveObject().objType}}));
+    if (canvas.getActiveObject().id) {
+        diagram.send(JSON.stringify({act: 'delete_object', arg: {id:canvas.getActiveObject().id, type:canvas.getActiveObject().objType}}));
     }
 }
 
 function moveToZ(o, z) {
     if (o) {
         if (o.objType === 'link')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, z: z}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, z: z}}));
         else if (o.objType === 'icon')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
         else if (o.objType === 'shape')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {uuid: o.uuid, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
     }
 }
 
@@ -822,7 +822,7 @@ function moveToBack() {
 
 function moveUp() {
     var o = canvas.getActiveObject();
-    if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) < canvas.getObjects().length - 2 - tempLinks.length) {
+    if (canvas.getActiveObject().id && canvas.getObjects().indexOf(o) < canvas.getObjects().length - 2 - tempLinks.length) {
         var z = canvas.getObjects().indexOf(o) / 2 + 1;
         moveToZ(o, z);
     }
@@ -830,7 +830,7 @@ function moveUp() {
 
 function moveDown() {
     var o = canvas.getActiveObject();
-    if (canvas.getActiveObject().uuid && canvas.getObjects().indexOf(o) > 0) {
+    if (canvas.getActiveObject().id && canvas.getObjects().indexOf(o) > 0) {
         var z = canvas.getObjects().indexOf(o) / 2 - 1;
         moveToZ(o, z);
     }
@@ -855,7 +855,7 @@ function updatePropName(name) {
                 o.children[i].text = name;
         }
         for (var i = 0; i < objectSelect.length; i++) {
-            if (objectSelect[i].uuid === o.uuid) {
+            if (objectSelect[i].id == o.id) {
                 objectSelect[i].name = name.split('\n')[0];
                 break;
             }
@@ -888,7 +888,7 @@ function updatePropStrokeColor(color) {
 
 function changeObject(o) {
     var tempObj = {};
-    tempObj.uuid = o.uuid;
+    tempObj.id = o.id;
     tempObj.x = o.left;
     tempObj.y = o.top;
     tempObj.z = canvas.getObjects().indexOf(o);
@@ -1288,7 +1288,7 @@ $(document).ready(function() {
                 objectsLoaded = [];
                 for (var o in msg.arg) {
                     if (msg.arg[o].type !== 'link') {
-                        objectSelect.push({uuid:msg.arg[o].uuid, name:msg.arg[o].name.split('\n')[0]});
+                        objectSelect.push({id:msg.arg[o].id, name:msg.arg[o].name.split('\n')[0]});
                     }
                     if (msg.arg[o].type === 'icon' && SVGCache[msg.arg[o].image] === undefined && msg.arg[o].image !== undefined && msg.arg[o].image !== null) {
                         var shape = msg.arg[o].image;
@@ -1340,8 +1340,9 @@ $(document).ready(function() {
                 var o = msg.arg;
                 var selected = false;
                 for (var i = 0; i < canvas.getObjects().length; i++) {
-                    if (canvas.item(i).uuid === o.uuid) {
-                        if (canvas.getActiveObject() && canvas.getActiveObject().uuid === o.uuid) {
+                    if (canvas.item(i).id === o.id) {
+                        if (canvas.getActiveObject() && canvas.getActiveObject().id === o.id) {
+                            updatingObject = true;
                             selected = true;
                         }
                         var to = canvas.item(i);
@@ -1357,6 +1358,7 @@ $(document).ready(function() {
                             canvas.item(i).setFill(o.fill_color);
                             canvas.renderAll();
                         }
+                        updatingObject = false;
                         break;
                     }
                 }
@@ -1367,7 +1369,7 @@ $(document).ready(function() {
                 dirty = true;
                 var o = msg.arg;
                 for (var i = 0; i < canvas.getObjects().length; i++) {
-                    if (canvas.item(i).uuid == o.uuid) {
+                    if (canvas.item(i).id == o.id) {
                         var obj = canvas.item(i);
                         obj.dirty = true;
                         if (o.type !== 'link') {
@@ -1476,7 +1478,7 @@ $(document).ready(function() {
                 var o = msg.arg;
                 addObjectToCanvas(o, false);
                 if (o.type !== 'link') {
-                    objectSelect.push({uuid:o.uuid, name:o.name.split('\n')[0]});
+                    objectSelect.push({id:o.id, name:o.name.split('\n')[0]});
                     objectSelect.sort(function(a, b) {
                         return a.name.localeCompare(b.name);
                     });
@@ -1485,9 +1487,9 @@ $(document).ready(function() {
                 $('#events2').jqGrid('setColProp', 'source_object', { editoptions: { value: getObjectSelect() }});
                 break;
             case 'delete_object':
-                var uuid = msg.arg;
+                var id = msg.arg;
                 for (var i = 0; i < canvas.getObjects().length; i++) {
-                    if (canvas.item(i).uuid == uuid) {
+                    if (canvas.item(i).id == id) {
                         var object = canvas.item(i);
                         if (canvas.item(i).children !== undefined) {
                             for (var k = 0; k < object.children.length; k++) {
@@ -1605,8 +1607,8 @@ $(document).ready(function() {
                         var to = null;
                         var tempLink;
                         for (var j = 0; j < canvas.getObjects().length; j++) {
-                            if (canvas.item(j).uuid === rows[i].source_object || canvas.item(j).uuid === rows[i].dest_object) {
-                                if (canvas.item(j).uuid === rows[i].source_object) {
+                            if (canvas.item(j).id == rows[i].source_object || canvas.item(j).id == rows[i].dest_object) {
+                                if (canvas.item(j).id == rows[i].source_object) {
                                     from = canvas.item(j);
                                     var shape = new fabric.Rect({
                                         dad: from,
@@ -1626,7 +1628,7 @@ $(document).ready(function() {
                                     var tempShape = shape;
                                     tempLinks.push(tempShape);
                                     canvas.add(shape);
-                                } else if (canvas.item(j).uuid === rows[i].dest_object) {
+                                } else if (canvas.item(j).id == rows[i].dest_object) {
                                     to = canvas.item(j);
                                     var shape = new fabric.Rect({
                                         dad: to,
