@@ -11,6 +11,3 @@ mysql -u root -p mcscop < backups/${MYSQLFILE}.sql
 tar zxvf backups/${MONGOFILE}.tar.gz
 mongorestore dump
 rm -rf dump
-#mongodump -d mcscop
-#tar zcvf backups/${MONGOFILE}.tar.gz dump
-#rm -rf dump
