@@ -80,6 +80,7 @@ var lastselection = {id: null, iRow: null, iCol: null};
 var gridsize = 40;
 var lastFillColor = '#000000';
 var lastStrokeColor = '#000000';
+var addingRow = false;
 
 // Rescale stroke widths based on object size
 // http://jsfiddle.net/davidtorroija/nawLjtn8/
@@ -509,7 +510,7 @@ function epochToDateString(value){
 
 function dateStringToEpoch(value) {
     var parts = value.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d+)/);
-    return(Date.UTC(parts[1], parts[2]-1, parts[3], parts[4], parts[5], parts[6], parts[7]));
+    return(Date(parts[1], parts[2]-1, parts[3], parts[4], parts[5], parts[6], parts[7]));
 }
 
 function startPan(event) {
@@ -1021,6 +1022,7 @@ function openToolbar(mode) {
 function closeToolbar() {
     toolbarState = false;
     //$('#toolbar-body').hide();
+    $('#propName').blur();
     $('#toolbar-body').animate({width: "0px"}, 200);
 }
 
@@ -1215,6 +1217,7 @@ function deleteRow(type, table, id) {
 }
 
 function saveRow(type, table, id) {
+    addingRow = false;
     var data = {};
     var act = "update_" + type;
     if (id.indexOf('jqg') !== -1) {
@@ -1698,7 +1701,7 @@ $(document).ready(function() {
                     buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-cell ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#opnotes\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
-                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#opnotes\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
@@ -1759,8 +1762,14 @@ $(document).ready(function() {
             if (data.event_time)
                 data.event_time = dateStringToEpoch(data.event_time);
             delete data.actions;
+            delete data.undefined;
             data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
+        },
+        afterEditCell: function(id, name, val, iRow, iCol) {
+            $("#"+iRow+"_"+name, "#opnotes").bind('blur',function(){
+                $('#opnotes').saveCell(iRow,iCol);
+            });
         },
         afterRestoreCell: function (options) {
             $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
@@ -1781,34 +1790,41 @@ $(document).ready(function() {
             position:"last",
             caption:"",
             buttonicon:"ui-icon-plus",
-            onClickButton: function(){
-                $('#opnotes').jqGrid('addRow', {addRowParams: {
-                        keys: true,
-                        beforeSaveRow: function(options, id) {
-                            data = {};
-                            $(this).find('input, select, textarea').each(function () {
-                                data[this.name] = $(this).val();
-                            });
-                            data.mission = mission;
-                            $('#opnotes').jqGrid('restoreRow', id, function(){});
-                            data.event_time = dateStringToEpoch(data.event_time);
-                            delete data.actions;
-                            diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
-                            $('#opnotes').jqGrid('resetSelection');
-                        },
-                        oneditfunc: function(id, cn, val, iRow, iCol) {
-                            if (lastselection.id && lastselection.id !== id) {
-                                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
-                                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
-                                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
+            onClickButton: function() {
+                if (!addingRow) {
+                    addingRow = true;
+                    $('#opnotes').jqGrid('addRow', {addRowParams: {
+                            keys: true,
+                            beforeSaveRow: function(options, id) {
+                                addingRow = false;
+                                data = {};
+                                $(this).find('input, select, textarea').each(function () {
+                                    data[this.name] = $(this).val();
+                                });
+                                data.mission = mission;
+                                $('#opnotes').jqGrid('restoreRow', id, function(){});
+                                data.event_time = dateStringToEpoch(data.event_time);
+                                delete data.actions;
+                                diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
+                                $('#opnotes').jqGrid('resetSelection');
+                            },
+                            oneditfunc: function(id, cn, val, iRow, iCol) {
+                                if (lastselection.id && lastselection.id !== id) {
+                                    $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                                    $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
+                                    $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
+                                }
+                                $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+                                $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
+                                $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
+                                lastselection = {id: id, iRow: iRow, iCol: iCol};
+                            },
+                            afterrestorefunc: function() {
+                                addingRow = false;
                             }
-                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
-                            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
-                            lastselection = {id: id, iRow: iRow, iCol: iCol};
                         }
-                    }
-               });
+                   });
+                }
             }
         });
     }
@@ -1850,7 +1866,7 @@ $(document).ready(function() {
                     buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#events2\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
-                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\');" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#events2\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
@@ -1946,6 +1962,11 @@ $(document).ready(function() {
             data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
         },
+        afterEditCell: function(id, name, val, iRow, iCol) {
+            $("#"+iRow+"_"+name, "#events2").bind('blur',function(){
+                $('#events2').saveCell(iRow,iCol);
+            });
+        },
         afterRestoreCell: function (options) {
             console.log('arc');
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
@@ -1966,35 +1987,41 @@ $(document).ready(function() {
             caption:"", 
             buttonicon:"ui-icon-plus", 
             onClickButton: function(){
-                $('#events2').jqGrid('addRow', {addRowParams: {
-                        keys: true,
-                        beforeSaveRow: function(options, id) {
-                            data = {};
-                            $(this).find('input, select, textarea').each(function () {
-                                data[this.name] = $(this).val();
-                            });
-                            data.mission = mission;
-                            $('#events2').jqGrid('restoreRow', id, function(){});
-                            data.event_time = dateStringToEpoch(data.event_time);
-                            data.discovery_time = dateStringToEpoch(data.discovery_time);
-                            delete data.actions;
-                            diagram.send(JSON.stringify({act: 'insert_event', arg: data}));
-                            $('#events2').jqGrid('resetSelection');
-                        },
-                        oneditfunc: function(id) {
-                            console.log('oef');
-                            if (lastselection.id && lastselection.id !== id) {
-                                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
-                                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
-                                $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
+                if (!addingRow) {
+                    addingRow = true;
+                    $('#events2').jqGrid('addRow', {addRowParams: {
+                            keys: true,
+                            beforeSaveRow: function(options, id) {
+                                addingRow = false;
+                                data = {};
+                                $(this).find('input, select, textarea').each(function () {
+                                    data[this.name] = $(this).val();
+                                });
+                                data.mission = mission;
+                                $('#events2').jqGrid('restoreRow', id, function(){});
+                                data.event_time = dateStringToEpoch(data.event_time);
+                                data.discovery_time = dateStringToEpoch(data.discovery_time);
+                                delete data.actions;
+                                diagram.send(JSON.stringify({act: 'insert_event', arg: data}));
+                                $('#events2').jqGrid('resetSelection');
+                            },
+                            oneditfunc: function(id) {
+                                if (lastselection.id && lastselection.id !== id) {
+                                    $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                                    $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
+                                    $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
+                                }
+                                $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+                                $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
+                                $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
+                                lastselection = {id: id, iRow: null, iCol: null};
+                            },
+                            afterrestorefunc: function() {
+                                addingRow = false;
                             }
-                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
-                            $('#events2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
-                            lastselection = {id: id, iRow: null, iCol: null};
                         }
-                    }
-               });
+                   });
+                }
             }
         });
     }

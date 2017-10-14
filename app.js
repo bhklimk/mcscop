@@ -294,15 +294,15 @@ ws.on('connection', function(socket) {
                 case 'update_event':
                     if (hasPermission(socket.permissions, 'modify_events')) {
                         var evt = msg.arg;
-                        if (isNaN(evt.event_time) || evt.event_time === '')
+                        if (!evt.event_time || isNaN(evt.event_time) || evt.event_time === '')
                             evt.event_time = (new Date).getTime();
-                        if (isNaN(evt.discovery_time) || evt.discovery_time === '')
+                        if (!evt.discovery_time || isNaN(evt.discovery_time) || evt.discovery_time === '')
                             evt.discovery_time = (new Date).getTime();
-                        if (isNaN(evt.dest_port) || evt.dest_port === '')
+                        if (!evt.dest_port || isNaN(evt.dest_port) || evt.dest_port === '')
                             evt.dest_port = 0;
-                        if (isNaN(evt.source_port) || evt.source_port === '')
+                        if (!evt.source_port || isNaN(evt.source_port) || evt.source_port === '')
                             evt.source_port = 0;
-                        if (isNaN(evt.assignment) || evt.assignment === '')
+                        if (!evt.assignment || isNaN(evt.assignment) || evt.assignment === '')
                             evt.assignment = 0;
                         evt.event_type = xssFilters.inHTMLData(evt.event_type);
                         evt.short_desc = xssFilters.inHTMLData(evt.short_desc);
@@ -318,15 +318,15 @@ ws.on('connection', function(socket) {
                 case 'insert_event':
                     if (hasPermission(socket.permissions, 'create_events')) {
                         var evt = msg.arg;
-                        if (isNaN(evt.event_time) || evt.event_time === '')
+                        if (!evt.event_time || isNaN(evt.event_time) || evt.event_time === '')
                             evt.event_time = (new Date).getTime();
-                        if (isNaN(evt.discovery_time) || evt.discovery_time === '')
+                        if (!evt.discovery_time || isNaN(evt.discovery_time) || evt.discovery_time === '')
                             evt.discovery_time = (new Date).getTime();
-                        if (isNaN(evt.dest_port) || evt.dest_port === '')
+                        if (!evt.dest_port || isNaN(evt.dest_port) || evt.dest_port === '')
                             evt.dest_port = 0;
-                        if (isNaN(evt.source_port) || evt.source_port === '')
+                        if (!evt.source_port || isNaN(evt.source_port) || evt.source_port === '')
                             evt.source_port = 0;
-                        if (isNaN(evt.assignment) || evt.assignment === '')
+                        if (!evt.assignment || isNaN(evt.assignment) || evt.assignment === '')
                             evt.assignment = 0;
                         evt.event_type = xssFilters.inHTMLData(evt.event_type);
                         evt.short_desc = xssFilters.inHTMLData(evt.short_desc);
@@ -344,7 +344,7 @@ ws.on('connection', function(socket) {
                 case 'delete_event':
                     if (hasPermission(socket.permissions, 'delete_events')) {
                         var evt = msg.arg;
-                        if (isNaN(evt.id) || evt.id === '')
+                        if (!evt.id || isNaN(evt.id) || evt.id === '')
                             evt.id = 0;
                         connection.query('UPDATE events SET deleted = 1 WHERE id = ?', [evt.id], function (err, results) {
                             if (!err) {
@@ -358,9 +358,9 @@ ws.on('connection', function(socket) {
                 case 'update_opnote':
                     if (hasPermission(socket.permissions, 'create_opnotes')) {
                         var evt = msg.arg;
-                        if (isNaN(evt.event) || evt.event === '')
+                        if (!evt.event || isNaN(evt.event) || evt.event === '')
                             evt.event = 0;
-                        if (isNaN(evt.event_time) || evt.event === '')
+                        if (!evt.event_time || isNaN(evt.event_time) || evt.event === '')
                             evt.event_time = (new Date).getTime();
                         evt.source_object = xssFilters.inHTMLData(evt.source_object);
                         evt.tool = xssFilters.inHTMLData(evt.tool);
@@ -382,11 +382,11 @@ ws.on('connection', function(socket) {
                         connection.query('SELECT role FROM users WHERE id = ?', [socket.user_id], function (err, results) {
                             if (!err) {
                                 var role = results[0].role;
-                                if (isNaN(role) || role === '')
+                                if (!role || isNaN(role) || role === '')
                                     role = 0;
-                                if (isNaN(evt.event) || evt.event === '')
+                                if (!evt.event || isNaN(evt.event) || evt.event === '')
                                     evt.event = 0;
-                                if (isNaN(evt.event_time) || evt.event === '')
+                                if (!evt.event_time || isNaN(evt.event_time) || evt.event === '')
                                     evt.event_time = (new Date).getTime();
                                 evt.source_object = xssFilters.inHTMLData(evt.source_object);
                                 evt.tool = xssFilters.inHTMLData(evt.tool);
@@ -409,8 +409,8 @@ ws.on('connection', function(socket) {
                 case 'delete_opnote':
                     if (hasPermission(socket.permissions, 'delete_opnotes')) {
                         var evt = msg.arg;
-                        if (isNaN(evt.id) || evt.id === '')
-                            evt.id = 0;
+                        if (!evt.id || isNaN(evt.id) || evt.id === '')
+                            evt.id = -1;
                         connection.query('UPDATE opnotes SET deleted = 1 WHERE id = ?', [evt.id], function (err, results) {
                             if (!err) {
                                 insertLogEvent(socket, 'Deleted opnote ID: ' + evt.id + '.');

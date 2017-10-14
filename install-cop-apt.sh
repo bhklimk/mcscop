@@ -11,9 +11,9 @@ sudo apt-get install nodejs
 npm install
 echo "Please provide your mysql root password.  This is used to"
 echo "create the MCSCOP database."
-mysql -u root -p -e "CREATE DATABASE mcscop;"
+sudo mysql -u root -e "CREATE DATABASE mcscop;"
 echo "Please provide your mysql root password.  This is used to"
 echo "import the MCSCOP database schema."
-cat mysql/mcscop-schema.sql mysql/user.sql | mysql -u root -p mcscop
+cat mysql/mcscop-schema.sql mysql/user.sql | sudo mysql -u root mcscop
 echo "The initial username and password for MCSCOP are:"
 echo "admin / password"
