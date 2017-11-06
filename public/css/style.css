@@ -241,13 +241,11 @@ td a {
     overflow-y: scroll;
 }
 
-#logForm {
+#opsForm, #logForm, #toolsForm{
     height: 100%;
-    padding-bottom: 40px;
-}
-
-#opsForm {
-    height: 100%;
+    padding-top: 10px;
+    padding-right: 10px;
+    padding-left: 10px;
     padding-bottom: 50px;
 }
 
@@ -288,6 +286,7 @@ td a {
 #files {
     height: 100%;
     overflow: scroll;
+    padding: 10px;
 }
 
 #filesButton {
@@ -547,7 +546,6 @@ input[type="password"] {
 }
 
 .toolbar-form {
-    padding: 10px;
     min-width: 300px;
 }
 

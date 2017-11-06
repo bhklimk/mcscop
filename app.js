@@ -291,6 +291,17 @@ ws.on('connection', function(socket) {
                             console.log(err);
                     });
                     break;
+                case 'get_notes':
+                    var analyst = socket.user_id;
+                    var query = 'SELECT id, name FROM notes WHERE deleted = 0 AND mission = ? ORDER BY name ASC'
+                    var args = [socket.mission];
+                    connection.query(query, args, function(err, rows, fields) {
+                        if (!err) {
+                            socket.send(JSON.stringify({act:'all_notes', arg:rows}));
+                        } else
+                            console.log(err);
+                    });
+                    break;
                 case 'update_event':
                     if (hasPermission(socket.permissions, 'modify_events')) {
                         var evt = msg.arg;
@@ -334,6 +345,7 @@ ws.on('connection', function(socket) {
                         connection.query('INSERT INTO events (mission, event_time, discovery_time, source_object, source_port, dest_object, dest_port, event_type, short_desc, analyst, assignment) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [socket.mission, evt.event_time, evt.discovery_time, evt.source_object, evt.source_port, evt.dest_object, evt.dest_port, evt.event_type, evt.short_desc, evt.analyst, evt.assignment], function (err, results) {
                             if (!err) {
                                 evt.id = results.insertId;
+                                evt.analyst = socket.username;
                                 insertLogEvent(socket, 'Created event: ' + evt.event_type + ' ID: ' + evt.id + '.');
                                 sendToRoom(socket.room, JSON.stringify({act: 'insert_event', arg: evt}));
                             } else
@@ -438,6 +450,7 @@ ws.on('connection', function(socket) {
                             if (o.type === 'icon' || o.type === 'shape') {
                                 var scale_x = 1;
                                 var scale_y = 1;
+                                var rot = 0;
                                 if (o.type === 'shape') {
                                     scale_x = 64;
                                     scale_y = 64;
@@ -447,7 +460,7 @@ ws.on('connection', function(socket) {
                                 o.fill_color = xssFilters.inHTMLData(o.fill_color);
                                 o.stroke_color = xssFilters.inHTMLData(o.stroke_color);
                                 o.image = xssFilters.inHTMLData(o.image);
-                                connection.query('INSERT INTO objects (uuid, mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, x, y, z) values ("", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [socket.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, x, y, o.z], function (err, results) {
+                                connection.query('INSERT INTO objects (uuid, mission, type, name, fill_color, stroke_color, image, scale_x, scale_y, rot, x, y, z) values ("", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [socket.mission, o.type, o.name, o.fill_color, o.stroke_color, o.image, scale_x, scale_y, rot, x, y, o.z], function (err, results) {
                                     if (!err) {
                                         o.id = results.insertId;
                                         connection.query('SELECT * FROM objects WHERE deleted = 0 AND id = ?', [o.id], function(err, rows, fields) {
@@ -601,9 +614,9 @@ ws.on('connection', function(socket) {
                                 });
                             } else  {
                                 if (o.type !== undefined && (o.type === 'icon' || o.type === 'shape')) {
-                                    connection.query('UPDATE objects SET x = ?, y = ?, scale_x = ?, scale_y = ? WHERE id = ?', [o.x, o.y, o.scale_x, o.scale_y, o.id], function (err, results) {
+                                    connection.query('UPDATE objects SET x = ?, y = ?, scale_x = ?, scale_y = ?, rot = ? WHERE id = ?', [o.x, o.y, o.scale_x, o.scale_y, o.rot, o.id], function (err, results) {
                                         if (!err) {
-                                            sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}));
+                                            sendToRoom(socket.room, JSON.stringify({act: 'move_object', arg: msg.arg}), socket);
                                         } else
                                             console.log(err);
                                     });

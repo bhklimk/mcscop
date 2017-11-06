@@ -13,7 +13,7 @@ if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !
     $("#moveToFront").prop('disabled', false).click(moveToFront);
     $("#moveToBack").prop('disabled', false).click(moveToBack);
     $("#insertObjectButton").prop('disabled', false).click(insertObject);
-    $("#deleteObjectButton").prop('disabled', false).click(deleteObject);;
+    $("#deleteObjectButton").prop('disabled', false).click(deleteObjectConfirm);;
 }
 var events_rw = false;
 var events_del = false;
@@ -29,14 +29,15 @@ if (permissions.indexOf('all') !== -1 || permissions.indexOf('delete_opnotes') !
         opnotes_del = true;
 
 // ---------------------------- FABRIC CANVASES ----------------------------------
+fabric.Object.prototype.originX = fabric.Object.prototype.originY = 'center';
+fabric.Group.prototype.hasControls = false;
 var canvas = new fabric.Canvas('canvas', {
-    selection: false,
     preserveObjectStacking: true,
     renderOnAddRemove: false,
     enableRetinaScaling: false,
     uniScaleTransform: true
 });
-var background = new fabric.Canvas('background', {
+var background = new fabric.StaticCanvas('background', {
     selection: false,
     preserveObjectStacking: true,
     renderOnAddRemove: false,
@@ -57,8 +58,6 @@ var objectSelect = [{id:0, name:'none/unknown'}];
 var userSelect = [{id:null, username:'none'}];
 var dateSlider = null;
 var images = {};
-var eventTableData = [];
-var opnoteTableData = [];
 var objectsLoaded = null;
 var updatingObject = false;
 var diagram;
@@ -179,34 +178,70 @@ canvas.observe('object:modified', function (e) {
  
 $('#diagram').mousedown(startPan);
 
+canvas.on('object:rotating', function(options) {
+    var step = 5;
+    options.target.set({
+        angle: Math.round(options.target.angle / step) * step,
+    });
+});
+
 canvas.on('object:moving', function(options) {
+    var grid = 10;
+    options.target.set({
+        left: Math.round(options.target.left / grid) * grid,
+        top: Math.round(options.target.top / grid) * grid
+    });
+    var tmod = 0;
+    var lmod = 0;
+    if (options.target._objects) {
+        tmod = options.target.getTop();
+        lmod = options.target.getLeft();
+    }
     dirty = true;
-    options.target.dirty = true;
-    for (var j = 0; j < options.target.children.length; j++) {
-        options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
-        options.target.children[j].setLeft(options.target.getLeft());
+    var o = options.target._objects ? options.target._objects : [options.target];
+    for (var i = 0; i < o.length; i++) {
+        o[i].dirty = true;
+        for (var j = 0; j < o[i].children.length; j++) {
+            o[i].children[j].setTop(tmod + o[i].getTop() + o[i].getHeight()/2);
+            o[i].children[j].setLeft(lmod + o[i].getLeft());
+        }
     }
 });
 
 canvas.on('object:scaling', function(options) {
+    var tmod = 0;
+    var lmod = 0;
+    if (options.target._objects) {
+        tmod = options.target.getTop();
+        lmod = options.target.getLeft();
+    }
     dirty = true;
-    options.target.dirty = true;
-    for (var j = 0; j < options.target.children.length; j++) {
-        options.target.children[j].setTop(options.target.getTop() + (options.target.getHeight()/2));
-        options.target.children[j].setLeft(options.target.getLeft());
+    var o = options.target._objects ? options.target._objects : [options.target];
+    for (var i = 0; i < o.length; i++) {
+        o[i].dirty = true;
+        for (var j = 0; j < o[i].children.length; j++) {
+            o[i].children[j].setTop(tmod + o[i].getTop() + o[i].getHeight()/2);
+            o[i].children[j].setLeft(lmod + o[i].getLeft());
+        }
     }
 });
 
 canvas.on('object:modified', function(options) {
-    var o = canvas.getActiveObject();
-    if (o !== null) {
-        var z = canvas.getObjects().indexOf(o)/2;
-        if (o.objType === 'link')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, z: z}}));
-        else if (o.objType === 'icon')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
-        else if (o.objType === 'shape')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
+    var tmod = 0;
+    var lmod = 0;
+    if (options.target._objects) {
+        tmod = options.target.getTop();
+        lmod = options.target.getLeft();
+    }
+    var o = options.target._objects ? options.target._objects : [options.target];
+    for (var i = 0; i < o.length; i++) {
+        var z = canvas.getObjects().indexOf(o[i])/2;
+        if (o[i].objType === 'link')
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o[i].id, type: o[i].objType, z: z}}));
+        else if (o[i].objType === 'icon')
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o[i].id, type: o[i].objType, x: lmod + o[i].left, y: tmod + o[i].top, z: z, scale_x: o[i].scaleX, scale_y: o[i].scaleY, rot: o[i].angle}}));
+        else if (o[i].objType === 'shape')
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o[i].id, type: o[i].objType, x: lmod + o[i].left, y: tmod + o[i].top, z: z, scale_x: o[i].width, scale_y: o[i].height, rot: o[i].angle}}));
     }
 });
 
@@ -234,45 +269,53 @@ fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
     }
 });
 
+canvas.on('selection:created', function(options) {
+    closeToolbar();
+    for (var i = options.target._objects.length - 1; i >= 0; i--) {
+        if (options.target._objects[i].objType === 'link') {
+            canvas.getActiveGroup().removeWithUpdate(options.target._objects[i]);
+        }
+    }
+});
+
 canvas.on('object:selected', function(options) {
     var o = options.target;
-    if (o) {
-        if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null) {
-            if (o.objType !== undefined) {
-                if (creatingLink) {
-                    if ((o.objType === 'icon' || o.objType === 'shape') && firstNode !== o) {
-                        if (firstNode === null) {
-                            firstNode = o;
-                            showMessage('Click on a second node to complete the link.');
-                        } else {
-                            showMessage('Link created.', 5);
-                            $('#cancelLink').hide();
-                            var z = canvas.getObjects().indexOf(firstNode) - 1;
-                            if (canvas.getObjects().indexOf(o) < z)
-                                z = canvas.getObjects().indexOf(o) - 1;
-                            lastFillColor = $('#propFillColor').val();
-                            lastStrokeColor = $('#propStrokeColor').val();
-                            diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.id, obj_b: o.id, z: z}}));
-                            firstNode = null;
-                            creatingLink = false;
-                        }
+    if (o && canvas.getActiveObject()) {
+        if (o.objType !== undefined) {
+            if (creatingLink) {
+                if ((o.objType === 'icon' || o.objType === 'shape') && firstNode !== o) {
+                    if (firstNode === null) {
+                        firstNode = o;
+                        showMessage('Click on a second node to complete the link.');
+                    } else {
+                        showMessage('Link created.', 5);
+                        $('#cancelLink').hide();
+                        var z = canvas.getObjects().indexOf(firstNode) - 1;
+                        if (canvas.getObjects().indexOf(o) < z)
+                            z = canvas.getObjects().indexOf(o) - 1;
+                        lastFillColor = $('#propFillColor').val();
+                        lastStrokeColor = $('#propStrokeColor').val();
+                        diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.id, obj_b: o.id, z: z}}));
+                        firstNode = null;
+                        creatingLink = false;
                     }
-                } else if (toolbarState) {
-                    $('#propID').val(o.id);
-                    $('#propFillColor').val(o.fill);
-                    $('#propStrokeColor').val(o.stroke);
-                    $('#propName').val('');
-                    if (o.children !== undefined) {
-                        for (var i = 0; i < o.children.length; i++) {
-                            if (o.children[i].objType === 'name')
-                                $('#propName').val(o.children[i].text);
-                        }
-                    }
-                    $('#propType').val(o.objType);
-                    $('#prop-' + o.objType).val(o.image.replace('.svg','.png'));
-                    $('#prop-' + o.objType).data('picker').sync_picker_with_select();
-                    openToolbar('tools');
                 }
+            } else {
+                $('#propID').val(o.id);
+                $('#propFillColor').val(o.fill);
+                $('#propStrokeColor').val(o.stroke);
+                $('#propName').val('');
+                if (o.children !== undefined) {
+                    for (var i = 0; i < o.children.length; i++) {
+                        if (o.children[i].objType === 'name')
+                            $('#propName').val(o.children[i].text);
+                    }
+                }
+                $('#propType').val(o.objType);
+                $('#prop-' + o.objType).val(o.image.replace('.svg','.png'));
+                $('#prop-' + o.objType).data('picker').sync_picker_with_select();
+                if (toolbarState)
+                    openToolbar('tools');
             }
         }
     }
@@ -300,10 +343,12 @@ canvas.on('before:render', function(e) {
                     }
                 }
                 if (fromObj && toObj && (fromObj.dirty || toObj.dirty || canvas.item(i).pending)) {
+                    var fromAbs = fromObj.calcTransformMatrix();
+                    var toAbs = toObj.calcTransformMatrix();
                     if (canvas.item(i).pending)
                         canvas.item(i).pending = false;
-                    canvas.item(i).set({ 'x1': fromObj.getCenterPoint().x, 'y1': fromObj.getCenterPoint().y });
-                    canvas.item(i).set({ 'x2': toObj.getCenterPoint().x, 'y2': toObj.getCenterPoint().y });
+                    canvas.item(i).set({ 'x1': fromAbs[4], 'y1': fromAbs[5] });
+                    canvas.item(i).set({ 'x2': toAbs[4], 'y2': toAbs[5] });
                     canvas.item(i).setCoords();
                     for (var j = 0; j < canvas.item(i).children.length; j++) {
                         canvas.item(i).children[j].set({'left': canvas.item(i).getCenterPoint().x, 'top': canvas.item(i).getCenterPoint().y });
@@ -491,10 +536,9 @@ function getObjectSelect() {
 
 function getOpnoteSubGridData(id) {
     var tdata = new Array();
-    for (var i = 0; i < opnoteTableData.length; i++) {
-        if (opnoteTableData[i].event == id) {
-            tdata.push(opnoteTableData[i]);
-        }
+    for (var i = 0; i < $('#opnotes').getGridParam('data').length; i++) {
+        if ($('#opnotes').getGridParam('data')[i].event == id)
+            tdata.push($('#opnotes').getGridParam('data')[i]);
     }
     return tdata;
 }
@@ -562,7 +606,7 @@ function addZero(i) {
     return i;
 }
 
-function addObjectToCanvas(o, select) {
+function addObjectToCanvas(o, selected) {
     if (o.type === 'link') {
         var fromObject = null;
         var toObject = null;
@@ -609,6 +653,7 @@ function addObjectToCanvas(o, select) {
             objType: 'name',
             selectable: false,
             originX: 'center',
+            originY: 'top',
             textAlign: 'center',
             fill: o.stroke_color,
             angle: angle,
@@ -641,6 +686,7 @@ function addObjectToCanvas(o, select) {
                 strokeWidth: 1,
                 scaleX: o.scale_x,
                 scaleY: o.scale_y,
+                angle: o.rot,
                 id: o.id,
                 objType: o.type,
                 image: o.image,
@@ -671,6 +717,7 @@ function addObjectToCanvas(o, select) {
                 objType: 'name',
                 selectable: false,
                 originX: 'center',
+                originY: 'top',
                 textAlign: 'center',
                 fontSize: 12,
                 fontFamily: 'verdana',
@@ -681,8 +728,10 @@ function addObjectToCanvas(o, select) {
             objectsLoaded.pop();
             canvas.add(shape);
             canvas.add(name);
-            if (select)
+            if (selected === 'single')
                 canvas.setActiveObject(shape);
+            else if (selected === 'group')
+                canvas.getActiveGroup().addWithUpdate(shape);
             shape.moveTo(o.z*2);
             name.moveTo(o.z*2+1);
         });
@@ -692,6 +741,7 @@ function addObjectToCanvas(o, select) {
             shape = new fabric.Rect({
                 width: o.scale_x,
                 height: o.scale_y,
+                angle: o.rot,
                 fill: o.fill_color,
                 stroke: o.stroke_color,
                 strokeWidth: 2,
@@ -713,6 +763,7 @@ function addObjectToCanvas(o, select) {
             shape = new fabric.Ellipse({
                 rx: o.scale_x / 2,
                 ry: o.scale_y / 2,
+                angle: o.rot, 
                 fill: o.fill_color,
                 stroke: o.stroke_color,
                 strokeWidth: 2,
@@ -738,6 +789,7 @@ function addObjectToCanvas(o, select) {
             objType: 'name',
             selectable: false,
             originX: 'center',
+            originY: 'top',
             textAlign: 'center',
             fontSize: 12,
             fontFamily: 'verdana',
@@ -747,8 +799,10 @@ function addObjectToCanvas(o, select) {
         shape.children = [name];
         canvas.add(shape);
         canvas.add(name);
-        if (select)
+        if (selected === 'single')
             canvas.setActiveObject(shape);
+        else if (selected === 'group')
+            canvas.getActiveGroup().addWithUpdate(shape);
         shape.moveTo(o.z*2);
         name.moveTo(o.z*2+1);
     }
@@ -793,6 +847,13 @@ function sendLogMessage(msg) {
     diagram.send(JSON.stringify({act: 'insert_log', arg: {text: msg}}));
 }
 
+function deleteObjectConfirm() {
+    $('#modal-title').text('Are you sure?');
+    $('#modal-body').html('<p>Are you sure you want to delete this object?</p>');
+    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal" onClick="deleteObject();">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal').modal('show')
+}
+
 function deleteObject() {
     if (canvas.getActiveObject().id) {
         diagram.send(JSON.stringify({act: 'delete_object', arg: {id:canvas.getActiveObject().id, type:canvas.getActiveObject().objType}}));
@@ -804,9 +865,9 @@ function moveToZ(o, z) {
         if (o.objType === 'link')
             diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, z: z}}));
         else if (o.objType === 'icon')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.scaleX, scale_y: o.scaleY, rot: o.angle}}));
         else if (o.objType === 'shape')
-            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height}}));
+            diagram.send(JSON.stringify({act: 'move_object', arg: {id: o.id, type: o.objType, x: o.left, y: o.top, z: z, scale_x: o.width, scale_y: o.height, rot: o.angle}}));
     }
 }
 
@@ -896,6 +957,7 @@ function changeObject(o) {
     tempObj.z = canvas.getObjects().indexOf(o);
     tempObj.scale_x = o.scaleX;
     tempObj.scale_y = o.scaleY;
+    tempObj.rot = o.angle;
     tempObj.type = o.objType;
     tempObj.fill_color = o.fill;
     tempObj.stroke_color = o.stroke;
@@ -923,7 +985,13 @@ function toggleToolbar(mode) {
 
 function openToolbar(mode) {
     if (!toolbarState || mode !== activeToolbar)
-        $('#toolbar-body').animate({width: Math.min($('#diagram_jumbotron').width()-60, settings[mode])}, {duration: 200, step: function() {
+        $('#toolbar-body').animate({width: Math.min($('#diagram_jumbotron').width()-60, settings[mode])}, {duration: 200, step: function()
+            {
+                if (mode === 'opnotes')
+                    $("#opnotes").setGridWidth(Math.max($('#opsForm').width()-5, 400));
+            }
+        , complete: function()
+            {
                 if (mode === 'opnotes')
                     $("#opnotes").setGridWidth(Math.max($('#opsForm').width()-5, 400));
             }
@@ -994,11 +1062,11 @@ function openToolbar(mode) {
             $('#tasksForm').hide();
             $('#notesForm').hide();
             $('#opsForm').show();
-            $('#logForm').hide();
             setTimeout(function() {
                 $("#opnotes").setGridHeight($('#opsForm').height()-70);
                 $("#opnotes").setGridWidth($('#opsForm').width()-5); 
-            }, 10);
+            }, 100);
+            $('#logForm').hide();
             $('#filesForm').hide();
             break;
         case 'files':
@@ -1069,7 +1137,7 @@ function startTasks() {
             var binding = new StringBinding(element, ccirDoc);
             binding.setup();
         });
-        var notesDoc;
+/*        var notesDoc;
         notesDoc = shareDBConnection.get('mcscop', 'mission' + mission + 'notes');
         notesDoc.subscribe(function(err) {
             if (notesDoc.type === null) {
@@ -1079,7 +1147,7 @@ function startTasks() {
             var element = document.getElementById('notes');
             var binding = new StringBinding(element, notesDoc);
             binding.setup();
-        });
+        });*/
     } else {
         setTimeout(function() {
             console.log('retrying tasks connection');
@@ -1094,11 +1162,11 @@ function downloadDiagram(link) {
 }
 
 function downloadOpnotes() {
-    JSONToCSVConvertor(opnoteTableData, 'opnotes.csv');
+    JSONToCSVConvertor($('#opnotes').getGridParam('data'), 'opnotes.csv');
 }
 
 function downloadEvents() {
-    JSONToCSVConvertor(eventTableData, 'events.csv');
+    JSONToCSVConvertor($('#events2').getGridParam('data'), 'opnotes.csv');
 }
 
 // https://ciphertrick.com/2014/12/07/download-json-data-in-csv-format-cross-browser-support/
@@ -1249,6 +1317,9 @@ function saveRow(type, table, id) {
 
 $(document).ready(function() {
     startTime();
+    document.body.addEventListener('dragleave', f, false);
+    document.body.addEventListener('dragover', f, false);
+    document.body.addEventListener('drop', f, false);
     // ---------------------------- SOCKETS ----------------------------------
     if (location.protocol === 'https:')
         diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
@@ -1272,6 +1343,8 @@ $(document).ready(function() {
         diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
         console.log('get log history');
         diagram.send(JSON.stringify({act:'get_log', arg: {mission: mission}}));
+        console.log('get notes');
+        diagram.send(JSON.stringify({act:'get_notes', arg: {mission: mission}}));
     };
     diagram.onmessage = function(msg) {
         msg = JSON.parse(msg.data);
@@ -1316,6 +1389,7 @@ $(document).ready(function() {
                 checkIfShapesCached(msg.arg);
                 break;
             case 'all_events':
+                var eventTableData = [];
                 for (var evt in msg.arg) {
                     eventTableData.push(msg.arg[evt]);
                 }
@@ -1338,7 +1412,7 @@ $(document).ready(function() {
                 $('#events2').jqGrid('setColProp', 'assignment', { editoptions: { value: getUserSelect() }});
                 break; 
             case 'all_opnotes':
-                opnoteTableData = [];
+                var opnoteTableData = [];
                 for (var evt in msg.arg) {
                     opnoteTableData.push(msg.arg[evt]);
                 }
@@ -1349,14 +1423,18 @@ $(document).ready(function() {
                 break;
             case 'change_object':
                 var o = msg.arg;
-                var selected = false;
+                var selected = '';
                 for (var i = 0; i < canvas.getObjects().length; i++) {
                     if (canvas.item(i).id === o.id) {
-                        if (canvas.getActiveObject() && canvas.getActiveObject().id === o.id) {
-                            updatingObject = true;
-                            selected = true;
-                        }
                         var to = canvas.item(i);
+                        if (to.active) {
+                            updatingObject = true;
+                            selected = 'single';
+                            if (canvas.getActiveGroup()) {
+                                selected = 'group';
+                                canvas.getActiveGroup().remove(to);
+                            }
+                        }
                         if (o.type === 'icon') {
                             var children = to.children.length;
                             for (var k = 0; k < children; k++)
@@ -1384,6 +1462,7 @@ $(document).ready(function() {
                         var obj = canvas.item(i);
                         obj.dirty = true;
                         if (o.type !== 'link') {
+                            obj.angle = o.rot;
                             if (o.type === 'icon') {
                                 obj.scaleX = o.scale_x;
                                 obj.scaleY = o.scale_y;
@@ -1391,17 +1470,29 @@ $(document).ready(function() {
                                 obj.width = o.scale_x;
                                 obj.height = o.scale_y;
                             }
+                            var tmod = 0;
+                            var lmod = 0;
+                        //    var activeGroup = canvas.getActiveGroup();
+                            if (obj.active && canvas.getActiveGroup())
+                                canvas.getActiveGroup().removeWithUpdate(obj);
+                            //    tmod = activeGroup.getTop();
+                              //  lmod = activeGroup.getLeft();
+                             //   o.x = o.x - lmod;
+                              //  o.y = o.y - tmod;
+                            //}   
                             obj.animate({left: o.x, top: o.y}, {
                                 duration: 100,
                                 onChange: function() {
                                     dirty = true;
                                     obj.dirty = true;
                                     for (var j = 0; j < obj.children.length; j++) {
-                                        obj.children[j].setTop(obj.getTop() + (obj.getHeight()/2));
-                                        obj.children[j].setLeft(obj.getLeft());
+                                        obj.children[j].setTop(tmod + obj.getTop() + (obj.getHeight()/2));
+                                        obj.children[j].setLeft(lmod + obj.getLeft());
                                     }
-                                    canvas.renderAll();;
+                                    obj.setCoords();
+                                    canvas.renderAll();
                                 }
+
                             });
                         }
                         if (i !== o.z*2) {
@@ -1421,16 +1512,10 @@ $(document).ready(function() {
                 break;
             case 'update_event':
                 var evt = msg.arg;
-                for (var i = 0; i < eventTableData.length; i++) {
-                    if (eventTableData[i].id === evt.id) {
-                        eventTableData[i] = evt;
-                    }
-                }
                 $('#events2').jqGrid('setRowData', evt.id, evt);
                 break;
             case 'insert_event':
                 var evt = msg.arg;
-                eventTableData.push(evt);
                 $('#events2').jqGrid('addRowData', evt.id, evt, 'last');
                 $('#events2').jqGrid('sortGrid', 'event_time', false, 'asc');
                 dateSlider.noUiSlider.updateOptions({
@@ -1446,12 +1531,6 @@ $(document).ready(function() {
             case 'delete_event':
                 var evt = msg.arg;
                 $('#events2').jqGrid('delRowData', evt.id);
-                for (var i = 0; i < eventTableData.length; i++) {
-                    if (eventTableData[i].id === evt.id) {
-                        eventTableData.splice(i, 1);
-                        break;
-                    }
-                }
                 dateSlider.noUiSlider.updateOptions({
                     start: [-1, $('#events2').getRowData().length],
                     behaviour: 'drag',
@@ -1464,27 +1543,15 @@ $(document).ready(function() {
                 break;
             case 'update_opnote':
                 var evt = msg.arg;
-                for (var i = 0; i < opnoteTableData.length; i++) {
-                    if (opnoteTableData[i].id === evt.id) {
-                        opnoteTableData[i] = evt;
-                    }
-                }
                 $('#opnotes').jqGrid('setRowData', evt.id, evt);
                 break;
             case 'insert_opnote':
                 var evt = msg.arg;
-                opnoteTableData.push(evt);
                 $('#opnotes').jqGrid('addRowData', evt.id, evt, 'last');
                 $('#opnotes').jqGrid('sortGrid', 'event_time', false, 'asc');
                 break;
             case 'delete_opnote':
                 var evt = msg.arg;
-                for (var i = 0; i < opnoteTableData.length; i++) {
-                    if (opnoteTableData[i].id === evt.id) {
-                        opnoteTableData.splice(i, 1);
-                        break;
-                    }
-                }
                 $('#opnotes').jqGrid('delRowData', evt.id);
                 break;
             case 'insert_object':
@@ -1509,6 +1576,8 @@ $(document).ready(function() {
                                 canvas.remove(object.children[k]);
                             }
                         }
+                        if (object.active && canvas.getActiveGroup())
+                            canvas.getActiveGroup().removeWithUpdate(object);
                         canvas.remove(object);
                         break;
                     }
@@ -1724,7 +1793,7 @@ $(document).ready(function() {
                 }
             },
             { label: 'Id', name: 'event', width: 10, editable: true },
-            { label: 'Event Time', name: 'event_time', width: 60, editable: true, formatter: epochToDateString, editoptions: {
+            { label: 'Event Time', name: 'event_time', width: 180, fixed: true, resizable: false, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
                         dateFormat: "yy-mm-dd",
@@ -1744,7 +1813,9 @@ $(document).ready(function() {
             }},
             { label: 'Host/Device', name: 'source_object', width: 50, editable: true },
             { label: 'Tool', name: 'tool', width: 20, editable: true },
-            { label: 'Action', name: 'action', width: 75, edittype: 'textarea', editable: true },
+            { label: 'Action', name: 'action', width: 75, edittype: 'textarea', editable: true, cellattr: function (rowId, tv, rawObject, cm, rdata) {
+                return 'style="white-space: pre-wrap;"';
+            }},
             { label: 'Analyst', name: 'analyst', width: 40, editable: false },
         ],
         onSelectRow: function() {
@@ -1869,7 +1940,9 @@ $(document).ready(function() {
                     { label: 'Event Time', name: 'event_time', width: 180, fixed: true, editable: false, formatter: epochToDateString },
                     { label: 'Host/Device', name: 'source_object', editable: false },
                     { label: 'Tool', name: 'tool', editable: false },
-                    { label: 'Action', name: 'action', editable: false },
+                    { label: 'Action', name: 'action', editable: false, cellattr: function (rowId, tv, rawObject, cm, rdata) {
+                        return 'style="white-space: pre-wrap;"';
+                    }},
                     { label: 'Analyst', name: 'analyst', width: 100, fixed: true, editable: false },
                 ],
             });
@@ -1936,7 +2009,9 @@ $(document).ready(function() {
             }},
             { label: 'DPort', name: 'dest_port', width: 60, fixed: true, editable: true },
             { label: 'Event Type', name: 'event_type', width: 150, editable: true },
-            { label: 'Event Description', name: 'short_desc', width: 200, edittype: 'textarea', editable: true },
+            { label: 'Event Description', name: 'short_desc', width: 200, edittype: 'textarea', editable: true, cellattr: function (rowId, tv, rawObject, cm, rdata) {
+                return 'style="white-space: pre-wrap;"';
+            }},
             { label: 'Assignment', name: 'assignment', width: 100, editable: true, formatter: 'select', edittype: 'select', editoptions: {
                 value: getUserSelect()
             }},
@@ -2072,6 +2147,98 @@ $(document).ready(function() {
         $grid.trigger("reloadGrid", [{page: 1, current: true}]);
         return false;
     });
+    // ---------------------------- NOTES ----------------------------------
+    $('#notes')
+        .on('select_node.jstree', function(e, data) {
+            if (data.node.li_attr.isLeaf) {
+                //var o = 'download/mission-' + mission + '/' + data.selected[0];
+                //var dl = $('<iframe />').attr('src', o).hide().appendTo('body');
+            }
+        }).jstree({
+            'core': {
+                'check_callback': true,
+                'data': {
+                    /*
+                    'method': 'POST',
+                    'url': function(node) {
+                        return 'dir/';
+                    },
+                    'data': function(node) {
+                        return {
+                            id: node.id,
+                            mission: mission
+                        };
+                    }*/
+                }
+            },
+            'plugins': ['dnd', 'wholerow', 'contextmenu'],
+            'contextmenu': {
+                'select_node' : false,
+                'items': function(node) {
+                    return {
+                        'mkdir': {
+                            'separator_before': false,
+                            'separator_after': false,
+                            'label': 'mkdir',
+                            'action': function (obj) {
+                                var _node = node;
+                                bootbox.prompt('Directory name?', function(name) {
+                                    /*
+                                    $.ajax({
+                                        url: 'mkdir',
+                                        type: 'POST',
+                                        data: {'id': _node.id, 'name': name, 'mission': mission},
+                                        success: function() {
+                                        },
+                                        error: function() {
+                                            console.log('mkdir error');
+                                        }
+                                    });
+                                    */
+                                });
+                            }
+                        },
+                        'del': {
+                            'separator_before': false,
+                            'separator_after': false,
+                            'label': 'del',
+                            'action': function (obj) {
+                                /*
+                                $.ajax({
+                                    url: 'delete',
+                                    type: 'POST',
+                                    data: {'id': node.id, 'mission': mission},
+                                    success: function() {
+                                    },
+                                    error: function() {
+                                        console.log('delete error');
+                                    }
+                                });
+                                */
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    $(document).on('dnd_stop.vakata', function(e, data) {
+        var t = $(data.event.target);
+        var targetnode = t.closest('.jstree-node');
+        var dst = targetnode.attr("id");
+        var src = data.data.nodes[0];
+        /*
+        $.ajax({
+            url: 'mv',
+            type: 'POST',
+            data: {'dst': dst, 'src': src},
+            success: function() {
+            },
+            error: function() {
+                console.log('mv error');
+            }
+        });
+        */
+    });
     // ---------------------------- MISC ----------------------------------
     $("#diagram_jumbotron").resizable({ handles: 's', minHeight: 100 });
     $("#toolbar-body").resizable({ handles: 'w', maxWidth: $('#diagram_jumbotron').width()-60 });
@@ -2098,3 +2265,58 @@ $(document).ready(function() {
     resizeCanvas();
     loadSettings();
 });
+var f = function(e)
+{
+    var srcElement = e.srcElement? e.srcElement : e.target;
+    if ($.inArray('Files', e.dataTransfer.types) > -1)
+    {
+        e.stopPropagation();
+        e.preventDefault();
+        e.dataTransfer.dropEffect = ($(srcElement).hasClass('droppable')) ? 'copy' : 'none';
+        if (e.type == 'drop') {
+/*            var formData = new FormData();
+            formData.append('dir', srcElement.id);
+            $.each(e.dataTransfer.files, function(i, file) {
+                formData.append('file',file);
+            });
+            formData.append('mission', mission);
+            $.ajax({
+                url: 'upload',
+                type: 'POST',
+                xhr: function() {
+                    var mxhr = $.ajaxSettings.xhr();
+                    if (mxhr.upload) {
+                        $("#progressbar")
+                            .progressbar({ value: 0 })
+                            .children('.ui-progressbar-value')
+                            .html('0%')
+                            .css("display", "block");
+                        mxhr.upload.addEventListener('progress', progressHandler, false);
+                    }
+                    return mxhr;
+                },
+                data: formData,
+                dataType: 'json',
+                cache: false,
+                contentType: false,
+                processData: false,
+                success: function() {
+                    $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload successful!');
+                    setTimeout(function() {
+                        $("#progressbar").fadeOut("slow");
+                    }, 5000);
+                },
+                error: function() {
+                    $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload error!');
+                    console.log('upload error');
+                }
+            });*/
+        }
+    }
+};
+
+$(document).ready(function() {
+    var mission = getParameterByName('mission');
+
+});
+
