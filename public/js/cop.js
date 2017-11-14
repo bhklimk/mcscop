@@ -31,6 +31,9 @@ if (permissions.indexOf('all') !== -1 || permissions.indexOf('delete_opnotes') !
 // ---------------------------- FABRIC CANVASES ----------------------------------
 fabric.Object.prototype.originX = fabric.Object.prototype.originY = 'center';
 fabric.Group.prototype.hasControls = false;
+fabric.Object.prototype.transparentCorners = false;
+fabric.Object.prototype.cornerSize = 7;
+fabric.Object.prototype.objectCaching = true;
 var canvas = new fabric.Canvas('canvas', {
     preserveObjectStacking: true,
     renderOnAddRemove: false,
@@ -39,9 +42,8 @@ var canvas = new fabric.Canvas('canvas', {
 });
 var background = new fabric.StaticCanvas('background', {
     selection: false,
-    preserveObjectStacking: true,
     renderOnAddRemove: false,
-    enableRetinaScaling: false
+    enableRetinaScaling: true
 });
 
 MAXWIDTH=4000;
@@ -66,15 +68,18 @@ var firstNode = null;
 var zoom = 1.0;
 var dirty = false;
 var SVGCache = {};
+var SVGCache2 = {};
 var tempLinks = [];
 var objectCache = {};
 var resizeTimer = null;
+var toolbarResizeTimer = null;
 var eventTableTimer = null;
 var opnoteTableTimer = null;
 var updateSettingsTimer = null;
 var sliderTimer = null;
 var doc;
 var activeToolbar = null;
+var activeTable = 'events';
 var lastselection = {id: null, iRow: null, iCol: null};
 var gridsize = 40;
 var lastFillColor = '#000000';
@@ -349,7 +354,6 @@ canvas.on('before:render', function(e) {
                         canvas.item(i).pending = false;
                     canvas.item(i).set({ 'x1': fromAbs[4], 'y1': fromAbs[5] });
                     canvas.item(i).set({ 'x2': toAbs[4], 'y2': toAbs[5] });
-                    canvas.item(i).setCoords();
                     for (var j = 0; j < canvas.item(i).children.length; j++) {
                         canvas.item(i).children[j].set({'left': canvas.item(i).getCenterPoint().x, 'top': canvas.item(i).getCenterPoint().y });
                         var angle = (Math.atan2((canvas.item(i).y1 - canvas.item(i).y2), (canvas.item(i).x1 - canvas.item(i).x2))) * (180/Math.PI);
@@ -359,9 +363,6 @@ canvas.on('before:render', function(e) {
                     }
                 }
             }
-        }
-        for (var i = 0; i < canvas.getObjects().length; i++) {
-            canvas.item(i).dirty = false;
         }
         if (tempLinks.length > 0) {
             for (var i = 0; i < tempLinks.length; i++) {
@@ -377,12 +378,25 @@ canvas.on('before:render', function(e) {
     }
 });
 
-function getIcon(icon, type) {
+function getIcon(icon, cb) {
     var path = 'images/icons/';
-    $.get(path + icon, function(data) {
-        SVGCache[icon] = data;
+    if (!SVGCache2[icon]) {
+        $.get(path + icon, function(data) {
+            SVGCache[icon] = data;
+            fabric.loadSVGFromString(data, function(objects, options) {
+                SVGCache2[icon] = fabric.util.groupSVGElements(objects, options);
+                if (cb) {
+                    cb();
+                }
+                objectsLoaded.pop();
+            });
+        }, 'text');
+    } else {
         objectsLoaded.pop();
-    }, 'text');
+        if (cb) {
+            cb();
+        }
+    }
 }
 
 function checkIfShapesCached(msg) {
@@ -461,17 +475,62 @@ function checkIfObjectsLoaded() {
     }
 }
 
+function createNotesTree(arg) {
+    $('#notes')
+        .on('select_node.jstree', function(e, data) {
+            if (data.node.li_attr.isLeaf) {
+                editDetails('notes' + data.selected[0]);
+            }
+        }).jstree({
+            'core': {
+                'check_callback': true,
+                'data': arg
+            },
+            'plugins': ['dnd', 'wholerow', 'contextmenu'],
+            'contextmenu': {
+                'select_node' : false,
+                'items': function(node) {
+                    return {
+                        'mkdir': {
+                            'separator_before': false,
+                            'separator_after': false,
+                            'label': 'New Note',
+                            'action': function (obj) {
+                                var _node = node;
+                                bootbox.prompt('Note name?', function(name) {
+                                    diagram.send(JSON.stringify({act: 'insert_note', arg: {name: name}}));
+                                });
+                            }
+                        },
+                        'del': {
+                            'separator_before': false,
+                            'separator_after': false,
+                            'label': 'Delete Note',
+                            'action': function (obj) {
+                                diagram.send(JSON.stringify({act: 'delete_note', arg: {id: node.id}}));
+                            }
+                        }
+                    }
+                }
+            }
+        });
+}
+
 function editDetails(id) {
-    if (canvas.getActiveObject()) {
-        $('#modal-title').text('Edit Object Notes');
-        $('#modal-body').html('<input type="hidden" id="object_details_id" name="object_details_id" value="' + canvas.getActiveObject().id + '"><textarea id="object_details" class="object-details"></textarea>');
+    if (!id && canvas.getActiveObject())
+        id = 'details-' + canvas.getActiveObject().id;
+    console.log(id);
+    if (id) {
+        $('#modal-title').text('Edit Notes');
+        $('#modal-body').html('<input type="hidden" id="object_details_id" name="object_details_id" value="' + id + '"><textarea id="object_details" class="object-details" style="resize: none;"></textarea>');
         $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">Close</button>');
+        $('#modal-content').addClass('modal-details');
         if (doc) {
             console.log('unsubscribing');
             doc.destroy();
             doc = undefined;
         }
-        doc = shareDBConnection.get('mcscop', 'details-' + canvas.getActiveObject().id);
+        doc = shareDBConnection.get('mcscop', id);
         doc.subscribe(function(err) {
             if (doc.type === null) {
                 doc.create('');
@@ -536,9 +595,9 @@ function getObjectSelect() {
 
 function getOpnoteSubGridData(id) {
     var tdata = new Array();
-    for (var i = 0; i < $('#opnotes').getGridParam('data').length; i++) {
-        if ($('#opnotes').getGridParam('data')[i].event == id)
-            tdata.push($('#opnotes').getGridParam('data')[i]);
+    for (var i = 0; i < $('#opnotes2').getGridParam('data').length; i++) {
+        if ($('#opnotes2').getGridParam('data')[i].event == id)
+            tdata.push($('#opnotes2').getGridParam('data')[i]);
     }
     return tdata;
 }
@@ -588,6 +647,12 @@ function startPan(event) {
     $(window).mouseup(stopPan);
     $(window).contextmenu(cancelMenu);
 };
+
+function newNote() {
+    bootbox.prompt('Note name?', function(name) {
+        diagram.send(JSON.stringify({act: 'insert_note', arg: {name: name}}));
+    });
+}
 
 function newObject() {
     canvas.deactivateAll().renderAll();
@@ -663,77 +728,83 @@ function addObjectToCanvas(o, selected) {
             top: line.getCenterPoint().y
         });
         line.children = [name];
-        
         canvas.add(line);
         canvas.add(name);
         line.moveTo(o.z*2);
         name.moveTo(o.z*2+1);
     } else if (o.type === 'icon' && o.image !== undefined && o.image !== null) {
-        var image, func;
-        if (SVGCache[o.image] === undefined) {
+//        var image, func;
+/*        if (SVGCache[o.image] === undefined) {
+            console.log('from url');
             image = ('images/icons/' + o.image);
             func = fabric.loadSVGFromURL;
         } else {
+            console.log('cached');
             image = SVGCache[o.image];
             func = fabric.loadSVGFromString;
         }
-        func(image, function(objects, options) {
-            var name;
-            var shape = fabric.util.groupSVGElements(objects, options);
-            shape.set({
-                fill: o.fill_color,
-                stroke: o.stroke_color,
-                strokeWidth: 1,
-                scaleX: o.scale_x,
-                scaleY: o.scale_y,
-                angle: o.rot,
-                id: o.id,
-                objType: o.type,
-                image: o.image,
-                name_val: o.name,
-                originX: 'center',
-                originY: 'center',
-                left: o.x,
-                top: o.y,
-                lockMovementX: !diagram_rw,
-                lockMovementY: !diagram_rw,
-                lockScalingX: !diagram_rw,
-                lockScalingY: !diagram_rw,
-                lockRotation: !diagram_rw
-            });
-            if (shape.paths) {
-                for (var i = 0; i < shape.paths.length; i++) {
-                    if (shape.paths[i].fill !== 'rgba(254,254,254,1)' && shape.paths[i].fill !== '') {
-                        shape.paths[i].setFill(o.fill_color);
-                    }
-                    if (shape.paths[i].stroke !== 'rgba(254,254,254,1)') {
-                        shape.paths[i].setStroke(o.stroke_color);
+      //  func(image, function(objects, options) {*/
+        if (!SVGCache2[o.image]) {
+            console.log('getting image');
+        }
+        getIcon(o.image, function() {
+            SVGCache2[o.image].clone(function(shape) {
+                var name;
+                shape.set({
+                    fill: o.fill_color,
+                    stroke: o.stroke_color,
+                    strokeWidth: 1,
+                    scaleX: o.scale_x,
+                    scaleY: o.scale_y,
+                    angle: o.rot,
+                    id: o.id,
+                    objType: o.type,
+                    image: o.image,
+                    name_val: o.name,
+                    originX: 'center',
+                    originY: 'center',
+                    left: o.x,
+                    top: o.y,
+                    lockMovementX: !diagram_rw,
+                    lockMovementY: !diagram_rw,
+                    lockScalingX: !diagram_rw,
+                    lockScalingY: !diagram_rw,
+                    lockRotation: !diagram_rw
+                });
+                if (shape.paths && !shape.image.includes('static')) {
+                    for (var i = 0; i < shape.paths.length; i++) {
+                        if (shape.paths[i].fill !== 'rgba(254,254,254,1)' && shape.paths[i].fill !== '') {
+                            shape.paths[i].setFill(o.fill_color);
+                        }
+                        if (shape.paths[i].stroke !== 'rgba(254,254,254,1)') {
+                            shape.paths[i].setStroke(o.stroke_color);
+                        }
                     }
                 }
-            }
-            name = new fabric.Text(o.name, {
-                parent_id: o.id,
-                parent: shape,
-                objType: 'name',
-                selectable: false,
-                originX: 'center',
-                originY: 'top',
-                textAlign: 'center',
-                fontSize: 12,
-                fontFamily: 'verdana',
-                left: o.x,
-                top: o.y + (shape.getHeight()/2)
+                name = new fabric.Text(o.name, {
+                    parent_id: o.id,
+                    parent: shape,
+                    objType: 'name',
+                    selectable: false,
+                    originX: 'center',
+                    originY: 'top',
+                    textAlign: 'center',
+                    fontSize: 12,
+                    fontFamily: 'verdana',
+                    left: o.x,
+                    top: o.y + (shape.getHeight()/2)
+                });
+                shape.children = [name];
+                objectsLoaded.pop();
+                canvas.add(shape);
+                canvas.add(name);
+                if (selected === 'single')
+                    canvas.setActiveObject(shape);
+                else if (selected === 'group')
+                    canvas.getActiveGroup().addWithUpdate(shape);
+                shape.moveTo(o.z*2);
+                name.moveTo(o.z*2+1);
             });
-            shape.children = [name];
-            objectsLoaded.pop();
-            canvas.add(shape);
-            canvas.add(name);
-            if (selected === 'single')
-                canvas.setActiveObject(shape);
-            else if (selected === 'group')
-                canvas.getActiveGroup().addWithUpdate(shape);
-            shape.moveTo(o.z*2);
-            name.moveTo(o.z*2+1);
         });
     } else if (o.type === 'shape') {
         var shape = o.image.split('-')[3].split('.')[0];
@@ -845,19 +916,6 @@ function insertObject() {
 
 function sendLogMessage(msg) {
     diagram.send(JSON.stringify({act: 'insert_log', arg: {text: msg}}));
-}
-
-function deleteObjectConfirm() {
-    $('#modal-title').text('Are you sure?');
-    $('#modal-body').html('<p>Are you sure you want to delete this object?</p>');
-    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal" onClick="deleteObject();">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
-    $('#modal').modal('show')
-}
-
-function deleteObject() {
-    if (canvas.getActiveObject().id) {
-        diagram.send(JSON.stringify({act: 'delete_object', arg: {id:canvas.getActiveObject().id, type:canvas.getActiveObject().objType}}));
-    }
 }
 
 function moveToZ(o, z) {
@@ -972,7 +1030,6 @@ function changeObject(o) {
 }
 
 function toggleToolbar(mode) {
- //   if ($('#toolbar-body').is(':hidden')) {
     if ($('#toolbar-body').width() === 0) {
         openToolbar(mode);
     } else {
@@ -983,28 +1040,35 @@ function toggleToolbar(mode) {
     }
 }
 
+function showTable(mode) {
+    $('#' + activeTable + 'Tab').removeClass('active-horiz-tab');
+    $('#' + mode + 'Tab').addClass('active-horiz-tab');
+    activeTable = mode;
+    switch(mode) {
+        case 'events':
+            $('#events').show();
+            $('#opnotes').hide();
+            break;
+        case 'opnotes':
+            $('#events').hide();
+            $('#opnotes').show();
+            break;
+    }
+}
+
 function openToolbar(mode) {
     if (!toolbarState || mode !== activeToolbar)
-        $('#toolbar-body').animate({width: Math.min($('#diagram_jumbotron').width()-60, settings[mode])}, {duration: 200, step: function()
-            {
-                if (mode === 'opnotes')
-                    $("#opnotes").setGridWidth(Math.max($('#opsForm').width()-5, 400));
-            }
-        , complete: function()
-            {
-                if (mode === 'opnotes')
-                    $("#opnotes").setGridWidth(Math.max($('#opsForm').width()-5, 400));
-            }
-        });
+        $('#' + activeToolbar + 'Tab').removeClass('active-tab');
+        $('#toolbar-body').animate({width: Math.min($('#diagram_jumbotron').width()-60, settings[mode])}, {duration: 200});
     toolbarState = true;
     activeToolbar = mode;
+    $('#' + mode + 'Tab').addClass('active-tab');
     switch(mode) {
         case 'tools':
             //$('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tools']));
             $('#toolsForm').show();
             $('#tasksForm').hide();
             $('#notesForm').hide();
-            $('#opsForm').hide();
             $('#filesForm').hide();
             $('#logForm').hide();
             if (canvas.getActiveObject()) {
@@ -1045,7 +1109,6 @@ function openToolbar(mode) {
             $('#toolsForm').hide();
             $('#tasksForm').show();
             $('#notesForm').hide();
-            $('#opsForm').hide();
             $('#filesForm').hide();
             $('#logForm').hide();
             break;
@@ -1053,7 +1116,6 @@ function openToolbar(mode) {
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').show();
-            $('#opsForm').hide();
             $('#filesForm').hide();
             $('#logForm').hide();
             break;
@@ -1061,11 +1123,6 @@ function openToolbar(mode) {
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').hide();
-            $('#opsForm').show();
-            setTimeout(function() {
-                $("#opnotes").setGridHeight($('#opsForm').height()-70);
-                $("#opnotes").setGridWidth($('#opsForm').width()-5); 
-            }, 100);
             $('#logForm').hide();
             $('#filesForm').hide();
             break;
@@ -1073,7 +1130,6 @@ function openToolbar(mode) {
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').hide();
-            $('#opsForm').hide();
             $('#filesForm').show();
             $('#logForm').hide();
             break;
@@ -1081,7 +1137,6 @@ function openToolbar(mode) {
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').hide();
-            $('#opsForm').hide();
             $('#filesForm').hide();
             $('#logForm').show();
         break;
@@ -1089,8 +1144,9 @@ function openToolbar(mode) {
 }
 
 function closeToolbar() {
+    if (activeToolbar)
+        $('#' + activeToolbar + 'Tab').removeClass('active-tab');
     toolbarState = false;
-    //$('#toolbar-body').hide();
     $('#propName').blur();
     $('#toolbar-body').animate({width: "0px"}, 200);
 }
@@ -1137,17 +1193,6 @@ function startTasks() {
             var binding = new StringBinding(element, ccirDoc);
             binding.setup();
         });
-/*        var notesDoc;
-        notesDoc = shareDBConnection.get('mcscop', 'mission' + mission + 'notes');
-        notesDoc.subscribe(function(err) {
-            if (notesDoc.type === null) {
-                notesDoc.create('Notes:');
-            }
-            if (err) throw err;
-            var element = document.getElementById('notes');
-            var binding = new StringBinding(element, notesDoc);
-            binding.setup();
-        });*/
     } else {
         setTimeout(function() {
             console.log('retrying tasks connection');
@@ -1162,7 +1207,7 @@ function downloadDiagram(link) {
 }
 
 function downloadOpnotes() {
-    JSONToCSVConvertor($('#opnotes').getGridParam('data'), 'opnotes.csv');
+    JSONToCSVConvertor($('#opnotes2').getGridParam('data'), 'opnotes.csv');
 }
 
 function downloadEvents() {
@@ -1251,15 +1296,16 @@ function setSlider(i, value) {
 }
 
 function resizeCanvas() {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function() {
+    if (canvas.getHeight() != $('#diagram').height()) {
         canvas.setHeight($('#diagram').height());
-        canvas.setWidth($('#diagram').width());
         background.setHeight($('#diagram').height());
+    }
+    if (canvas.getWidth() != $('#diagram').width()) {
+        canvas.setWidth($('#diagram').width());
         background.setWidth($('#diagram').width());
-        canvas.renderAll();
         $("#events2").setGridWidth($('#events').width()-5);
-    }, 50);
+        $("#opnotes2").setGridWidth($('#events').width()-5);
+    }
 }
 
 function startTime() {
@@ -1280,10 +1326,27 @@ function checkTime(i) {
     return i;
 }
 
+function deleteObjectConfirm() {
+    $('#modal-title').text('Are you sure?');
+    $('#modal-body').html('<p>Are you sure you want to delete this object?</p>');
+    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-danger" data-dismiss="modal" onClick="deleteObject();">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal-content').removeAttr('style');
+    $('#modal-content').removeClass('modal-details');
+    $('#modal').modal('show')
+}
+
+function deleteObject() {
+    if (canvas.getActiveObject().id) {
+        diagram.send(JSON.stringify({act: 'delete_object', arg: {id:canvas.getActiveObject().id, type:canvas.getActiveObject().objType}}));
+    }
+}
+
 function deleteRowConfirm(type, table, id) {
     $('#modal-title').text('Are you sure?');
     $('#modal-body').html('<p>Are you sure you want to delete this row?</p>');
-    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal" onClick="deleteRow(\'' + type + '\', \'' + table + '\', \'' + id + '\');">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-danger" data-dismiss="modal" onClick="deleteRow(\'' + type + '\', \'' + table + '\', \'' + id + '\');">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal-content').removeAttr('style');
+    $('#modal-content').removeClass('modal-details');
     $('#modal').modal('show')
 }
 
@@ -1317,9 +1380,8 @@ function saveRow(type, table, id) {
 
 $(document).ready(function() {
     startTime();
-    document.body.addEventListener('dragleave', f, false);
-    document.body.addEventListener('dragover', f, false);
-    document.body.addEventListener('drop', f, false);
+    $('.modal-dialog').draggable();
+    $('.modal-content').resizable({ minHeight: 153, minWidth: 300});
     // ---------------------------- SOCKETS ----------------------------------
     if (location.protocol === 'https:')
         diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
@@ -1331,20 +1393,22 @@ $(document).ready(function() {
         $('#modal-body').html('<p>Loading COP, please wait...</p><img src="images/loading.gif"/>');
         $('#modal-footer').html('');
         $('#modal').modal('show')
-        console.log('connect');
-        diagram.send(JSON.stringify({act:'join', arg: mission}));
-        console.log('get users list');
-        diagram.send(JSON.stringify({act:'get_users', arg: mission}));
-        console.log('get objects');
-        diagram.send(JSON.stringify({act:'get_objects', arg: mission}));
-        console.log('get events');
-        diagram.send(JSON.stringify({act:'get_events', arg: mission}));
-        console.log('get opnotes');
-        diagram.send(JSON.stringify({act:'get_opnotes', arg: mission}));
-        console.log('get log history');
-        diagram.send(JSON.stringify({act:'get_log', arg: {mission: mission}}));
-        console.log('get notes');
-        diagram.send(JSON.stringify({act:'get_notes', arg: {mission: mission}}));
+        setTimeout(function() {
+            console.log('connect');
+            diagram.send(JSON.stringify({act:'join', arg: {mission: mission}}));
+            console.log('get users list');
+            diagram.send(JSON.stringify({act:'get_users', arg: {}}));
+            console.log('get objects');
+            diagram.send(JSON.stringify({act:'get_objects', arg: {}}));
+            console.log('get events');
+            diagram.send(JSON.stringify({act:'get_events', arg: {}}));
+            console.log('get opnotes');
+            diagram.send(JSON.stringify({act:'get_opnotes', arg: {}}));
+            console.log('get log history');
+            diagram.send(JSON.stringify({act:'get_log', arg: {}}));
+            console.log('get notes');
+            diagram.send(JSON.stringify({act:'get_notes', arg: {}}));
+        }, 100);
     };
     diagram.onmessage = function(msg) {
         msg = JSON.parse(msg.data);
@@ -1355,14 +1419,13 @@ $(document).ready(function() {
             case 'disco':
                 canvas.clear();
                 canvas.renderAll();
-                $('#modal').data('bs.modal',null);
-                $('#modal-title').text('Attention!');
+                $('#modal-close').hide();
+                $('#modal-header').html('Attention!');
                 $('#modal-body').html('<p>Connection lost! Please refresh the page to continue!</p>');
-                $('#modal-footer').html('<button type="button" class="button btn btn-default" data-dismiss="modal">Close</button>');
-                $('#modal').modal({
-                    backdrop: 'static',
-                    keyboard: false
-                });
+                $('#modal-footer').html('');
+                $('#modal-content').removeAttr('style');
+                $('#modal-content').removeClass('modal-details');
+                $('#modal').removeData('bs.modal').modal({backdrop: 'static', keyboard: false});
                 break;
             case 'update_files':
                 $('#files').jstree('refresh');
@@ -1416,10 +1479,21 @@ $(document).ready(function() {
                 for (var evt in msg.arg) {
                     opnoteTableData.push(msg.arg[evt]);
                 }
-                $('#opnotes').jqGrid('setGridParam', { 
+                $('#opnotes2').jqGrid('setGridParam', { 
                     datatype: 'local',
                     data: opnoteTableData
                 }).trigger("reloadGrid");
+                break;
+            case 'all_notes':
+                createNotesTree(msg.arg);
+                break;
+            case 'insert_note':
+                $('#notes').jstree(true).create_node('#', msg.arg);
+                break;
+            case 'delete_note':
+                var node = $('#notes').jstree(true).get_node(msg.arg.id, true);
+                if (node)
+                    $('#notes').jstree(true).delete_node(node);
                 break;
             case 'change_object':
                 var o = msg.arg;
@@ -1472,14 +1546,8 @@ $(document).ready(function() {
                             }
                             var tmod = 0;
                             var lmod = 0;
-                        //    var activeGroup = canvas.getActiveGroup();
                             if (obj.active && canvas.getActiveGroup())
                                 canvas.getActiveGroup().removeWithUpdate(obj);
-                            //    tmod = activeGroup.getTop();
-                              //  lmod = activeGroup.getLeft();
-                             //   o.x = o.x - lmod;
-                              //  o.y = o.y - tmod;
-                            //}   
                             obj.animate({left: o.x, top: o.y}, {
                                 duration: 100,
                                 onChange: function() {
@@ -1492,7 +1560,6 @@ $(document).ready(function() {
                                     obj.setCoords();
                                     canvas.renderAll();
                                 }
-
                             });
                         }
                         if (i !== o.z*2) {
@@ -1543,16 +1610,16 @@ $(document).ready(function() {
                 break;
             case 'update_opnote':
                 var evt = msg.arg;
-                $('#opnotes').jqGrid('setRowData', evt.id, evt);
+                $('#opnotes2').jqGrid('setRowData', evt.id, evt);
                 break;
             case 'insert_opnote':
                 var evt = msg.arg;
-                $('#opnotes').jqGrid('addRowData', evt.id, evt, 'last');
-                $('#opnotes').jqGrid('sortGrid', 'event_time', false, 'asc');
+                $('#opnotes2').jqGrid('addRowData', evt.id, evt, 'last');
+                $('#opnotes2').jqGrid('sortGrid', 'event_time', false, 'asc');
                 break;
             case 'delete_opnote':
                 var evt = msg.arg;
-                $('#opnotes').jqGrid('delRowData', evt.id);
+                $('#opnotes2').jqGrid('delRowData', evt.id);
                 break;
             case 'insert_object':
                 var o = msg.arg;
@@ -1590,9 +1657,12 @@ $(document).ready(function() {
     diagram.onclose = function() {
         canvas.clear();
         canvas.renderAll();
+        $('#modal-close').hide();
         $('#modal-title').text('Attention!');
         $('#modal-body').html('<p>Connection lost! Please refesh the page to retry!</p>');
         $('#modal-footer').html('');
+        $('#modal-content').removeAttr('style');
+        $('#modal-content').removeClass('modal-details');
         $('#modal').removeData('bs.modal').modal({backdrop: 'static', keyboard: false});
     };
 
@@ -1635,12 +1705,11 @@ $(document).ready(function() {
     // ---------------------------- DIAGRAM ----------------------------------
     for(var x=1;x<(MAXWIDTH/gridsize);x++)
     {
-        background.add(new fabric.Line([gridsize*x - MAXWIDTH/2, 0 - MAXHEIGHT/2, gridsize*x - MAXWIDTH/2, MAXHEIGHT/2],{ stroke: "#bfbfbf", strokeWidth: 1, selectable:false, strokeDashArray: [2, 2]}));
-        background.add(new fabric.Line([0 - MAXWIDTH/2, gridsize*x - MAXHEIGHT/2, MAXWIDTH/2, gridsize*x - MAXHEIGHT/2],{ stroke: "#bfbfbf", strokeWidth: 1, selectable:false, strokeDashArray: [2, 2]}));
+        background.add(new fabric.Line([gridsize*x - MAXWIDTH/2, 0 - MAXHEIGHT/2, gridsize*x - MAXWIDTH/2, MAXHEIGHT/2],{ stroke: "#bfbfbf", strokeWidth: 0.5, selectable:false}));
+         //, strokeDashArray: [2, 2]}));
+        background.add(new fabric.Line([0 - MAXWIDTH/2, gridsize*x - MAXHEIGHT/2, MAXWIDTH/2, gridsize*x - MAXHEIGHT/2],{ stroke: "#bfbfbf", strokeWidth: 0.5, selectable:false}));
+        //, strokeDashArray: [2, 2]}));
     }
-    background.add(new fabric.Line([-10, 0, 12, 0],{ stroke: "3399ff", strokeWidth: 2, selectable:false, strokeDashArray: [1, 1]}));
-    background.add(new fabric.Line([0, -10, 0, 12],{ stroke: "3399ff", strokeWidth: 2, selectable:false, strokeDashArray: [1, 1]}));
-    background.renderAll();
 
     // ---------------------------- SLIDER ----------------------------------
     dateSlider = document.getElementById('slider');
@@ -1759,7 +1828,7 @@ $(document).ready(function() {
         }
     });
     // ---------------------------- JQGRIDS ----------------------------------
-    $("#opnotes").jqGrid({
+    $("#opnotes2").jqGrid({
         datatype: 'local',
         cellsubmit: 'clientArray',
         editurl: 'clientArray',
@@ -1780,11 +1849,11 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!opnotes_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRowConfirm(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
-                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
-                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-cell ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#opnotes\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRowConfirm(\'opnote\', \'#opnotes2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-cell ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#opnotes2\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
-                    buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#opnotes\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#opnotes2\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
                 width: 15,
@@ -1826,22 +1895,22 @@ $(document).ready(function() {
         },
         beforeEditCell: function (id, cn, val, iRow, iCol) {
             if (lastselection.id && lastselection.id !== id) {
-                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
-                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-cell').hide();
-                $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-cell').hide();
+                $('#opnotes2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                $('#opnotes2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-cell').hide();
+                $('#opnotes2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-cell').hide();
             }
-            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-cell').show();
-            $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-cell').show();
+            $('#opnotes2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+            $('#opnotes2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-cell').show();
+            $('#opnotes2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-cell').show();
             lastselection = {id: id, iRow: iRow, iCol: iCol};
         },
         beforeSaveCell: function(options, col, value) {
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
-            $('#opnotes').jqGrid('resetSelection');
+            $('#opnotes2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
+            $('#opnotes2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
+            $('#opnotes2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
+            $('#opnotes2').jqGrid('resetSelection');
             lastselection.id = null;
-            var data = $('#opnotes').getRowData(options);
+            var data = $('#opnotes2').getRowData(options);
             data[col] = value;
             if (data.event_time)
                 data.event_time = dateStringToEpoch(data.event_time);
@@ -1851,33 +1920,33 @@ $(document).ready(function() {
             diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
         },
         afterEditCell: function(id, name, val, iRow, iCol) {
-            $("#"+iRow+"_"+name, "#opnotes").bind('blur',function(){
-                $('#opnotes').saveCell(iRow,iCol);
+            $("#"+iRow+"_"+name, "#opnotes2").bind('blur',function(){
+                $('#opnotes2').saveCell(iRow,iCol);
             });
         },
         afterRestoreCell: function (options) {
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
-            $('#opnotes tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
-            $('#opnotes').jqGrid('resetSelection');
+            $('#opnotes2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
+            $('#opnotes2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
+            $('#opnotes2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
+            $('#opnotes2').jqGrid('resetSelection');
         }
 
     });
-    $('#opnotes').jqGrid('navGrid', '#opnotesPager', {
+    $('#opnotes2').jqGrid('navGrid', '#opnotesPager', {
         add: false,
         edit: false,
         del: false,
         refresh: false,
     })
     if (opnotes_rw) {
-        $('#opnotes').jqGrid('navGrid').jqGrid('navButtonAdd', '#opnotesPager',{
+        $('#opnotes2').jqGrid('navGrid').jqGrid('navButtonAdd', '#opnotesPager',{
             position:"last",
             caption:"",
             buttonicon:"ui-icon-plus",
             onClickButton: function() {
                 if (!addingRow) {
                     addingRow = true;
-                    $('#opnotes').jqGrid('addRow', {position: 'last', initdata: {event_time: getDate()}, addRowParams: {
+                    $('#opnotes2').jqGrid('addRow', {position: 'last', initdata: {event_time: getDate()}, addRowParams: {
                             keys: true,
                             beforeSaveRow: function(options, id) {
                                 addingRow = false;
@@ -1886,21 +1955,21 @@ $(document).ready(function() {
                                     data[this.name] = $(this).val();
                                 });
                                 data.mission = mission;
-                                $('#opnotes').jqGrid('restoreRow', id, function(){});
+                                $('#opnotes2').jqGrid('restoreRow', id, function(){});
                                 data.event_time = dateStringToEpoch(data.event_time);
                                 delete data.actions;
                                 diagram.send(JSON.stringify({act: 'insert_opnote', arg: data}));
-                                $('#opnotes').jqGrid('resetSelection');
+                                $('#opnotes2').jqGrid('resetSelection');
                             },
                             oneditfunc: function(id, cn, val, iRow, iCol) {
                                 if (lastselection.id && lastselection.id !== id) {
-                                    $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
-                                    $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
-                                    $('#opnotes tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
+                                    $('#opnotes2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
+                                    $('#opnotes2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-row').hide();
+                                    $('#opnotes2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-cancel-row').hide();
                                 }
-                                $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
-                                $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
-                                $('#opnotes tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
+                                $('#opnotes2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-del').hide();
+                                $('#opnotes2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-save-row').show();
+                                $('#opnotes2 tr#'+$.jgrid.jqID(id)+ ' div.ui-inline-cancel-row').show();
                                 lastselection = {id: id, iRow: iRow, iCol: iCol};
                             },
                             afterrestorefunc: function() {
@@ -2147,114 +2216,29 @@ $(document).ready(function() {
         $grid.trigger("reloadGrid", [{page: 1, current: true}]);
         return false;
     });
-    // ---------------------------- NOTES ----------------------------------
-    $('#notes')
-        .on('select_node.jstree', function(e, data) {
-            if (data.node.li_attr.isLeaf) {
-                //var o = 'download/mission-' + mission + '/' + data.selected[0];
-                //var dl = $('<iframe />').attr('src', o).hide().appendTo('body');
-            }
-        }).jstree({
-            'core': {
-                'check_callback': true,
-                'data': {
-                    /*
-                    'method': 'POST',
-                    'url': function(node) {
-                        return 'dir/';
-                    },
-                    'data': function(node) {
-                        return {
-                            id: node.id,
-                            mission: mission
-                        };
-                    }*/
-                }
-            },
-            'plugins': ['dnd', 'wholerow', 'contextmenu'],
-            'contextmenu': {
-                'select_node' : false,
-                'items': function(node) {
-                    return {
-                        'mkdir': {
-                            'separator_before': false,
-                            'separator_after': false,
-                            'label': 'mkdir',
-                            'action': function (obj) {
-                                var _node = node;
-                                bootbox.prompt('Directory name?', function(name) {
-                                    /*
-                                    $.ajax({
-                                        url: 'mkdir',
-                                        type: 'POST',
-                                        data: {'id': _node.id, 'name': name, 'mission': mission},
-                                        success: function() {
-                                        },
-                                        error: function() {
-                                            console.log('mkdir error');
-                                        }
-                                    });
-                                    */
-                                });
-                            }
-                        },
-                        'del': {
-                            'separator_before': false,
-                            'separator_after': false,
-                            'label': 'del',
-                            'action': function (obj) {
-                                /*
-                                $.ajax({
-                                    url: 'delete',
-                                    type: 'POST',
-                                    data: {'id': node.id, 'mission': mission},
-                                    success: function() {
-                                    },
-                                    error: function() {
-                                        console.log('delete error');
-                                    }
-                                });
-                                */
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    $(document).on('dnd_stop.vakata', function(e, data) {
-        var t = $(data.event.target);
-        var targetnode = t.closest('.jstree-node');
-        var dst = targetnode.attr("id");
-        var src = data.data.nodes[0];
-        /*
-        $.ajax({
-            url: 'mv',
-            type: 'POST',
-            data: {'dst': dst, 'src': src},
-            success: function() {
-            },
-            error: function() {
-                console.log('mv error');
-            }
-        });
-        */
-    });
+
     // ---------------------------- MISC ----------------------------------
     $("#diagram_jumbotron").resizable({ handles: 's', minHeight: 100 });
     $("#toolbar-body").resizable({ handles: 'w', maxWidth: $('#diagram_jumbotron').width()-60 });
     $("#toolbar-body").on("resize", function(event, ui) {
-        settings[activeToolbar] = Math.round($('#toolbar-body').width());
-        $("#opnotes").setGridWidth(Math.max($('#opsForm').width()-5, 800));
-        updateSettings();
+        //updateSettings();
     }); 
     $('#diagram_jumbotron').on('resize', function(event, ui) {
-        settings.diagram = Math.round($('#diagram_jumbotron').height());
-        $("#opnotes").setGridHeight($('#opsForm').height()-70);
-        updateSettings();
-        resizeCanvas();
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            settings[activeToolbar] = Math.round($('#toolbar-body').width());
+            console.log('rj');
+            settings.diagram = Math.round($('#diagram_jumbotron').height());
+            updateSettings();
+            resizeCanvas();
+        }, 100);
     });
-    $("#events2").setGridWidth($('#events').width()-5);
-    window.addEventListener('resize', resizeCanvas, false);
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            resizeCanvas();
+        }, 100);
+    }, false);
     $("#message-input-box").keypress(function (e) {
         var key = e.charCode || e.keyCode || 0;
         if (key === $.ui.keyCode.ENTER) {
@@ -2262,61 +2246,6 @@ $(document).ready(function() {
             $("#message-input-box").val('');
         }
     });
-    resizeCanvas();
     loadSettings();
+    resizeCanvas();
 });
-var f = function(e)
-{
-    var srcElement = e.srcElement? e.srcElement : e.target;
-    if ($.inArray('Files', e.dataTransfer.types) > -1)
-    {
-        e.stopPropagation();
-        e.preventDefault();
-        e.dataTransfer.dropEffect = ($(srcElement).hasClass('droppable')) ? 'copy' : 'none';
-        if (e.type == 'drop') {
-/*            var formData = new FormData();
-            formData.append('dir', srcElement.id);
-            $.each(e.dataTransfer.files, function(i, file) {
-                formData.append('file',file);
-            });
-            formData.append('mission', mission);
-            $.ajax({
-                url: 'upload',
-                type: 'POST',
-                xhr: function() {
-                    var mxhr = $.ajaxSettings.xhr();
-                    if (mxhr.upload) {
-                        $("#progressbar")
-                            .progressbar({ value: 0 })
-                            .children('.ui-progressbar-value')
-                            .html('0%')
-                            .css("display", "block");
-                        mxhr.upload.addEventListener('progress', progressHandler, false);
-                    }
-                    return mxhr;
-                },
-                data: formData,
-                dataType: 'json',
-                cache: false,
-                contentType: false,
-                processData: false,
-                success: function() {
-                    $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload successful!');
-                    setTimeout(function() {
-                        $("#progressbar").fadeOut("slow");
-                    }, 5000);
-                },
-                error: function() {
-                    $("#progressbar").progressbar('value', 100).children('.ui-progressbar-value').html('Upload error!');
-                    console.log('upload error');
-                }
-            });*/
-        }
-    }
-};
-
-$(document).ready(function() {
-    var mission = getParameterByName('mission');
-
-});
-

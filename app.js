@@ -31,7 +31,7 @@ var sessionMiddleware = session({
     store: sessionStore
 });
 var rooms = new Map();
-var connection = mysql.createConnection(mysqlOptions);
+var connection;
 var ws = new wss.Server({server:http});
 var upload = multer({dest: './temp_uploads'});
 
@@ -54,7 +54,25 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
 
-connection.connect();
+function handleMySqlConnection() {
+    connection = mysql.createConnection(mysqlOptions);
+    connection.connect(function(err) {
+        if(err) {
+            console.log('Error connecting to MySql server:', err);
+            setTimeout(handleMySqlConnection, 5000);
+        }
+    });
+    connection.on('error', function(err) {
+        console.log('MySql error:', err);
+        if(err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'PROTOCOL_PACKETS_OUT_OF_ORDER') {
+            handleMySqlConnection();
+        } else {
+            throw err;
+        }
+    });
+}
+
+handleMySqlConnection();
 
 var db = require('sharedb-mongo')('mongodb://localhost:27017/mcscop');
 var backend = new ShareDB({db: db});
@@ -101,7 +119,7 @@ function getDir(dir, mission, cb) {
             "icon" : 'jstree-custom-folder',
             "state": {
                 "opened": true,
-                "disabled": true,
+                "disabled": false,
                 "selected": false
             },
             "li_attr": {
@@ -213,11 +231,11 @@ ws.on('connection', function(socket) {
                     backend.listen(stream);
                     break;
                 case 'join':
-                    socket.room = msg.arg;
-                    socket.mission = msg.arg;
-                    if (!rooms.get(msg.arg))
-                        rooms.set(msg.arg, new Set());
-                    rooms.get(msg.arg).add(socket);
+                    socket.room = msg.arg.mission;
+                    socket.mission = msg.arg.mission;
+                    if (!rooms.get(msg.arg.mission))
+                        rooms.set(msg.arg.mission, new Set());
+                    rooms.get(msg.arg.mission).add(socket);
                     break;
                 case 'insert_log':
                     msg.arg.analyst = socket.username;
@@ -297,10 +315,72 @@ ws.on('connection', function(socket) {
                     var args = [socket.mission];
                     connection.query(query, args, function(err, rows, fields) {
                         if (!err) {
-                            socket.send(JSON.stringify({act:'all_notes', arg:rows}));
+                            var resp = new Array();
+                            for (var i = 0; i < rows.length; i++) {
+                                resp.push({
+                                    "id": rows[i].id,
+                                    "text": rows[i].name,
+                                    "icon" : 'jstree-custom-file',
+                                    "state": {
+                                        "opened": false,
+                                        "disabled": false,
+                                        "selected": false
+                                    },
+                                    "li_attr": {
+                                        "base": '#',
+                                        "isLeaf": true
+                                    },
+                                    "children": false
+                                });
+                            }
+                            socket.send(JSON.stringify({act:'all_notes', arg:resp}));
                         } else
                             console.log(err);
                     });
+                    break;
+                case 'insert_note':
+                    if (hasPermission(socket.permissions, 'edit_notes')) {
+                        var evt = msg.arg;
+                        if (evt.name) {
+                            evt.name = xssFilters.inHTMLData(evt.name);
+                            evt.analyst = socket.user_id;
+                            connection.query('INSERT INTO notes (mission, name) values (?, ?)', [socket.mission, evt.name], function (err, results) {
+                                if (!err) {
+                                    insertLogEvent(socket, 'Created note: ' + evt.name + '.');
+                                    sendToRoom(socket.room, JSON.stringify({act: 'insert_note', arg: {
+                                        "id": results.insertId,
+                                        "text": evt.name,
+                                        "icon" : 'jstree-custom-file',
+                                        "state": {
+                                            "opened": false,
+                                            "disabled": false,
+                                            "selected": false
+                                        },
+                                        "li_attr": {
+                                            "base": '#',
+                                            "isLeaf": true
+                                        },
+                                        "children": false
+                                    }}));
+                                } else
+                                    console.log(err);
+                            });
+                        }
+                    }
+                    break;
+                case 'delete_note':
+                    if (hasPermission(socket.permissions, 'edit_notes')) {
+                        var evt = msg.arg;
+                        if (!evt.id || isNaN(evt.id) || evt.id === '')
+                            evt.id = 0;
+                        connection.query('UPDATE notes SET deleted = 1 WHERE id = ?', [evt.id], function (err, results) {
+                            if (!err) {
+                                insertLogEvent(socket, 'Deleted note: ' + evt.id + '.');
+                                    sendToRoom(socket.room, JSON.stringify({act: 'delete_note', arg: evt}));
+                            } else
+                                console.log(err);
+                        });
+                    }
                     break;
                 case 'update_event':
                     if (hasPermission(socket.permissions, 'modify_events')) {

@@ -103,7 +103,7 @@ td a {
 .ui-progressbar .ui-progressbar-value {
     margin: 0px;
     background: #337ab7;
-    color: #000;
+    color: #7f7f7f;
 }
 
 #progressbar-container {
@@ -133,7 +133,7 @@ td a {
 }
 
 .ui-widget.ui-widget-content {
-    border: 1px solid #000;
+    border: 1px solid #7f7f7f;
 }
 
 .ui-jqdialog {
@@ -194,7 +194,7 @@ td a {
 }
 
 .noUi-handle {
-    border: 1px solid #000;
+    border: 1px solid #7f7f7f;
 }
 
 .noUi-connect {
@@ -210,8 +210,9 @@ td a {
 }
 
 .ui-jqgrid {
+    padding: 1px;
     margin-right: 5px;
-    margin-bottom: 10px;
+    margin-bottom: 7px;
 }
 
 .jsgrid-header-cell, .jsgrid-cell {
@@ -235,18 +236,23 @@ td a {
     min-height:32px !important
 }
 
-#log {
-    padding: 4px;
-    height: 100%;
-    overflow-y: scroll;
+.droppable {
+    width: 100%;
 }
 
-#opsForm, #logForm, #toolsForm{
+#log, #files, #notes {
     height: 100%;
-    padding-top: 10px;
-    padding-right: 10px;
-    padding-left: 10px;
-    padding-bottom: 50px;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+#opnotesForm, #logForm, #toolsForm, #notesForm, #filesForm, #tasksForm {
+    height: 100%;
+    padding: 10px;
+}
+
+#logForm, #notesForm, #opnotesForm {
+    padding-bottom: 45px;
 }
 
 #play {
@@ -271,32 +277,6 @@ td a {
     margin-right: 18px;
 }
 
-#toolsButton {
-    background-color: #385a91;
-}
-
-#tasksButton {
-    background-color: #913851;
-}
-
-#notesButton {
-    background-color: #3b722c;
-}
-
-#files {
-    height: 100%;
-    overflow: scroll;
-    padding: 10px;
-}
-
-#filesButton {
-    background-color: #baa700;
-}
-
-#logButton {
-    background-color: #42a987;
-}
-
 .canvas-container {
     width: 100% !important;
     height: 100% !important;;
@@ -305,12 +285,26 @@ td a {
     top: 0px !important;
 }
 
+.modal {
+    overflow: hidden;
+}
+
 .modal-header {
     background-color: darkgray;
 }
 
 .modal-content {
     background-color: lightgray;
+    display: flex;
+    flex-flow: column;
+}
+
+.modal-details {
+    height: 800px;
+}
+
+.modal-body {
+    flex: 1;
 }
 
 .modal-footer {
@@ -323,9 +317,16 @@ td a {
     width: 300px;
 }
 
+.ui-resizable-handle {
+    left: unset;
+}
+
 .object-details {
+    position: absolute;
+    padding: 5px;
+    margin: -15px;
     width: 100%;
-    height: 600px;
+    height: 100%;
     font-family: courier;
 }
 
@@ -337,7 +338,7 @@ td a {
     border-radius: 0px;
     padding: 10px;
     overflow: hidden;
-    border: 1px solid black;
+    border: 1px solid #7f7f7f;
     margin-bottom: 10px;
     background-color: #d2d2d2;
 }
@@ -459,7 +460,7 @@ input[type="password"] {
     width: 600px;
     min-height: 30px;
     background: #c1c1c1;
-    border: 1px solid black;
+    border: 1px solid #7f7f7f;
     padding: 5px;
     display: none;
 }
@@ -511,15 +512,112 @@ input[type="password"] {
     padding: 0px !important;
 }
 
-.nav-button {
+.tab {
+    background: #9d9d9d;
     line-height: 16px;
-    background-color: darkgray;
-    margin-top: 4px;
+    padding-top: 2px;
+    padding-bottom: 2px;
     border-radius: 4px 0px 0px 4px;
-    border-top: 1px solid black;
-    border-left: 1px solid black;
-    border-bottom: 1px solid black;
+    border-top: 1px solid #7f7f7f;
+    border-left: 1px solid #7f7f7f;
+    border-bottom: 1px solid #7f7f7f;
     text-align: center;
+    -webkit-transform: perspective(75px) rotateY(-30deg);
+    -moz-transform: perspective(75px) rotateY(-30deg);
+}
+
+.horiz-tab {
+    pointer-events: all;
+    z-index: -1;
+    position: relative;
+    float: left;
+    height: 35px;
+    width: 100px;
+    background: #9d9d9d;
+    line-height: 35px;
+    border-radius: 4px 4px 0px 0px;
+    border-top: 1px solid #7f7f7f;
+    border-left: 1px solid #7f7f7f;
+    border-right: 1px solid #7f7f7f;
+    text-align: center;
+    -webkit-transform: perspective(75px) rotateX(30deg);
+    -moz-transform: perspective(75px) rotateX(30deg);
+}
+
+.tab span {
+    opacity: 0.0;
+}
+
+.tab-float {
+    background: none;
+    pointer-events: none;
+    z-index: 99;
+}
+
+#tables {
+    position: relative;
+}
+
+.click-through {
+    pointer-events: none;
+}
+
+.active-tab {
+    z-index: 40;
+    background-color: #efefef;
+    position: relative;
+}
+
+.active-horiz-tab {
+    z-index: 40;
+    background-color: #d2d2d2;
+}
+
+.tab-text {
+}
+
+.tools {
+    left: 20px;
+    top: 60px;
+}
+
+.tasks {
+    left: 11px;
+    top: 156px;
+}
+
+.notes {
+    left: 20px;
+    top: 234px;
+}
+
+.ops {
+    left: 20px;
+    top: 295px;
+}
+
+.files {
+    left: 20px;
+    top: 370px;
+}
+
+.logs {
+    left: 20px;
+    top: 440px;
+}
+
+.rotated {
+    position: absolute;
+    -webkit-transform: rotate(-90deg);
+    -webkit-transform-origin: left top;
+    -moz-transform: rotate(-90deg);
+    -moz-transform-origin: left top;
+    -ms-transform: rotate(-90deg);
+    -ms-transform-origin: left top;
+    -o-transform: rotate(-90deg);
+    -o-transform-origin: left top;
+    transform: rotate(-90deg);
+    transform-origin: left center;
 }
 
 .center-text {
@@ -527,13 +625,23 @@ input[type="password"] {
 }
 
 .toolbar-nav {
+    padding-top: 6px;
     width: 36px;
     position: absolute;
-    left: -36px;
+    left: -34px;
     top: 0px;
 }
 
-.toolbar {
+#table-nav {
+    z-index: 5;
+    height:36px;
+    position: absolute;
+    top: -34px;
+    left: 5.5px;
+    pointer-events: none;
+}
+
+#toolbar {
     background-color: #fff;
     position: absolute;
     right: 0px;
@@ -541,31 +649,38 @@ input[type="password"] {
     height: 100%;
 }
 
-.toolbar-body[style]{
+#toolbar-body[style]{
   left:0 !important;
+}
+
+#toolbar-body {
+    width: 0px;
+    height: 100%;
+    border-left: 1px solid #7f7f7f;
+    background-color: #efefef;
 }
 
 .toolbar-form {
     min-width: 300px;
 }
 
-.toolbar-body {
-    width: 0px;
-    height: 100%;
-    border-left: 1px black solid;
-    background-color: #efefef;
-}
 
 .thumbnail {
     margin-bottom: 2px;
     width: 40px;
     height: 40px;
+    position: relative;
 }
 
-/*.thumbnails.image_picker_selector img {
-    width: 36px;
-    height: 36px;
-}*/
+.image_picker_image {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    max-width:90%;
+    max-height:90%;
+    vertical-align: middle;
+}
 
 table {
     font-size: 14px;

@@ -22,7 +22,7 @@ html
         div.clock#utc
         div
       include nav.pug
-      div.jumbotron.diagram_jumbotron#diagram_jumbotron(style='height:700px')
+      div.jumbotron.diagram_jumbotron#diagram_jumbotron(style='height:700px; margin-bottom:36px;')
         div.canvas#diagram
           canvas#background
           canvas#canvas
@@ -31,22 +31,35 @@ html
             button.zoomIn#zoomIn.ui-icon.ui-icon-zoomin(onclick='zoomIn()')
             button.zoomOut#zoomOut.ui-icon.ui-icon-zoomout(onclick='zoomOut()')
             button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
-        div.toolbar#toolbar
+        div#toolbar
           div.toolbar-nav#toolbar-nav
-            div.nav-button#toolsButton(onclick='toggleToolbar("tools")') T<br>O<br>O<br>L<br>S
-            div.nav-button#tasksButton(onclick='toggleToolbar("tasks")') T<br>A<br>S<br>K<br>S
-            div.nav-button#notesButton(onclick='toggleToolbar("notes")') N<br>O<br>T<br>E<br>S
-            div.nav-button#opsButton(onclick='toggleToolbar("opnotes")') O<br>P<br>S
-            div.nav-button#filesButton(onclick='toggleToolbar("files")') F<br>I<br>L<br>E<br>S
-            div.nav-button#logButton(onclick='toggleToolbar("log")') L<br>O<br>G
-          div.toolbar-body#toolbar-body
-            div#opsForm.toolbar-form
-              table#opnotes
-              div#opnotesPager
+            div.tab#toolsTab(onclick='toggleToolbar("tools")')
+              span.tab-text T<br>O<br>O<br>L<br>S
+            div.tab#tasksTab(onclick='toggleToolbar("tasks")')
+              span.tab-text T<br>A<br>S<br>K<br>S
+            div.tab#notesTab(onclick='toggleToolbar("notes")')
+              span.tab-text N<br>O<br>T<br>E<br>S
+            div.tab#opnotes2Tab(onclick='toggleToolbar("opnotes")')
+              span.tab-text O<br>P<br>S
+            div.tab#filesTab(onclick='toggleToolbar("files")')
+              span.tab-text F<br>I<br>L<br>E<br>S
+            div.tab#logTab(onclick='toggleToolbar("log")')
+              span.tab-text L<br>O<br>G
+          div.toolbar-nav.click-through 
+            div.tab-text.tab-float.rotated.tools TOOLS
+            div.tab-text.tab-float.rotated.tasks TASKS
+            div.tab-text.tab-float.rotated.notes NOTES
+            div.tab-text.tab-float.rotated.ops OPS
+            div.tab-text.tab-float.rotated.files FILES
+            div.tab-text.tab-float.rotated.logs LOGS
+          div#toolbar-body
+            div#opnotesForm.toolbar-form
+              //table#opnotes2
+              //div#opnotesPager2
               button.btn.btn-primary#downloadOpnotes(onclick='downloadOpnotes()') Download
             div#notesForm.toolbar-form
               div#notes
-              //textarea#notes
+              button.btn.btn-primary#newNote(style='margin-top: 5px', onclick='newNote()') New Note
             div#tasksForm.toolbar-form
               textarea.tasks#hostTasks
               textarea.tasks#networkTasks
@@ -101,16 +114,26 @@ html
             div#logForm.toolbar-form
               div#log
               input(type="text", name="message-input-box")#message-input-box.message-input-box
-      div.jumbotron#events
-        div#sliderContainer
-          button#play.ui-icon.ui-icon-play(onclick='toggleAnimateSlider()')
-          div#slider
-        table#events2
-        div#eventsPager
-        span(style='margin-right: 10px;')
-          button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
-        span
-          a.btn.btn-primary#downloadEvents(onclick='downloadDiagram(this)') Download Diagram
+
+      div.jumbotron#tables(style="overflow: visible")
+        div#table-nav
+          div.horiz-tab.active-horiz-tab#eventsTab(onclick='showTable("events")')
+            span.tab-text EVENTS
+          div.horiz-tab#opnotesTab(onclick='showTable("opnotes")')
+            span.tab-text OPNOTES
+        div#events
+          div#sliderContainer
+            button#play.ui-icon.ui-icon-play(onclick='toggleAnimateSlider()')
+            div#slider
+          table#events2
+          div#eventsPager
+          span(style='margin-right: 10px;')
+            button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
+          span
+            a.btn.btn-primary#downloadEvents(onclick='downloadDiagram(this)') Download Diagram
+        div#opnotes(style="display: none;")
+          table#opnotes2
+          div#opnotesPager
 script var permissions = "#{permissions}".split(',');
 script(src='js/jquery.js')
 script(src='js/grid.locale-en.js')
