@@ -255,8 +255,8 @@ fabric.util.addListener(canvas.upperCanvasEl, 'dblclick', function (e) {
     if (canvas.getActiveObject() !== null && canvas.getActiveGroup() === null && !creatingLink) {
         if (o.objType !== undefined) {
             $('#propID').val(o.id);
-            $('#propFillColor').val(o.fill);
-            $('#propStrokeColor').val(o.stroke);
+            $('#propFillColor').simplecolorpicker('selectColor', o.fill);
+            $('#propStrokeColor').simplecolorpicker('selectColor', o.stroke);
             $('#propName').val('');
             if (o.children !== undefined) {
                 for (var i = 0; i < o.children.length; i++) {
@@ -299,7 +299,7 @@ canvas.on('object:selected', function(options) {
                         if (canvas.getObjects().indexOf(o) < z)
                             z = canvas.getObjects().indexOf(o) - 1;
                         lastFillColor = $('#propFillColor').val();
-                        lastStrokeColor = $('#propStrokeColor').val();
+                        lastFillColor = $('#propStrokeColor').val();
                         diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.id, obj_b: o.id, z: z}}));
                         firstNode = null;
                         creatingLink = false;
@@ -307,8 +307,8 @@ canvas.on('object:selected', function(options) {
                 }
             } else {
                 $('#propID').val(o.id);
-                $('#propFillColor').val(o.fill);
-                $('#propStrokeColor').val(o.stroke);
+                $('#propFillColor').simplecolorpicker('selectColor', o.fill);
+                $('#propStrokeColor').simplecolorpicker('selectColor', o.stroke);
                 $('#propName').val('');
                 if (o.children !== undefined) {
                     for (var i = 0; i < o.children.length; i++) {
@@ -354,6 +354,7 @@ canvas.on('before:render', function(e) {
                         canvas.item(i).pending = false;
                     canvas.item(i).set({ 'x1': fromAbs[4], 'y1': fromAbs[5] });
                     canvas.item(i).set({ 'x2': toAbs[4], 'y2': toAbs[5] });
+                    canvas.item(i).setCoords();
                     for (var j = 0; j < canvas.item(i).children.length; j++) {
                         canvas.item(i).children[j].set({'left': canvas.item(i).getCenterPoint().x, 'top': canvas.item(i).getCenterPoint().y });
                         var angle = (Math.atan2((canvas.item(i).y1 - canvas.item(i).y2), (canvas.item(i).x1 - canvas.item(i).x2))) * (180/Math.PI);
@@ -390,7 +391,18 @@ function getIcon(icon, cb) {
                 }
                 objectsLoaded.pop();
             });
-        }, 'text');
+        }, 'text').fail(function() {
+            $.get(path + 'missing.svg', function(data) {
+                SVGCache[icon] = data;
+                fabric.loadSVGFromString(data, function(objects, options) {
+                    SVGCache2[icon] = fabric.util.groupSVGElements(objects, options);
+                    if (cb) {
+                        cb();
+                    }
+                    objectsLoaded.pop();
+                });
+            }, 'text')
+        });
     } else {
         objectsLoaded.pop();
         if (cb) {
@@ -416,8 +428,8 @@ function checkIfShapesCached(msg) {
 }
 
 // ---------------------------- CHAT / LOG WINDOW  ----------------------------------
-function addLogMessage(msg) {
-    var lf = $('#log');
+function addChatMessage(msg) {
+    var lf = $('#' + msg.channel);
     if (msg.more && !msg.prepend)
         lf.append('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
     for (var i = 0; i < msg.messages.length; i++) {
@@ -432,7 +444,7 @@ function addLogMessage(msg) {
     }
     if (msg.more && msg.prepend)
         lf.prepend('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
-    $('#log').scrollTop($('#log')[0].scrollHeight);
+    $('#chat2').scrollTop($('#chat2')[0].scrollHeight);
 }
 
 function getMoreMessages() {
@@ -526,7 +538,6 @@ function editDetails(id) {
         $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">Close</button>');
         $('#modal-content').addClass('modal-details');
         if (doc) {
-            console.log('unsubscribing');
             doc.destroy();
             doc = undefined;
         }
@@ -733,20 +744,6 @@ function addObjectToCanvas(o, selected) {
         line.moveTo(o.z*2);
         name.moveTo(o.z*2+1);
     } else if (o.type === 'icon' && o.image !== undefined && o.image !== null) {
-//        var image, func;
-/*        if (SVGCache[o.image] === undefined) {
-            console.log('from url');
-            image = ('images/icons/' + o.image);
-            func = fabric.loadSVGFromURL;
-        } else {
-            console.log('cached');
-            image = SVGCache[o.image];
-            func = fabric.loadSVGFromString;
-        }
-      //  func(image, function(objects, options) {*/
-        if (!SVGCache2[o.image]) {
-            console.log('getting image');
-        }
         getIcon(o.image, function() {
             SVGCache2[o.image].clone(function(shape) {
                 var name;
@@ -1048,10 +1045,26 @@ function showTable(mode) {
         case 'events':
             $('#events').show();
             $('#opnotes').hide();
+            $('#chat').hide();
+            $('#settings').hide();
             break;
         case 'opnotes':
             $('#events').hide();
             $('#opnotes').show();
+            $('#chat').hide();
+            $('#settings').hide();
+            break;
+        case 'chat':
+            $('#events').hide();
+            $('#opnotes').hide();
+            $('#chat').show();
+            $('#settings').hide();
+            break;
+        case 'settings':
+            $('#events').hide();
+            $('#opnotes').hide();
+            $('#chat').hide();
+            $('#settings').show();
             break;
     }
 }
@@ -1065,12 +1078,12 @@ function openToolbar(mode) {
     $('#' + mode + 'Tab').addClass('active-tab');
     switch(mode) {
         case 'tools':
-            //$('#toolbar-body').css('width', Math.min($('#diagram_jumbotron').width()-60, settings['tools']));
             $('#toolsForm').show();
             $('#tasksForm').hide();
             $('#notesForm').hide();
             $('#filesForm').hide();
             $('#logForm').hide();
+            $('#propFillColorDiv').show();
             if (canvas.getActiveObject()) {
                 if (diagram_rw)
                     $('#toolbarTitle').html('Edit Object');
@@ -1092,8 +1105,8 @@ function openToolbar(mode) {
                 $('#propID').val('');
                 $('#propNameGroup').show();
                 $('#propName').val('');
-                $('#propFillColor').val(lastFillColor);
                 $('#propStrokeColor').val(lastStrokeColor);
+                $('#propFillColor').val(lastFillColor);
                 $('#propType').val('icon');
                 $('#prop-icon').val('00-000-icon-hub.png');
                 $('#prop-icon').data('picker').sync_picker_with_select();
@@ -1118,13 +1131,6 @@ function openToolbar(mode) {
             $('#notesForm').show();
             $('#filesForm').hide();
             $('#logForm').hide();
-            break;
-        case 'opnotes':
-            $('#toolsForm').hide();
-            $('#tasksForm').hide();
-            $('#notesForm').hide();
-            $('#logForm').hide();
-            $('#filesForm').hide();
             break;
         case 'files':
             $('#toolsForm').hide();
@@ -1414,7 +1420,7 @@ $(document).ready(function() {
         msg = JSON.parse(msg.data);
         switch(msg.act) {
             case 'log':
-                addLogMessage(msg.arg);
+                addChatMessage(msg.arg);
                 break;
             case 'disco':
                 canvas.clear();
@@ -1515,10 +1521,12 @@ $(document).ready(function() {
                                 canvas.remove(to.children[k]);
                             canvas.remove(to);
                             addObjectToCanvas(o, selected);
+                            canvas.item(i).set('dirty', true);
                             canvas.renderAll();
                         } else if (o.type === 'shape' || o.type === 'link') {
                             canvas.item(i).setStroke(o.stroke_color);
                             canvas.item(i).setFill(o.fill_color);
+                            canvas.item(i).set('dirty', true);
                             canvas.renderAll();
                         }
                         updatingObject = false;
@@ -1672,6 +1680,10 @@ $(document).ready(function() {
     $('#propObjectGroup').tabs({
         beforeActivate: function(e, u) {
             $('#propType').val(u.newPanel.attr('id').split('-')[1]);
+            if ($('#propType').val() === 'link')
+                $('#propFillColorDiv').hide();
+            else
+                $('#propFillColorDiv').show();
         }
     });
     $.each(['icon','shape','link'], function(i, v) {
@@ -1856,12 +1868,13 @@ $(document).ready(function() {
                     buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#opnotes2\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
-                width: 15,
+                fixed: true,
+                width: 45,
                 formatoptions: {
                     keys: true,
                 }
             },
-            { label: 'Id', name: 'event', width: 10, editable: true },
+            { label: 'Id', name: 'event', width: 40, fixed: true, editable: true },
             { label: 'Event Time', name: 'event_time', width: 180, fixed: true, resizable: false, editable: true, formatter: epochToDateString, editoptions: {
                 dataInit: function (element) {
                     $(element).datetimepicker({
@@ -1880,12 +1893,12 @@ $(document).ready(function() {
                     newformat: 'yy-mm-dd HH:mm:ss.l'
                 }
             }},
-            { label: 'Host/Device', name: 'source_object', width: 50, editable: true },
-            { label: 'Tool', name: 'tool', width: 20, editable: true },
-            { label: 'Action', name: 'action', width: 75, edittype: 'textarea', editable: true, cellattr: function (rowId, tv, rawObject, cm, rdata) {
+            { label: 'Host/Device', name: 'source_object', width: 100, fixed: true, editable: true },
+            { label: 'Tool', name: 'tool', width: 100, fixed: true, editable: true },
+            { label: 'Action', name: 'action', edittype: 'textarea', editable: true, cellattr: function (rowId, tv, rawObject, cm, rdata) {
                 return 'style="white-space: pre-wrap;"';
             }},
-            { label: 'Analyst', name: 'analyst', width: 40, editable: false },
+            { label: 'Analyst', name: 'analyst', width: 100, fixed: true, editable: false },
         ],
         onSelectRow: function() {
             return false;
@@ -2126,7 +2139,6 @@ $(document).ready(function() {
             });
         },
         afterRestoreCell: function (options) {
-            console.log('arc');
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
@@ -2218,11 +2230,14 @@ $(document).ready(function() {
     });
 
     // ---------------------------- MISC ----------------------------------
+    $('#propFillColor').simplecolorpicker({picker: true});
+    $('#propStrokeColor').simplecolorpicker({picker: true});
     $("#diagram_jumbotron").resizable({ handles: 's', minHeight: 100 });
     $("#toolbar-body").resizable({ handles: 'w', maxWidth: $('#diagram_jumbotron').width()-60 });
-    $("#toolbar-body").on("resize", function(event, ui) {
+    $("#toolbar-body").on('resize', function(event, ui) {
         //updateSettings();
-    }); 
+    });
+    // reseize event to resize canvas and toolbars
     $('#diagram_jumbotron').on('resize', function(event, ui) {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(function() {
@@ -2246,6 +2261,7 @@ $(document).ready(function() {
             $("#message-input-box").val('');
         }
     });
+    // load settings from cookie
     loadSettings();
     resizeCanvas();
 });

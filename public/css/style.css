@@ -25,6 +25,11 @@ td a {
 
 }
 
+.simplecolorpicker {
+    border: 1px solid #9d9d9d !important;
+    margin-right: 10px;
+}
+
 .avatar {
     width: 48px;
     height: 48px;
@@ -246,6 +251,48 @@ td a {
     overflow-x: hidden;
 }
 
+#chat {
+    height: 400px;
+    width: 100%;
+    padding-bottom: 30px;
+    border: 1px solid #7f7f7f;
+}
+
+#chat2 {
+    width: auto;
+    height: 100%;
+    overflow-y: scroll;
+    background: #ffffff;
+    padding-left: 15px;
+}
+
+.channel {
+    height: 26px;
+    width: 100%;
+    color: #b8b0b7;
+    padding: 0 12px 0 15px;
+    font-size: 16px;
+    font-family: NotoSansJP,Slack-Lato,appleLogo,sans-serif;
+    text-decoration: none;
+    line-height: 26px;
+    vertical-align: middle;
+}
+
+.channel:hover {
+    background: #3e313c;
+}
+
+#channels {
+    background: #4d394b;
+    width: 100px;
+    height: 100%;
+    float: left;
+}
+
+#toolsForm {
+    overflow-y: scroll;
+}
+
 #opnotesForm, #logForm, #toolsForm, #notesForm, #filesForm, #tasksForm {
     height: 100%;
     padding: 10px;
@@ -428,6 +475,10 @@ input[type="password"] {
     overflow-x: hidden;
 }
 
+#propFillColorDiv {
+    float: left;
+}
+
 .cancelLink {
     position: relative;
     left: 6px;
@@ -512,16 +563,16 @@ input[type="password"] {
     padding: 0px !important;
 }
 
-.tab {
+.vert-tab {
     background: #9d9d9d;
-    line-height: 16px;
     padding-top: 2px;
     padding-bottom: 2px;
+    width: 35;
+    height: 100px;
     border-radius: 4px 0px 0px 4px;
     border-top: 1px solid #7f7f7f;
     border-left: 1px solid #7f7f7f;
     border-bottom: 1px solid #7f7f7f;
-    text-align: center;
     -webkit-transform: perspective(75px) rotateY(-30deg);
     -moz-transform: perspective(75px) rotateY(-30deg);
 }
@@ -534,12 +585,10 @@ input[type="password"] {
     height: 35px;
     width: 100px;
     background: #9d9d9d;
-    line-height: 35px;
     border-radius: 4px 4px 0px 0px;
     border-top: 1px solid #7f7f7f;
     border-left: 1px solid #7f7f7f;
     border-right: 1px solid #7f7f7f;
-    text-align: center;
     -webkit-transform: perspective(75px) rotateX(30deg);
     -moz-transform: perspective(75px) rotateX(30deg);
 }
@@ -576,34 +625,58 @@ input[type="password"] {
 .tab-text {
 }
 
-.tools {
-    left: 20px;
-    top: 60px;
+.events-tab {
+    position: absolute;
+    left: 60px;
+    top: -24px;
 }
 
-.tasks {
-    left: 11px;
-    top: 156px;
+.opnotes-tab {
+    position: absolute;
+    left: 154px;
+    top: -24px;
 }
 
-.notes {
-    left: 20px;
-    top: 234px;
+.chat-tab {
+    position: absolute;
+    left: 268px;
+    top: -24px;
 }
 
-.ops {
-    left: 20px;
-    top: 295px;
+.settings-tab {
+    position: absolute;
+    left: 352px;
+    top: -24px;
 }
 
-.files {
+.tools-tab {
     left: 20px;
-    top: 370px;
+    top: 69px;
 }
 
-.logs {
+.tasks-tab {
     left: 20px;
-    top: 440px;
+    top: 172px;
+}
+
+.notes-tab {
+    left: 20px;
+    top: 268px;
+}
+
+.ops-tab {
+    left: 20px;
+    top: 367px;
+}
+
+.files-tab {
+    left: 20px;
+    top: 363px;
+}
+
+.logs-tab {
+    left: 20px;
+    top: 462px;
 }
 
 .rotated {
@@ -628,11 +701,11 @@ input[type="password"] {
     padding-top: 6px;
     width: 36px;
     position: absolute;
-    left: -34px;
+    left: -33px;
     top: 0px;
 }
 
-#table-nav {
+.table-nav {
     z-index: 5;
     height:36px;
     position: absolute;
