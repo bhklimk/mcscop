@@ -1,6 +1,13 @@
+@font-face {
+    font-family: lato;
+    src:
+        url('Lato-Regular.woff2') format('woff2'),
+        url('Lato-Regular.woff') format('woff');
+}
+
 body {
     background-color: darkgray;
-    font-family: verdana;
+    font-family: lato;
 }
 
 h1, h2, h3, h4, .h1, .h2, .h3, .h4 {
@@ -71,8 +78,8 @@ td a {
 }
 
 .message-input-box {
-    border-color: #717274;
-    border-radius: 6px !important;
+    border: 2px solid #a0a0a2;
+    border-radius: 5px !important;
     width: 100%;
 }
 
@@ -266,20 +273,32 @@ td a {
     padding-left: 15px;
 }
 
+.unread {
+    background: #dc5960;
+    font-size: 12px;
+    border-radius: 15px;
+    padding: 1px 10px;
+    color: #ffffff;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    line-height: 16px;
+}
+
 .channel {
+    display: flex;
+    justify-content: space-between;
     height: 26px;
     width: 100%;
     color: #b8b0b7;
     padding: 0 12px 0 15px;
     font-size: 16px;
-    font-family: NotoSansJP,Slack-Lato,appleLogo,sans-serif;
     text-decoration: none;
     line-height: 26px;
     vertical-align: middle;
 }
 
 .channel-selected {
-    background: #4C9689;
+    background: #4C9689 !important;
     color: #ffffff;
 }
 
@@ -306,12 +325,13 @@ td a {
     height: 100%;
     overflow-x: hidden;
     overflow-y: scroll;
+    padding-top: 5px;
     padding-left: 15px;
 }
 
 #channels {
     background: #4d394b;
-    width: 100px;
+    width: 220px;
     height: 100%;
     float: left;
 }
@@ -784,5 +804,5 @@ input[type="password"] {
 
 table {
     font-size: 14px;
-    font-family: roboto, sans-serif;
+    font-family: lato;
 }

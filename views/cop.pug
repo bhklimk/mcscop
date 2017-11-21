@@ -38,13 +38,11 @@ html
             div.vert-tab#tasksTab(onclick='toggleToolbar("tasks")')
             div.vert-tab#notesTab(onclick='toggleToolbar("notes")')
             div.vert-tab#filesTab(onclick='toggleToolbar("files")')
-            div.vert-tab#logTab(onclick='toggleToolbar("log")')
           div.toolbar-nav.click-through 
             div.tab-text.tab-float.rotated.tools-tab TOOLS
             div.tab-text.tab-float.rotated.tasks-tab TASKS
             div.tab-text.tab-float.rotated.notes-tab NOTES
             div.tab-text.tab-float.rotated.files-tab FILES
-            div.tab-text.tab-float.rotated.logs-tab LOGS
           div#toolbar-body
             div#notesForm.toolbar-form
               div#notes
@@ -158,7 +156,9 @@ html
         div#chat(style="display: none;")
           div#channels
             div.channel.channel-selected#channel-log #log
+              span#unread-log.unread(style="display: none;")
             div.channel#channel-general #general
+              span#unread-general.unread(style="display: none;")
           div#channel-panes
             div#log.channel-pane
             div#general.channel-pane(style="display: none;")

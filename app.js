@@ -176,12 +176,12 @@ function processNode(dir, mission, f) {
 }
 
 function insertLogEvent(socket, message, channel) {
-    if (!channel)
+    if (!channel || channel === '')
         channel = 'log';
     var analyst = socket.user_id;
     var timestamp = (new Date).getTime();
     connection.query('INSERT INTO log (mission, channel, text, analyst, timestamp) values (?, ?, ?, ?, ?)', [socket.mission, channel, message, analyst, timestamp]);
-    sendToRoom(socket.room, JSON.stringify({act:'log', arg:{prepend:false, more:false, messages:[{analyst: socket.username, user_id: socket.user_id, channel: channel, text: message, timestamp: timestamp}]}}));
+    sendToRoom(socket.room, JSON.stringify({act:'chat', arg:{messages:[{analyst: socket.username, user_id: socket.user_id, channel: channel, text: message, timestamp: timestamp}]}}));
 }
 
 function patch() {
@@ -239,37 +239,57 @@ ws.on('connection', function(socket) {
                         rooms.set(msg.arg.mission, new Set());
                     rooms.get(msg.arg.mission).add(socket);
                     break;
-                case 'insert_log':
+                case 'insert_chat':
                     msg.arg.analyst = socket.username;
                     msg.arg.user_id = socket.user_id;
                     msg.arg.text = xssFilters.inHTMLData(msg.arg.text);
                     msg.arg.timestamp = (new Date).getTime();
-                    connection.query('INSERT INTO log (mission, analyst, text, timestamp) values (?, ?, ?, ?)', [socket.mission, socket.user_id, msg.arg.text, msg.arg.timestamp], function (err, results) {
+                    connection.query('INSERT INTO log (mission, analyst, channel, text, timestamp) values (?, ?, ?, ?, ?)', [socket.mission, socket.user_id, msg.arg.channel, msg.arg.text, msg.arg.timestamp], function (err, results) {
                         if (!err) {
-                            sendToRoom(socket.room, JSON.stringify({act:'log', arg:{prepend:false, more:false, messages:[msg.arg]}}));
+                            sendToRoom(socket.room, JSON.stringify({act:'chat', arg:{messages:[msg.arg]}}));
                         } else
                             console.log(err);
                     });
                     break;
-                case 'get_log':
-                    var start_from = 0;
-                    var args = [socket.mission];
-                    var prepend = false;
-                    var more = false;
-                    var query = 'SELECT * FROM (SELECT analyst as user_id, (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, channel, text, timestamp FROM log WHERE deleted = 0 AND mission = ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp ASC';
+                case 'get_old_chats':
                     if (msg.arg.start_from !== undefined && !isNaN(msg.arg.start_from)) {
-                        console.log(msg, msg.arg.start_from);
-                        prepend = true;
-                        args = [socket.mission, parseInt(msg.arg.start_from)];
-                        query = 'SELECT * FROM (SELECT (SELECT analyst as user_id, username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, channel, text, timestamp FROM log WHERE deleted = 0 AND mission = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp DESC';
+                        connection.query('SELECT * FROM (SELECT true AS prepend, analyst AS user_id, (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, channel, text, timestamp FROM log WHERE deleted = 0 AND mission = ? AND channel = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp DESC', [socket.mission, msg.arg.channel, parseInt(msg.arg.start_from)], function(err, rows, fields) {
+                            if (rows && rows.length == 50) {
+                                if (msg.arg.start_from !== undefined && !isNaN(msg.arg.start_from))
+                                    rows[49].more = 1;
+                                else
+                                    rows[0].more = 1;
+                            }
+                            if (!err) {
+                                socket.send(JSON.stringify({act:'bulk_chat', arg:{messages:rows}}));
+                            } else
+                                console.log(err);
+                        });
                     }
-                    connection.query(query, args, function(err, rows, fields) {
-                        if (rows.length == 50)
-                            more = true;
+                    break;
+                case 'get_all_chats':
+                    var res = [];
+                    connection.query('SELECT DISTINCT(channel) FROM log WHERE deleted = 0 AND mission = ?', [socket.mission], function(err, channels, fields) {
                         if (!err) {
-                            socket.send(JSON.stringify({act:'log', arg:{prepend:prepend, more: more, messages:rows}}));
-                        } else
-                            console.log(err);
+                            async.each(channels, function(channel, callback) {
+                                connection.query('SELECT * FROM (SELECT analyst as user_id, (SELECT username FROM users WHERE deleted = 0 AND users.id = analyst) AS analyst, channel, text, timestamp FROM log WHERE deleted = 0 AND mission = ? AND channel = ? ORDER BY timestamp DESC LIMIT 50) tmp ORDER BY timestamp ASC', [socket.mission, channel.channel], function(err, rows, fields) {
+                                    if (rows && rows.length == 50) {
+                                        if (msg.arg.start_from !== undefined && !isNaN(msg.arg.start_from))
+                                            rows[49].more = 1;
+                                        else
+                                            rows[0].more = 1;
+                                    }
+                                    if (!err) {
+                                        res = res.concat(rows);
+                                        callback();
+                                    } else
+                                        console.log(err);
+                                });
+                            }, function(err) {
+                                if (!err)
+                                    socket.send(JSON.stringify({act:'bulk_chat', arg:{messages:res}}));
+                            });
+                        }
                     });
                     break;
                 case 'get_objects':

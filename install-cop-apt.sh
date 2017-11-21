@@ -33,6 +33,8 @@ else
     echo "import the MCSCOP database schema."
     cat mysql/mcscop-schema.sql mysql/user.sql | sudo mysql -u root -p mcscop
 fi
+echo "To run MCSCOP use: node app.js from the mcscop directory."
+echo "Persistent install is possible using pm2."
 echo "The initial username and password for MCSCOP are:"
 echo "admin / password"
-
+echo "Make sure to change passwords upon login."

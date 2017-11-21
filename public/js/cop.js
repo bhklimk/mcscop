@@ -1,6 +1,6 @@
 if (!permissions)
     permissions = [];
-var earliest_message = 2147483647000;
+var earliest_messages = {}; //= 2147483647000;
 var diagram_rw = false;
 if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !== -1) {
     diagram_rw = true;
@@ -49,7 +49,7 @@ var background = new fabric.StaticCanvas('background', {
 MAXWIDTH=4000;
 MAXHEIGHT=4000;
 
-var settings = {'zoom': 1.0, 'x': 0, 'y': 0, 'diagram': 700, 'tools': 400, 'tasks': 400, 'notes': 400, 'opnotes': 1200, 'files': 400, 'log': 400};
+var settings = {'zoom': 1.0, 'x': 0, 'y': 0, 'diagram': 700, 'tools': 400, 'tasks': 400, 'notes': 400, 'files': 400};
 var creatingLink = false;
 var firstObject = null;
 var scale = 1;
@@ -59,7 +59,6 @@ var mission = getParameterByName('mission');
 var objectSelect = [{id:0, name:'none/unknown'}];
 var userSelect = [{id:null, username:'none'}];
 var dateSlider = null;
-var images = {};
 var objectsLoaded = null;
 var updatingObject = false;
 var diagram;
@@ -68,7 +67,6 @@ var firstNode = null;
 var zoom = 1.0;
 var dirty = false;
 var SVGCache = {};
-var SVGCache2 = {};
 var tempLinks = [];
 var objectCache = {};
 var resizeTimer = null;
@@ -80,6 +78,10 @@ var sliderTimer = null;
 var doc;
 var activeToolbar = null;
 var activeTable = 'events';
+var activeChannel = 'log';
+var chatPosition = {};
+var firstChat = true;
+var unreadMessages = {};
 var lastselection = {id: null, iRow: null, iCol: null};
 var gridsize = 40;
 var lastFillColor = '#000000';
@@ -381,11 +383,10 @@ canvas.on('before:render', function(e) {
 
 function getIcon(icon, cb) {
     var path = 'images/icons/';
-    if (!SVGCache2[icon]) {
+    if (!SVGCache[icon]) {
         $.get(path + icon, function(data) {
-            SVGCache[icon] = data;
             fabric.loadSVGFromString(data, function(objects, options) {
-                SVGCache2[icon] = fabric.util.groupSVGElements(objects, options);
+                SVGCache[icon] = fabric.util.groupSVGElements(objects, options);
                 if (cb) {
                     cb();
                 }
@@ -393,9 +394,8 @@ function getIcon(icon, cb) {
             });
         }, 'text').fail(function() {
             $.get(path + 'missing.svg', function(data) {
-                SVGCache[icon] = data;
                 fabric.loadSVGFromString(data, function(objects, options) {
-                    SVGCache2[icon] = fabric.util.groupSVGElements(objects, options);
+                    SVGCache[icon] = fabric.util.groupSVGElements(objects, options);
                     if (cb) {
                         cb();
                     }
@@ -428,29 +428,45 @@ function checkIfShapesCached(msg) {
 }
 
 // ---------------------------- CHAT / LOG WINDOW  ----------------------------------
-function addChatMessage(msg) {
-    if (msg.more && !msg.prepend)
-        lf.append('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
+function addChatMessage(msg, bulk) {
+    if (!bulk)
+        bulk = false;
     for (var i = 0; i < msg.messages.length; i++) {
-        var lf = $('#' + msg.messages[i].channel);
+        if (!earliest_messages[msg.messages[i].channel])
+            earliest_messages[msg.messages[i].channel] = 2147483647000
+        var pane = $('#' + msg.messages[i].channel);
         var ts = msg.messages[i].timestamp;
-        if (ts < earliest_message) {
-            earliest_message = ts;
+        if (ts < earliest_messages[msg.messages[i].channel]) {
+            earliest_messages[msg.messages[i].channel] = ts;
         }
-        if (msg.prepend)
-            lf.prepend('<div class="message-wraper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
-        else
-            lf.append('<div class="message-wrapper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
-        $('#' + msg.messages[i].channel).scrollTop($('#' + msg.messages[i].channel)[0].scrollHeight);
+        if (msg.messages[i].prepend)
+            pane.prepend('<div class="message-wraper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
+        else {
+            var atBottom = $('#' + msg.messages[i].channel)[0].scrollHeight - $('#' + msg.messages[i].channel).scrollTop() === $('#' + msg.messages[i].channel).outerHeight();
+            var newMsg = $('<div class="message-wrapper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
+            if (!bulk && activeChannel ===  msg.messages[i].channel)
+                newMsg.hide();
+            newMsg.appendTo(pane);
+            if (!bulk && activeChannel !== msg.messages[i].channel) {
+                if (!unreadMessages[msg.messages[i].channel])
+                    unreadMessages[msg.messages[i].channel] = 1;
+                else
+                    unreadMessages[msg.messages[i].channel]++;
+                $('#unread-' + msg.messages[i].channel).text(unreadMessages[msg.messages[i].channel]).show();
+            }
+            if (!bulk && activeChannel === msg.messages[i].channel)
+                newMsg.fadeIn('fast');
+            if (atBottom)
+                $('#' + msg.messages[i].channel).scrollTop($('#' + msg.messages[i].channel)[0].scrollHeight);
+        }
+        if (msg.messages[i].more)
+            pane.prepend('<div id="get-more-messages"><span onClick="getMoreMessages(\'' + msg.messages[i].channel + '\')">Get more messages.</span></div>');
     }
-    //if (msg.more && msg.prepend)
-    //    lf.prepend('<div id="get-more-messages"><span onClick="getMoreMessages()">Get more messages.</span></div>');
-    //console.log(msg.channel);
 }
 
-function getMoreMessages() {
+function getMoreMessages(channel) {
     $('#get-more-messages').remove();
-    diagram.send(JSON.stringify({act:'get_log', arg: {mission: mission, start_from: earliest_message}}));
+    diagram.send(JSON.stringify({act:'get_old_chats', arg: {channel: channel, start_from: earliest_messages[channel]}}));
 }
 
 // ---------------------------- SETTINGS COOKIE ----------------------------------
@@ -532,7 +548,6 @@ function createNotesTree(arg) {
 function editDetails(id) {
     if (!id && canvas.getActiveObject())
         id = 'details-' + canvas.getActiveObject().id;
-    console.log(id);
     if (id) {
         $('#modal-title').text('Edit Notes');
         $('#modal-body').html('<input type="hidden" id="object_details_id" name="object_details_id" value="' + id + '"><textarea id="object_details" class="object-details" style="resize: none;"></textarea>');
@@ -746,7 +761,7 @@ function addObjectToCanvas(o, selected) {
         name.moveTo(o.z*2+1);
     } else if (o.type === 'icon' && o.image !== undefined && o.image !== null) {
         getIcon(o.image, function() {
-            SVGCache2[o.image].clone(function(shape) {
+            SVGCache[o.image].clone(function(shape) {
                 var name;
                 shape.set({
                     fill: o.fill_color,
@@ -912,8 +927,8 @@ function insertObject() {
     }
 }
 
-function sendLogMessage(msg) {
-    diagram.send(JSON.stringify({act: 'insert_log', arg: {text: msg}}));
+function sendChatMessage(msg, channel) {
+    diagram.send(JSON.stringify({act: 'insert_chat', arg: {channel: channel, text: msg}}));
 }
 
 function moveToZ(o, z) {
@@ -1060,6 +1075,11 @@ function showTable(mode) {
             $('#opnotes').hide();
             $('#chat').show();
             $('#settings').hide();
+            if (firstChat) {
+                console.log('here');
+                $('#log').scrollTop($('#log')[0].scrollHeight);
+                firstChat = false;
+            }
             break;
         case 'settings':
             $('#events').hide();
@@ -1083,7 +1103,6 @@ function openToolbar(mode) {
             $('#tasksForm').hide();
             $('#notesForm').hide();
             $('#filesForm').hide();
-            $('#logForm').hide();
             $('#propFillColorDiv').show();
             if (canvas.getActiveObject()) {
                 if (diagram_rw)
@@ -1124,29 +1143,19 @@ function openToolbar(mode) {
             $('#tasksForm').show();
             $('#notesForm').hide();
             $('#filesForm').hide();
-            $('#logForm').hide();
             break;
         case 'notes':
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').show();
             $('#filesForm').hide();
-            $('#logForm').hide();
             break;
         case 'files':
             $('#toolsForm').hide();
             $('#tasksForm').hide();
             $('#notesForm').hide();
             $('#filesForm').show();
-            $('#logForm').hide();
             break;
-        case 'log':
-            $('#toolsForm').hide();
-            $('#tasksForm').hide();
-            $('#notesForm').hide();
-            $('#filesForm').hide();
-            $('#logForm').show();
-        break;
     }
 }
 
@@ -1310,8 +1319,8 @@ function resizeCanvas() {
     if (canvas.getWidth() != $('#diagram').width()) {
         canvas.setWidth($('#diagram').width());
         background.setWidth($('#diagram').width());
-        $("#events2").setGridWidth($('#events').width()-5);
-        $("#opnotes2").setGridWidth($('#events').width()-5);
+        $("#events2").setGridWidth($('#tables').width()-5);
+        $("#opnotes2").setGridWidth($('#tables').width()-5);
     }
 }
 
@@ -1411,8 +1420,8 @@ $(document).ready(function() {
             diagram.send(JSON.stringify({act:'get_events', arg: {}}));
             console.log('get opnotes');
             diagram.send(JSON.stringify({act:'get_opnotes', arg: {}}));
-            console.log('get log history');
-            diagram.send(JSON.stringify({act:'get_log', arg: {}}));
+            console.log('get chat history');
+            diagram.send(JSON.stringify({act:'get_all_chats', arg: {}}));
             console.log('get notes');
             diagram.send(JSON.stringify({act:'get_notes', arg: {}}));
         }, 100);
@@ -1420,7 +1429,10 @@ $(document).ready(function() {
     diagram.onmessage = function(msg) {
         msg = JSON.parse(msg.data);
         switch(msg.act) {
-            case 'log':
+            case 'bulk_chat':
+                addChatMessage(msg.arg, true);
+                break;
+            case 'chat':
                 addChatMessage(msg.arg);
                 break;
             case 'disco':
@@ -2117,7 +2129,6 @@ $(document).ready(function() {
             lastselection = {id: id, iRow: iRow, iCol: iCol};
         },
         beforeSaveCell: function (options, col, value) {
-            console.log('bsc');
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-save-cell').hide();
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-cancel-cell').hide();
@@ -2230,10 +2241,18 @@ $(document).ready(function() {
     // ---------------------------- CHAT ----------------------------------
     $('.channel').click(function(e) {
         var c = e.target.id.split('-')[1];
+        if ($('#' + activeChannel)[0].scrollHeight - $('#' + activeChannel).scrollTop() === $('#' + activeChannel).outerHeight())
+            chatPosition[activeChannel] = 'bottom';
+        else
+            chatPosition[activeChannel] = $('#' + activeChannel).scrollTop();
         $('.channel-pane').hide();
         $('.channel').removeClass('channel-selected');
         $('#' + c).show();
+        $('#unread-' + c).hide();
+        if (!chatPosition[c] || chatPosition[c] === 'bottom')
+            $('#' + c).scrollTop($('#' + c)[0].scrollHeight);
         $('#channel-' + c).addClass('channel-selected');
+        activeChannel = c;
     });
     // ---------------------------- MISC ----------------------------------
     $('#propFillColor').simplecolorpicker({picker: true});
@@ -2248,7 +2267,6 @@ $(document).ready(function() {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(function() {
             settings[activeToolbar] = Math.round($('#toolbar-body').width());
-            console.log('rj');
             settings.diagram = Math.round($('#diagram_jumbotron').height());
             updateSettings();
             resizeCanvas();
@@ -2263,7 +2281,7 @@ $(document).ready(function() {
     $("#message-input-box").keypress(function (e) {
         var key = e.charCode || e.keyCode || 0;
         if (key === $.ui.keyCode.ENTER) {
-            sendLogMessage($("#message-input-box").val());
+            sendChatMessage($("#message-input-box").val(), activeChannel);
             $("#message-input-box").val('');
         }
     });
