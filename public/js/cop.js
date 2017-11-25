@@ -82,6 +82,9 @@ var activeChannel = 'log';
 var chatPosition = {};
 var firstChat = true;
 var unreadMessages = {};
+var shouldBlur = false;
+var cellEdit = null;
+var clickComplete = false;
 var lastselection = {id: null, iRow: null, iCol: null};
 var gridsize = 40;
 var lastFillColor = '#000000';
@@ -183,6 +186,7 @@ canvas.observe('object:modified', function (e) {
         e.target.resizeToScale();
 });
  
+// ---------------------------- Canvas Events  ----------------------------------
 $('#diagram').mousedown(startPan);
 
 canvas.on('object:rotating', function(options) {
@@ -411,6 +415,7 @@ function getIcon(icon, cb) {
     }
 }
 
+// check if shapes are chached before loading canvas
 function checkIfShapesCached(msg) {
     if (objectsLoaded.length == 0) {
         console.log('cached');
@@ -931,6 +936,8 @@ function sendChatMessage(msg, channel) {
     diagram.send(JSON.stringify({act: 'insert_chat', arg: {channel: channel, text: msg}}));
 }
 
+// move objects up / down on canvas
+
 function moveToZ(o, z) {
     if (o) {
         if (o.objType === 'link')
@@ -970,6 +977,7 @@ function moveDown() {
     }
 }
 
+// show message above canvas for link creation, etc
 function showMessage(msg, timeout) {
     $('#message').html('<span class="messageHeader">' + msg + '</span>');
     $('#message').show();
@@ -1020,6 +1028,7 @@ function updatePropStrokeColor(color) {
     }
 }
 
+// replace an objects icon with another or change an icon's colors
 function changeObject(o) {
     var tempObj = {};
     tempObj.id = o.id;
@@ -1040,17 +1049,6 @@ function changeObject(o) {
         }
     }
     diagram.send(JSON.stringify({act: 'change_object', arg: tempObj}));
-}
-
-function toggleToolbar(mode) {
-    if ($('#toolbar-body').width() === 0) {
-        openToolbar(mode);
-    } else {
-        if (activeToolbar === mode)
-            closeToolbar();
-        else
-            openToolbar(mode);
-    }
 }
 
 function showTable(mode) {
@@ -1087,6 +1085,18 @@ function showTable(mode) {
             $('#chat').hide();
             $('#settings').show();
             break;
+    }
+}
+
+// toolbar toggle, open, etc
+function toggleToolbar(mode) {
+    if ($('#toolbar-body').width() === 0) {
+        openToolbar(mode);
+    } else {
+        if (activeToolbar === mode)
+            closeToolbar();
+        else
+            openToolbar(mode);
     }
 }
 
@@ -1729,9 +1739,9 @@ $(document).ready(function() {
     // ---------------------------- DIAGRAM ----------------------------------
     for(var x=1;x<(MAXWIDTH/gridsize);x++)
     {
-        background.add(new fabric.Line([gridsize*x - MAXWIDTH/2, 0 - MAXHEIGHT/2, gridsize*x - MAXWIDTH/2, MAXHEIGHT/2],{ stroke: "#bfbfbf", strokeWidth: 0.5, selectable:false}));
+        background.add(new fabric.Line([gridsize*x - MAXWIDTH/2, 0 - MAXHEIGHT/2, gridsize*x - MAXWIDTH/2, MAXHEIGHT/2],{ stroke: "#989898", strokeWidth: 0.5, selectable:false}));
          //, strokeDashArray: [2, 2]}));
-        background.add(new fabric.Line([0 - MAXWIDTH/2, gridsize*x - MAXHEIGHT/2, MAXWIDTH/2, gridsize*x - MAXHEIGHT/2],{ stroke: "#bfbfbf", strokeWidth: 0.5, selectable:false}));
+        background.add(new fabric.Line([0 - MAXWIDTH/2, gridsize*x - MAXHEIGHT/2, MAXWIDTH/2, gridsize*x - MAXHEIGHT/2],{ stroke: "#989898", strokeWidth: 0.5, selectable:false}));
         //, strokeDashArray: [2, 2]}));
     }
 
@@ -1852,6 +1862,18 @@ $(document).ready(function() {
         }
     });
     // ---------------------------- JQGRIDS ----------------------------------
+    $(document).click(function(e) {
+        if (cellEdit && clickComplete) {
+            if ($(e.target).attr('id') === 'ui-datepicker-div' || $(e.target).parents("#ui-datepicker-div").length > 0) {
+                console.log('no-blur');
+            }
+            else {
+                console.log('blur');
+                cellEdit();
+            }
+        }
+        clickComplete = true;
+    });
     $("#opnotes2").jqGrid({
         datatype: 'local',
         cellsubmit: 'clientArray',
@@ -1894,7 +1916,13 @@ $(document).ready(function() {
                         timeFormat: "HH:mm:ss.l",
                         controlType: 'select',
                         showMillisec: true,
-                        useCurrent: true
+                        useCurrent: true,
+                        beforeShow: function (input, inst) {
+                            var rect = input.getBoundingClientRect();
+                            setTimeout(function () {
+                                inst.dpDiv.css({ top: rect.top + window.scrollY - inst.dpDiv.height() - 10 });
+                            }, 0);
+                        }
                     })
                 },
                 editrules: {
@@ -2065,7 +2093,13 @@ $(document).ready(function() {
                         dateFormat: "yy-mm-dd",
                         timeFormat: "HH:mm:ss.l",
                         controlType: 'select',
-                        showMillisec: true
+                        showMillisec: true,
+                        beforeShow: function (input, inst) {
+                            var rect = input.getBoundingClientRect();
+                            setTimeout(function () {
+                                inst.dpDiv.css({ top: rect.top + window.scrollY - inst.dpDiv.height() - 10 });
+                            }, 0);
+                        }
                     })
                 },
                 editrules: {
@@ -2083,7 +2117,12 @@ $(document).ready(function() {
                         timeFormat: "HH:mm:ss.l",
                         controlType: 'select',
                         showMillisec: true,
-                        vertical: 'top'
+                        beforeShow: function (input, inst) {
+                            var rect = input.getBoundingClientRect();
+                            setTimeout(function () {
+                                inst.dpDiv.css({ top: rect.top + window.scrollY - inst.dpDiv.height() - 10 });
+                            }, 0);
+                        }
                     })
                 },
                 editrules: {
@@ -2118,6 +2157,7 @@ $(document).ready(function() {
             return false;
         },
         beforeEditCell: function (id, cn, val, iRow, iCol) {
+            console.log(id, cn);
             if (lastselection.id && lastselection.id !== id) {
                 $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
                 $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-cell').hide();
@@ -2145,9 +2185,19 @@ $(document).ready(function() {
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
         },
         afterEditCell: function(id, name, val, iRow, iCol) {
-            $("#"+iRow+"_"+name, "#events2").bind('blur',function(){
+            clickComplete = false;
+            cellEdit = function() {
+                console.log('here');
                 $('#events2').saveCell(iRow,iCol);
-            });
+                cellEdit = null;
+            }
+//            $("#"+iRow+"_"+name, "#events2").bind('blur',function(e){
+  //              if (shouldBlur) {
+    //                console.log('blurring');
+      //              console.log(e);
+        //        }
+            //    $('#events2').saveCell(iRow,iCol);
+          //  });
         },
         afterRestoreCell: function (options) {
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
