@@ -88,7 +88,7 @@ var clickComplete = false;
 var lastselection = {id: null, iRow: null, iCol: null};
 var gridsize = 40;
 var lastFillColor = '#000000';
-var lastStrokeColor = '#000000';
+var lastStrokeColor = '#ffffff';
 var addingRow = false;
 
 // Rescale stroke widths based on object size
@@ -1015,6 +1015,7 @@ function updatePropName(name) {
 function updatePropFillColor(color) {
     var o = canvas.getActiveObject();
     if (o) {
+        lastFillColor = $('#propFillColor').val();
         o.fill = color;
         changeObject(o);
     }
@@ -1023,6 +1024,7 @@ function updatePropFillColor(color) {
 function updatePropStrokeColor(color) {
     var o = canvas.getActiveObject();
     if (o) {
+        lastStrokeColor = $('#propStrokeColor').val();
         o.stroke = color;
         changeObject(o);
     }
@@ -1127,6 +1129,8 @@ function openToolbar(mode) {
                 $('#newObjectButton').show();
                 $('#propObjectGroup').tabs('disable');
                 var objType = $('#propType').val();
+                if (objType === 'link')
+                    $('#propFillColorDiv').hide();
                 var index = $('#propObjectGroup a[href="#tabs-' + objType + '"]').parent().index();
                 $('#propObjectGroup').tabs('enable', index);
                 $('#propObjectGroup').tabs('option', 'active', index);
@@ -1135,8 +1139,8 @@ function openToolbar(mode) {
                 $('#propID').val('');
                 $('#propNameGroup').show();
                 $('#propName').val('');
-                $('#propStrokeColor').val(lastStrokeColor);
-                $('#propFillColor').val(lastFillColor);
+                $('#propFillColor').simplecolorpicker('selectColor', lastFillColor);
+                $('#propStrokeColor').simplecolorpicker('selectColor', lastStrokeColor);
                 $('#propType').val('icon');
                 $('#prop-icon').val('00-000-icon-hub.png');
                 $('#prop-icon').data('picker').sync_picker_with_select();
