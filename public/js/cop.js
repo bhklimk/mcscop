@@ -1,7 +1,42 @@
+function getParameterByName(name, url) {
+    if (!url) url = window.location.href;
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+        results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
+}
+
+// requirements!
+global.jQuery = require('jquery');
+global.$ = jQuery;
+require('./jquery-ui.min.js');
+require('./jquery-ui-timepicker-addon.min.js');
+require('bootstrap');
+var bootbox = require('./bootbox.min');
+require('./jquery.jqGrid.min');
+require('./grid.locale-en');
+require('./fabric.min');
+require('jquery-simplecolorpicker')
+require('image-picker');
+var jqGrid = require('./jquery.jqGrid.min');
+var noUiSlider = require('nouislider');
+var jstree = require('jstree');
+require('./files');
+var sharedb = require('sharedb/lib/client');
+var richText = require('rich-text');
+var StringBinding = require('sharedb-string-binding');
+global.hljs = require('highlight.js');
+var Quill = require('quill');
+var bsw = require('./bootstrap-window');
+global.mission = getParameterByName('mission');
+
+// ---------------------------- PERMISSIONS & BUTTONS ----------------------------------
 if (!permissions)
     permissions = [];
-var earliest_messages = {}; //= 2147483647000;
 var diagram_rw = false;
+// bind buttons
 if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !== -1) {
     diagram_rw = true;
     $("#propName").prop('disabled', false);
@@ -15,6 +50,28 @@ if (permissions.indexOf('all') !== -1 || permissions.indexOf('modify_diagram') !
     $("#insertObjectButton").prop('disabled', false).click(insertObject);
     $("#deleteObjectButton").prop('disabled', false).click(deleteObjectConfirm);;
 }
+$("#toolsTab").click(function() { toggleToolbar('tools'); });
+$("#tasksTab").click(function() { toggleToolbar('tasks'); });
+$("#notesTab").click(function() { toggleToolbar('notes'); });
+$("#filesTab").click(function() { toggleToolbar('files'); });
+$("#eventsTab").click(function() { toggleTable('events'); });
+$("#opnotesTab").click(function() { toggleTable('opnotes'); });
+$("#chatTab").click(function() { toggleTable('chat'); });
+$("#settingsTab").click(function() { toggleTable('settings'); });
+$("#propFillColor").change(function() { updatePropFillColor(this.value); });
+$("#propStrokeColor").change(function() { updatePropStrokeColor(this.value) });
+$("#propName").change(function() { updatePropName(this.value) });
+$("#zoomInButton").click(function() { zoomIn(); });
+$("#zoomOutButton").click(function() { zoomOut(); });
+$("#closeToolbarButton").click(closeToolbar);
+$("#cancelLinkButton").click(cancelLink);
+$("#editDetailsButton").click(function() { editDetails(); });
+$("#newNoteButton").click(function() { newNote(); });
+$("#downloadEventsButton").click(function() { downloadEvents(); });
+$("#downloadDiagramButton").click(function() { downloadDiagram(); });
+$("#downloadOpnotesButton").click(function() { downloadOpnotes(); });
+
+// more permissions stuff
 var events_rw = false;
 var events_del = false;
 var opnotes_rw = false;
@@ -50,12 +107,12 @@ MAXWIDTH=4000;
 MAXHEIGHT=4000;
 
 var settings = {'zoom': 1.0, 'x': 0, 'y': 0, 'diagram': 700, 'tools': 400, 'tasks': 400, 'notes': 400, 'files': 400};
+var earliest_messages = {}; //= 2147483647000;
 var creatingLink = false;
 var firstObject = null;
 var scale = 1;
 var offsetX = 0;
 var offsetY = 0;
-var mission = getParameterByName('mission');
 var objectSelect = [{id:0, name:'none/unknown'}];
 var userSelect = [{id:null, username:'none'}];
 var dateSlider = null;
@@ -75,7 +132,6 @@ var eventTableTimer = null;
 var opnoteTableTimer = null;
 var updateSettingsTimer = null;
 var sliderTimer = null;
-var doc;
 var activeToolbar = null;
 var activeTable = 'events';
 var activeChannel = 'log';
@@ -84,12 +140,19 @@ var firstChat = true;
 var unreadMessages = {};
 var shouldBlur = false;
 var cellEdit = null;
+var cellEditRow = null;
 var clickComplete = false;
-var lastselection = {id: null, iRow: null, iCol: null};
+global.lastselection = {id: null, iRow: null, iCol: null};
 var gridsize = 40;
 var lastFillColor = '#000000';
 var lastStrokeColor = '#ffffff';
-var addingRow = false;
+global.addingRow = false;
+var windowManager = null;
+
+var wsdb;
+var openDocs = {};
+var shareDBConnection;
+sharedb.types.register(richText.type);
 
 // Rescale stroke widths based on object size
 // http://jsfiddle.net/davidtorroija/nawLjtn8/
@@ -306,7 +369,7 @@ canvas.on('object:selected', function(options) {
                             z = canvas.getObjects().indexOf(o) - 1;
                         lastFillColor = $('#propFillColor').val();
                         lastFillColor = $('#propStrokeColor').val();
-                        diagram.send(JSON.stringify({act: 'insert_object', arg: {mission: mission, name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.id, obj_b: o.id, z: z}}));
+                        diagram.send(JSON.stringify({act: 'insert_object', arg: {name:$('#propName').val(), type: 'link', image: $('#prop-link').val().replace('.png','.svg'), stroke_color:$('#propStrokeColor').val(), obj_a: firstNode.id, obj_b: o.id, z: z}}));
                         firstNode = null;
                         creatingLink = false;
                     }
@@ -327,6 +390,8 @@ canvas.on('object:selected', function(options) {
                 $('#prop-' + o.objType).data('picker').sync_picker_with_select();
                 if (toolbarState)
                     openToolbar('tools');
+                if (options.e && options.e.ctrlKey)
+                    editDetails();
             }
         }
     }
@@ -447,7 +512,7 @@ function addChatMessage(msg, bulk) {
         if (msg.messages[i].prepend)
             pane.prepend('<div class="message-wraper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
         else {
-            var atBottom = $('#' + msg.messages[i].channel)[0].scrollHeight - $('#' + msg.messages[i].channel).scrollTop() === $('#' + msg.messages[i].channel).outerHeight();
+            var atBottom = $('#' + msg.messages[i].channel)[0].scrollHeight - Math.round($('#' + msg.messages[i].channel).scrollTop()) == $('#' + msg.messages[i].channel).outerHeight();
             var newMsg = $('<div class="message-wrapper"><div class="message"><div class="message-gutter"><img class="message-avatar" src="images/avatars/' + msg.messages[i].user_id + '.png"/></div><div class="message-content"><div class="message-content-header"><span class="message-sender">' + msg.messages[i].analyst + '</span><span class="message-time">' + epochToDateString(ts) + '</span></div><span class="message-body">' + msg.messages[i].text + '</span></div></div>');
             if (!bulk && activeChannel ===  msg.messages[i].channel)
                 newMsg.hide();
@@ -512,8 +577,11 @@ function checkIfObjectsLoaded() {
 function createNotesTree(arg) {
     $('#notes')
         .on('select_node.jstree', function(e, data) {
+            var name = '';
+            if (data.node && data.node.text)
+                name = data.node.text;
             if (data.node.li_attr.isLeaf) {
-                editDetails('notes' + data.selected[0]);
+                editDetails('notes' + data.selected[0], name);
             }
         }).jstree({
             'core': {
@@ -550,29 +618,71 @@ function createNotesTree(arg) {
         });
 }
 
-function editDetails(id) {
-    if (!id && canvas.getActiveObject())
+function editDetails(id, name) {
+    if (!name)
+        name = '';
+    if (!id && canvas.getActiveObject()) {
         id = 'details-' + canvas.getActiveObject().id;
+        if (canvas.getActiveObject().name_val)
+            name = '- ' + canvas.getActiveObject().name_val.split('\n')[0];
+    }
     if (id) {
-        $('#modal-title').text('Edit Notes');
-        $('#modal-body').html('<input type="hidden" id="object_details_id" name="object_details_id" value="' + id + '"><textarea id="object_details" class="object-details" style="resize: none;"></textarea>');
+        $('#modal-title').text('Edit Notes ' + name);
         $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">Close</button>');
         $('#modal-content').addClass('modal-details');
-        if (doc) {
-            doc.destroy();
-            doc = undefined;
-        }
-        doc = shareDBConnection.get('mcscop', id);
-        doc.subscribe(function(err) {
-            if (doc.type === null) {
-                doc.create('');
-            }
-            if (err) throw err;
-            var element = document.getElementById('object_details');
-            var binding = new StringBinding(element, doc);
-            binding.setup();
-        });
-        $('#modal').modal('show');
+        //if (doc) {
+        //    doc.destroy();
+        //    doc = undefined;
+        //}
+        if (!openDocs[id]) {
+            openDocs[id] = shareDBConnection.get('mcscop', id);
+            openDocs[id].subscribe(function(err) {
+                if (openDocs[id].type === null) {
+                    openDocs[id].create('', 'rich-text');
+                }
+                if (err) throw err;
+                if (openDocs[id].type.name === 'rich-text') {
+                    var w = windowManager.createWindow({
+                        sticky:  false,
+                        title: 'Edit Notes ' + name,
+                        effect: 'none',
+                        bodyContent: '<div id="object_details_' + id + '" class="object-details" style="resize: none;"></div>',
+                        closeCallback: function() {
+                            openDocs[id].destroy();
+                            delete openDocs[id];
+                        }    
+                    });
+                    w.$el.draggable({ handle: '.modal-header' }).children('.window-content').resizable({ minHeight: 153, minWidth: 300});
+                    var quill = new Quill('#object_details_' + id, {
+                        theme: 'snow',
+                        modules: {
+                            syntax: true,
+                            toolbar: [
+                                [{ header: [1, 2, false] }],
+                                ['bold', 'italic', 'underline'],
+                                ['image', 'code-block']
+                            ]
+                        }
+                    });
+                    quill.setContents(openDocs[id].data);
+                    quill.on('text-change', function(delta, oldDelta, source) {
+                        if (source !== 'user') return;
+                        openDocs[id].submitOp(delta, {source: quill});
+                    });
+                    openDocs[id].on('op', function(op, source) {
+                        if (source === quill) return;
+                        quill.updateContents(op);
+                    });
+                } else {
+                    $('#modal-body').html('<input type="hidden" id="object_details_id" name="object_details_id" value="' + id + '"><textarea style="height:100%;" id="object_details" class="object-details" style="resize: none;"></textarea>');
+                    var element = document.getElementById('object_details');
+                    var binding = new StringBinding(element, openDocs[id]);
+                    binding.setup();
+                }
+            });
+            //$('#modal').modal('show');
+        } else
+            console.log('document already open');
     }
 }
 
@@ -728,6 +838,7 @@ function addObjectToCanvas(o, selected) {
             id: o.id,
             objType: 'link',
             image: o.image,
+            name_val: o.name,
             from: o.obj_a,
             to: o.obj_b,
             fill: '#000000',
@@ -837,6 +948,7 @@ function addObjectToCanvas(o, selected) {
                 id: o.id,
                 objType: o.type,
                 image: o.image,
+                name_val: o.name,
                 name: name,
                 originX: 'center',
                 originY: 'center',
@@ -859,6 +971,7 @@ function addObjectToCanvas(o, selected) {
                 id: o.id,
                 objType: o.type,
                 image: o.image,
+                name_val: o.name,
                 name: name,
                 originX: 'center',
                 originY: 'center',
@@ -897,16 +1010,6 @@ function addObjectToCanvas(o, selected) {
     }
 }
 
-function getParameterByName(name, url) {
-    if (!url) url = window.location.href;
-    name = name.replace(/[\[\]]/g, "\\$&");
-    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
-        results = regex.exec(url);
-    if (!results) return null;
-    if (!results[2]) return '';
-    return decodeURIComponent(results[2].replace(/\+/g, " "));
-}
-
 function insertLink() {
     creatingLink = true;
     showMessage('Click on a node to start a new link.');
@@ -928,7 +1031,7 @@ function insertObject() {
         var center = new fabric.Point(canvas.width / 2, canvas.height / 2);
         lastFillColor = $('#propFillColor').val();
         lastStrokeColor = $('#propStrokeColor').val();
-        diagram.send(JSON.stringify({act: 'insert_object', arg:{mission: mission, name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#prop-' + $('#propType').val()).val().replace('.png','.svg'), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
+        diagram.send(JSON.stringify({act: 'insert_object', arg:{name:$('#propName').val(), fill_color:$('#propFillColor').val(), stroke_color:$('#propStrokeColor').val(), image:$('#prop-' + $('#propType').val()).val().replace('.png','.svg'), type:$('#propType').val(), x: Math.round(center.x / canvas.getZoom() + offsetX), y: Math.round(center.y / canvas.getZoom() - offsetY), z: canvas.getObjects().length}})); 
     }
 }
 
@@ -1053,7 +1156,7 @@ function changeObject(o) {
     diagram.send(JSON.stringify({act: 'change_object', arg: tempObj}));
 }
 
-function showTable(mode) {
+function toggleTable(mode) {
     $('#' + activeTable + 'Tab').removeClass('active-horiz-tab');
     $('#' + mode + 'Tab').addClass('active-horiz-tab');
     activeTable = mode;
@@ -1076,7 +1179,6 @@ function showTable(mode) {
             $('#chat').show();
             $('#settings').hide();
             if (firstChat) {
-                console.log('here');
                 $('#log').scrollTop($('#log')[0].scrollHeight);
                 firstChat = false;
             }
@@ -1359,7 +1461,7 @@ function checkTime(i) {
 function deleteObjectConfirm() {
     $('#modal-title').text('Are you sure?');
     $('#modal-body').html('<p>Are you sure you want to delete this object?</p>');
-    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-danger" data-dismiss="modal" onClick="deleteObject();">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-danger" data-dismiss="modal" onClick="cop.deleteObject();">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
     $('#modal-content').removeAttr('style');
     $('#modal-content').removeClass('modal-details');
     $('#modal').modal('show')
@@ -1374,7 +1476,7 @@ function deleteObject() {
 function deleteRowConfirm(type, table, id) {
     $('#modal-title').text('Are you sure?');
     $('#modal-body').html('<p>Are you sure you want to delete this row?</p>');
-    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-danger" data-dismiss="modal" onClick="deleteRow(\'' + type + '\', \'' + table + '\', \'' + id + '\');">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-danger" data-dismiss="modal" onClick="cop.deleteRow(\'' + type + '\', \'' + table + '\', \'' + id + '\');">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
     $('#modal-content').removeAttr('style');
     $('#modal-content').removeClass('modal-details');
     $('#modal').modal('show')
@@ -1399,7 +1501,6 @@ function saveRow(type, table, id) {
         $(table).jqGrid('saveRow', id); 
         data = $(table).getRowData(id);
     }
-    data.mission = mission;
     $(table).jqGrid('restoreRow', id, function(){});
     if (data.event_time)
         data.event_time = dateStringToEpoch(data.event_time);
@@ -1410,13 +1511,20 @@ function saveRow(type, table, id) {
 
 $(document).ready(function() {
     startTime();
-    $('.modal-dialog').draggable();
+    $('.modal-dialog').draggable({ handle: '.modal-header' });
     $('.modal-content').resizable({ minHeight: 153, minWidth: 300});
     // ---------------------------- SOCKETS ----------------------------------
-    if (location.protocol === 'https:')
+    if (location.protocol === 'https:') {
         diagram = new WebSocket('wss://' + window.location.host + '/mcscop/');
-    else
+        wsdb = new WebSocket('wss://' + window.location.host + '/mcscop/');
+    } else {
         diagram = new WebSocket('ws://' + window.location.host + '/mcscop/');
+        wsdb = new WebSocket('ws://' + window.location.host + '/mcscop/');
+    }
+    shareDBConnection = new sharedb.Connection(wsdb);
+    wsdb.onopen = function() {
+        wsdb.send(JSON.stringify({act: 'stream', arg: ''}));
+    };
     diagram.onopen = function() {
         $('#modal').modal('hide');
         $('#modal-title').text('Please wait...!');
@@ -1866,13 +1974,11 @@ $(document).ready(function() {
         }
     });
     // ---------------------------- JQGRIDS ----------------------------------
-    $(document).click(function(e) {
+    $(window).click(function(e) {
         if (cellEdit && clickComplete) {
-            if ($(e.target).attr('id') === 'ui-datepicker-div' || $(e.target).parents("#ui-datepicker-div").length > 0) {
-                console.log('no-blur');
+            if ($(e.target).attr('id') === 'ui-datepicker-div' || $(e.target).parents("#ui-datepicker-div").length > 0 || $.contains(cellEditRow[0], e.target)) {
             }
             else {
-                console.log('blur');
                 cellEdit();
             }
         }
@@ -1899,8 +2005,8 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!opnotes_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRowConfirm(\'opnote\', \'#opnotes2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
-                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'opnote\', \'#opnotes2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="cop.deleteRowConfirm(\'opnote\', \'#opnotes2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="cop.saveRow(\'opnote\', \'#opnotes2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-cell ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#opnotes2\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#opnotes2\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
@@ -1919,7 +2025,7 @@ $(document).ready(function() {
                         dateFormat: "yy-mm-dd",
                         timeFormat: "HH:mm:ss.l",
                         controlType: 'select',
-                        showMillisec: true,
+                        showMillisec: false,
                         useCurrent: true,
                         beforeShow: function (input, inst) {
                             var rect = input.getBoundingClientRect();
@@ -1973,13 +2079,16 @@ $(document).ready(function() {
                 data.event_time = dateStringToEpoch(data.event_time);
             delete data.actions;
             delete data.undefined;
-            data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_opnote', arg: data}));
         },
         afterEditCell: function(id, name, val, iRow, iCol) {
-            $("#"+iRow+"_"+name, "#opnotes2").bind('blur',function(){
+            // this handles clicking outside a cell while editing... a janky blur
+            clickComplete = false;
+            cellEditRow = $('#' + id);
+            cellEdit = function() {
                 $('#opnotes2').saveCell(iRow,iCol);
-            });
+                cellEdit = null;
+            }
         },
         afterRestoreCell: function (options) {
             $('#opnotes2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
@@ -2011,7 +2120,6 @@ $(document).ready(function() {
                                 $(this).find('input, select, textarea').each(function () {
                                     data[this.name] = $(this).val();
                                 });
-                                data.mission = mission;
                                 $('#opnotes2').jqGrid('restoreRow', id, function(){});
                                 data.event_time = dateStringToEpoch(data.event_time);
                                 delete data.actions;
@@ -2078,10 +2186,10 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!events_del)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRowConfirm(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
-                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="cop.deleteRowConfirm(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="cop.saveRow(\'event\', \'#events2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
                     buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save ui-inline-save-cell" id="jSaveButton_' + options.rowId + '" onclick="$(\'#events2\').saveCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
-                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '<div title="Cancel new row" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     buttons +=  '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-cell" id="jCancelButton_' + options.rowId + '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="btn_cancel_' + options.rowId + '" onclick="$(\'#events2\').restoreCell(lastselection.iRow, lastselection.iCol);" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
@@ -2097,7 +2205,7 @@ $(document).ready(function() {
                         dateFormat: "yy-mm-dd",
                         timeFormat: "HH:mm:ss.l",
                         controlType: 'select',
-                        showMillisec: true,
+                        showMillisec: false,
                         beforeShow: function (input, inst) {
                             var rect = input.getBoundingClientRect();
                             setTimeout(function () {
@@ -2120,7 +2228,7 @@ $(document).ready(function() {
                         dateFormat: "yy-mm-dd",
                         timeFormat: "HH:mm:ss.l",
                         controlType: 'select',
-                        showMillisec: true,
+                        showMillisec: false,
                         beforeShow: function (input, inst) {
                             var rect = input.getBoundingClientRect();
                             setTimeout(function () {
@@ -2161,7 +2269,6 @@ $(document).ready(function() {
             return false;
         },
         beforeEditCell: function (id, cn, val, iRow, iCol) {
-            console.log(id, cn);
             if (lastselection.id && lastselection.id !== id) {
                 $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-del').show();
                 $('#events2 tr#'+$.jgrid.jqID(lastselection.id)+ ' div.ui-inline-save-cell').hide();
@@ -2185,23 +2292,16 @@ $(document).ready(function() {
             if (data.discovery_time)
                 data.discovery_time = dateStringToEpoch(data.discovery_time);
             delete data.actions;
-            data.mission = mission;
             diagram.send(JSON.stringify({act: 'update_event', arg: data}));
         },
         afterEditCell: function(id, name, val, iRow, iCol) {
+            // this handles clicking outside a cell while editing... a janky blur
             clickComplete = false;
+            cellEditRow = $('#' + id);
             cellEdit = function() {
-                console.log('here');
                 $('#events2').saveCell(iRow,iCol);
                 cellEdit = null;
             }
-//            $("#"+iRow+"_"+name, "#events2").bind('blur',function(e){
-  //              if (shouldBlur) {
-    //                console.log('blurring');
-      //              console.log(e);
-        //        }
-            //    $('#events2').saveCell(iRow,iCol);
-          //  });
         },
         afterRestoreCell: function (options) {
             $('#events2 tr#'+$.jgrid.jqID(options)+ ' div.ui-inline-del').show();
@@ -2232,7 +2332,6 @@ $(document).ready(function() {
                                 $(this).find('input, select, textarea').each(function () {
                                     data[this.name] = $(this).val();
                                 });
-                                data.mission = mission;
                                 $('#events2').jqGrid('restoreRow', id, function(){});
                                 data.event_time = dateStringToEpoch(data.event_time);
                                 data.discovery_time = dateStringToEpoch(data.discovery_time);
@@ -2302,11 +2401,17 @@ $(document).ready(function() {
         $('.channel-pane').hide();
         $('.channel').removeClass('channel-selected');
         $('#' + c).show();
+        unreadMessages[c] = 0;
         $('#unread-' + c).hide();
         if (!chatPosition[c] || chatPosition[c] === 'bottom')
             $('#' + c).scrollTop($('#' + c)[0].scrollHeight);
         $('#channel-' + c).addClass('channel-selected');
         activeChannel = c;
+    });
+    // ---------------------------- WINDOW MANAGER ----------------------------------
+    windowManager = new bsw.WindowManager({
+        container: "#windowPane",
+        windowTemplate: $('#details_template').html()
     });
     // ---------------------------- MISC ----------------------------------
     $('#propFillColor').simplecolorpicker({picker: true});
@@ -2343,3 +2448,10 @@ $(document).ready(function() {
     loadSettings();
     resizeCanvas();
 });
+
+module.exports = {
+    deleteObject: deleteObject,
+    saveRow: saveRow,
+    deleteRow: deleteRow,
+    deleteRowConfirm: deleteRowConfirm
+};

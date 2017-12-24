@@ -2,6 +2,7 @@ html
   head
     title= title
     link(rel='stylesheet', href='css/bootstrap.min.css')
+    link(rel='stylesheet', href='css/highlight.min.css')
     link(rel='stylesheet', href='css/image-picker.css')
     link(rel='stylesheet', href='css/ui.jqgrid.css')
     link(rel='stylesheet', href='css/ui.jqgrid-bootstrap-ui.css')
@@ -9,6 +10,7 @@ html
     link(rel='stylesheet', href='css/jquery-ui.min.css')
     link(rel='stylesheet', href='css/jquery-ui.theme.min.css')
     link(rel='stylesheet', href='css/jquery-ui-timepicker-addon.min.css')
+    link(rel='stylesheet', href='css/quill.snow.css')
     link(rel='stylesheet', href='css/nouislider.min.css')
     link(rel='stylesheet', href='css/jstree.min.css')
     link(rel='stylesheet', href='css/colorpicker.css')
@@ -29,15 +31,15 @@ html
           canvas#canvas
           div#message
           div#zoom-buttons
-            button.zoomIn#zoomIn.ui-icon.ui-icon-zoomin(onclick='zoomIn()')
-            button.zoomOut#zoomOut.ui-icon.ui-icon-zoomout(onclick='zoomOut()')
-            button.cancelLink#cancelLink(onclick='cancelLink()') Cancel Link
+            button.zoomIn#zoomInButton.ui-icon.ui-icon-zoomin
+            button.zoomOut#zoomOutButton.ui-icon.ui-icon-zoomout
+            button.cancelLink#cancelLinkButton Cancel Link
         div#toolbar
           div.toolbar-nav#toolbar-nav
-            div.vert-tab#toolsTab(onclick='toggleToolbar("tools")')
-            div.vert-tab#tasksTab(onclick='toggleToolbar("tasks")')
-            div.vert-tab#notesTab(onclick='toggleToolbar("notes")')
-            div.vert-tab#filesTab(onclick='toggleToolbar("files")')
+            div.vert-tab#toolsTab
+            div.vert-tab#tasksTab
+            div.vert-tab#notesTab
+            div.vert-tab#filesTab
           div.toolbar-nav.click-through 
             div.tab-text.tab-float.rotated.tools-tab TOOLS
             div.tab-text.tab-float.rotated.tasks-tab TASKS
@@ -46,7 +48,7 @@ html
           div#toolbar-body
             div#notesForm.toolbar-form
               div#notes
-              button.btn.btn-primary#newNote(style='margin-top: 5px', onclick='newNote()') New Note
+              button.btn.btn-primary#newNoteButton(style='margin-top: 5px') New Note
             div#tasksForm.toolbar-form
               textarea.tasks#hostTasks
               textarea.tasks#networkTasks
@@ -62,41 +64,45 @@ html
               input(type="hidden", name="type")#propType
               div.form-group#propNameGroup
                 label Name
-                textarea(name="name" onchange="updatePropName(this.value)" disabled).form-control#propName
+                textarea(name="name" disabled).form-control#propName
               div.form-group#propColorGroup
                 label Color
                 div.colors
                   div#propFillColorDiv
-                    select#propFillColor(name="propFillColor" onchange="updatePropFillColor(this.value)")
+                    select#propFillColor(name="propFillColor")
+                      option(value="#000000") selected) Black
+                      option(value="#808080") Gray
+                      option(value="#c0c0c0") Silver
                       option(value="#ffffff") White
-                      option(value="#000000", selected) Black
-                      option(value="#7bd148") Green
-                      option(value="#5484ed") Bold blue
-                      option(value="#a4bdfc") Blue
-                      option(value="#46d6db") Turquoise
-                      option(value="#7ae7bf") Light green
-                      option(value="#51b749") Bold green
-                      option(value="#fbd75b") Yellow
-                      option(value="#ffb878") Orange
-                      option(value="#ff887c") Red
-                      option(value="#dc2127") Bold red
-                      option(value="#dbadff") Purple
-                      option(value="#e1e1e1") Gray
-                  select#propStrokeColor(name="propStrokeColor" onchange="updatePropStrokeColor(this.value)")
-                    option(value="#ffffff", selected) White
-                    option(value="#000000") Black
-                    option(value="#7bd148") Green
-                    option(value="#5484ed") Bold blue
-                    option(value="#a4bdfc") Blue
-                    option(value="#46d6db") Turquoise
-                    option(value="#7ae7bf") Light green
-                    option(value="#51b749") Bold green
-                    option(value="#fbd75b") Yellow
-                    option(value="#ffb878") Orange
-                    option(value="#ff887c") Red
-                    option(value="#dc2127") Bold red
-                    option(value="#dbadff") Purple
-                    option(value="#e1e1e1") Gray
+                      option(value="#800000") Maroon
+                      option(value="#ff0000") Red
+                      option(value="#808000") Olive
+                      option(value="#ffff00") Yellow
+                      option(value="#008000") Green
+                      option(value="#00ff00") Lime
+                      option(value="#008080") Teal
+                      option(value="#00ffff") Aqua
+                      option(value="#000080") Navy
+                      option(value="#0000ff") Blue
+                      option(value="#800080") Purple
+                      option(value="#ff00ff") Fuschia
+                  select#propStrokeColor(name="propStrokeColor")
+                    option(value="#000000") selected) Black
+                    option(value="#808080") Gray
+                    option(value="#c0c0c0") Silver
+                    option(value="#ffffff") White
+                    option(value="#800000") Maroon
+                    option(value="#ff0000") Red
+                    option(value="#808000") Olive
+                    option(value="#ffff00") Yellow
+                    option(value="#008000") Green
+                    option(value="#00ff00") Lime
+                    option(value="#008080") Teal
+                    option(value="#00ffff") Aqua
+                    option(value="#000080") Navy
+                    option(value="#0000ff") Blue
+                    option(value="#800080") Purple
+                    option(value="#ff00ff") Fuschia
               div.form-group#propObjectGroup
                 ul
                   li
@@ -124,16 +130,16 @@ html
                   button.propButton.btn.btn-default#moveToBack(type='button' disabled) Back
               div.form-group#makeObject
                   button.propButton.btn.btn-primary#insertObjectButton(type='button' disabled) Insert
-                  button.propButton.btn.btn-info#editDetailsButton(type='button' onclick="editDetails()") Details
+                  button.propButton.btn.btn-info#editDetailsButton(type='button') Details
                   button.propButton.btn.btn-danger#deleteObjectButton(type='button') Delete
-                  button.btn.btn-default(type='button' onclick="closeToolbar()") Cancel
+                  button.btn.btn-default#closeToolbarButton(type='button') Cancel
 
       div.jumbotron#tables(style="overflow: visible")
         div.table-nav
-          div.horiz-tab.active-horiz-tab#eventsTab(onclick='showTable("events")')
-          div.horiz-tab#opnotesTab(onclick='showTable("opnotes")')
-          div.horiz-tab#chatTab(onclick='showTable("chat")')
-          div.horiz-tab#settingsTab(onclick='showTable("settings")')
+          div.horiz-tab.active-horiz-tab#eventsTab
+          div.horiz-tab#opnotesTab
+          div.horiz-tab#chatTab
+          div.horiz-tab#settingsTab
         div.toolbar-nav.click-through 
           div.tab-text.tab-float.events-tab EVENTS
           div.tab-text.tab-float.opnotes-tab OPNOTES
@@ -146,13 +152,13 @@ html
           table#events2
           div#eventsPager
           span(style='margin-right: 10px;')
-            button.btn.btn-primary#downloadEvents(onclick='downloadEvents()') Download Events
+            button.btn.btn-primary#downloadEventsButton Download Events
           span
-            a.btn.btn-primary#downloadEvents(onclick='downloadDiagram(this)') Download Diagram
+            a.btn.btn-primary#downloadEventsButton Download Diagram
         div#opnotes(style="display: none;")
           table#opnotes2
           div#opnotesPager
-          button.btn.btn-primary#downloadOpnotes(onclick='downloadOpnotes()') Download Opnotes
+          button.btn.btn-primary#downloadOpnotesButton Download Opnotes
         div#chat(style="display: none;")
           div#channels
             div.channel.channel-selected#channel-log #log
@@ -165,19 +171,14 @@ html
             div#channel-footer
               input(type="text", name="message-input-box")#message-input-box.message-input-box
         div#settings(style="display: none;")
+          div#settings-pane(style="height: 400px") Coming soon!
+    div#windowPane.window-pane
+script(type="template/text", id="details_template")
+  div.window-dialog.modal-dialog
+    div.window-content.modal-content
+      div.window-header.modal-header
+        div.window-title.modal-title
+      div.window-body.modal-body
+      div.window-footer.modal-footer
 script var permissions = "#{permissions}".split(',');
-script(src='js/jquery.js')
-script(src='js/grid.locale-en.js')
-script(src='js/jquery.jqGrid.min.js')
-script(src='js/bootstrap.min.js')
-script(src='js/image-picker.min.js')
-script(src='js/colorpicker.js')
-script(src='js/fabric.min.js')
-script(src='js/jquery-ui.min.js')
-script(src='js/jquery-ui-timepicker-addon.min.js')
-script(src='js/nouislider.min.js')
-script(src='js/sharedbclient.js')
-script(src='js/jstree.min.js')
-script(src='js/bootbox.min.js')
-script(src='js/cop.js')
-script(src='js/files.js')
+script(src='js/cop-bundle.js')

@@ -32,6 +32,41 @@ td a {
 
 }
 
+#windowPane {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.7);
+    z-index: 999;
+}
+
+.window-pane .label {
+    cursor: pointer;
+    line-height: 2;
+    margin-left: 5px;
+}
+
+.window-pane .label+.label {
+    margin-bottom: 0px;
+}
+
+button.pane-close {
+    float: none;
+    font-size: 14px;
+    margin-left: 4px;
+    -webkit-appearance: none;
+    padding: 0;
+    cursor: pointer;
+    background: 0 0;
+    border: 0;
+    font-weight: 700;
+    line-height: 1;
+    color: #000;
+    text-shadow: 0 1px 0 #fff;
+    opacity: .2;
+}
+
 .simplecolorpicker {
     border: 1px solid #9d9d9d !important;
     margin-right: 10px;
@@ -173,6 +208,21 @@ td a {
     color: #444444;
 }
 
+.ui-state-highlight{
+    border-bottom-color: #cccccc !important;
+    border-bottom-style: solid !important;
+    border-bottom-width: 1px !important;
+    border-left-color: #cccccc !important;
+    border-left-style: solid !important;
+    border-left-width: 1px !important;
+    border-right-color: #cccccc !important;
+    border-right-style: solid !important;
+    border-right-width: 1px !important;
+    border-top: none !important;
+    background: none !important;
+    color: #444444 !important;
+}
+
 .ui-state-highlight a, .ui-widget-content .ui-state-highlight a, .ui-widget-header .ui-state-highlight a {
     color: #333;
 }
@@ -289,7 +339,7 @@ td a {
     justify-content: space-between;
     height: 26px;
     width: 100%;
-    color: #b8b0b7;
+    color: #acb2b8;
     padding: 0 12px 0 15px;
     font-size: 16px;
     text-decoration: none;
@@ -303,7 +353,7 @@ td a {
 }
 
 .channel:hover {
-    background: #3e313c;
+    background: #4A5664;
 }
 
 #channel-panes {
@@ -330,7 +380,7 @@ td a {
 }
 
 #channels {
-    background: #4d394b;
+    background: #303E4D;
     width: 220px;
     height: 100%;
     float: left;
@@ -398,11 +448,36 @@ td a {
 }
 
 .modal-body {
+    padding: 0px;
+    margin: 15px;
+}
+
+.window-body {
+    margin: 0px;
+    display: flex;
+    flex-flow: column;
     flex: 1;
+}
+
+.window-content {
+    height: 600px;
+    border-radius: 0px;
+}
+
+.window-header {
+    padding: 10px;
 }
 
 .modal-footer {
     background-color: darkgray;
+}
+
+.ql-toolbar.ql-snow {
+
+}
+
+.ql-editor {
+    width: 100%;
 }
 
 .login-logo {
@@ -416,12 +491,10 @@ td a {
 }
 
 .object-details {
-    position: absolute;
-    padding: 5px;
-    margin: -15px;
-    width: 100%;
-    height: 100%;
+    background-color: #ffffff;
     font-family: courier;
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-dialog {

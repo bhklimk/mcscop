@@ -3,6 +3,7 @@ var fs = require('fs');
 var app = express();
 var multer = require('multer');
 var ShareDB = require('sharedb');
+var richText = require('rich-text');
 var WebSocketJSONStream = require('websocket-json-stream');
 var http = require('http').Server(app);
 var session = require('express-session');
@@ -75,6 +76,7 @@ function handleMySqlConnection() {
 handleMySqlConnection();
 
 var db = require('sharedb-mongo')('mongodb://localhost:27017/mcscop');
+ShareDB.types.register(richText.type);
 var backend = new ShareDB({db: db});
 
 function sendToRoom(room, msg, selfSocket, roleFilter) {

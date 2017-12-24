@@ -13,7 +13,7 @@ while true; do
     case $yn in
         [Yy]* ) ans=1; break;;
         [Nn]* ) ans=0; break;;
-        * ) echo "Please select yes or no.";;
+        * ) echo "[!] Please select yes or no.";;
     esac
 done
 if [ $ans -eq 1 ]; then
@@ -35,10 +35,10 @@ if [ $? -eq 0 ]; then
     cat mysql/mcscop-schema.sql mysql/user.sql | mysql -u root mcscop
 else
     echo "[!] Please provide your mysql root password.  This is used to"
-    echo "[*] create the MCSCOP database."
+    echo "    create the MCSCOP database."
     mysql -u root -p -e "CREATE DATABASE mcscop;"
     echo "[!] Please provide your mysql root password.  This is used to"
-    echo "[*] import the MCSCOP database schema."
+    echo "    import the MCSCOP database schema."
     cat mysql/mcscop-schema.sql mysql/user.sql | mysql -u root -p mcscop
 fi
 echo ""
@@ -47,7 +47,7 @@ while true; do
     case $yn in
         [Yy]* ) ans=1; break;;
         [Nn]* ) ans=0; break;;
-        * ) echo "Please select yes or no.";;
+        * ) echo "[!] Please select yes or no.";;
     esac
 done
 if [ $ans -eq 1 ]; then

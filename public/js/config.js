@@ -1,3 +1,10 @@
+global.jQuery = require('jquery');
+global.$ = jQuery;
+require('./jquery-ui.min.js');
+require('bootstrap');
+var jqGrid = require('./jquery.jqGrid.min');
+require('./grid.locale-en');
+
 var lastSelection;
 
 if (!permissions)
@@ -119,7 +126,7 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!users_rw)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(event, \'roles\', \'#roles\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(event, \'roles\', \'#roles\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="cancelRow(event, \'roles\', \'#roles\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="config.deleteRow(event, \'roles\', \'#roles\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="config.saveRow(event, \'roles\', \'#roles\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="config.cancelRow(event, \'roles\', \'#roles\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
                 width: 15,
@@ -208,7 +215,7 @@ $(document).ready(function() {
                     var buttons = '<div title="Delete row" style="float: left;';
                     if (!users_rw)
                         buttons += ' display: none;';
-                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="deleteRow(event, \'users\', \'#users\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="saveRow(event, \'users\', \'#users\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="cancelRow(event, \'users\', \'#users\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="config.deleteRow(event, \'users\', \'#users\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> <div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-save" id="jSaveButton_' + options.rowId + '" onclick="config.saveRow(event, \'users\', \'#users\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div><div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel" id="jCancelButton_' + options.rowId + '" onclick="config.cancelRow(event, \'users\', \'#users\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
                     return buttons;
                 },
                 width: 15,
@@ -293,3 +300,9 @@ $(document).ready(function() {
         $("#users").jqGrid("setGridWidth", $("#users").closest(".jumbotron").width());
     }).triggerHandler("resize");
 });
+
+module.exports = {
+    saveRow: saveRow,
+    cancelRow: cancelRow,
+    deleteRow: deleteRow
+};

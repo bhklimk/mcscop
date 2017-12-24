@@ -1,3 +1,37 @@
+global.jQuery = require('jquery');
+global.$ = jQuery;
+require('./jquery-ui.min.js');
+require('./jquery-ui-timepicker-addon.min.js');
+require('bootstrap');
+var jqGrid = require('./jquery.jqGrid.min');
+require('./grid.locale-en');
+
+function deleteRowConfirm(table, id) {
+    $('#modal-title').text('Are you sure?');
+    $('#modal-body').html('<p>Are you sure you want to delete this row?</p>');
+    $('#modal-footer').html('<button type="button btn-primary" class="button btn btn-danger" data-dismiss="modal" onClick="main.deleteRow(\'' + table + '\', \'' + id + '\');">Yes</button> <button type="button btn-primary" class="button btn btn-default" data-dismiss="modal">No</button>');
+    $('#modal-content').removeAttr('style');
+    $('#modal-content').removeClass('modal-details');
+    $('#modal').modal('show')
+}
+
+function deleteRow(table, id) {
+    $(table).jqGrid('delRowData', id);
+    var data = { oper: 'del', id: id }
+    $.ajax({
+        url: 'api/missions',
+        type: 'POST',
+        data: data,
+        dataType: 'json',
+        cache: false,
+        success: function() {
+        },
+        error: function() {
+            console.log('mission delete error');
+        }
+    });
+}
+
 var lastSelection = null;
 if (!permissions)
     permissions = [];
@@ -53,7 +87,15 @@ $(document).ready(function() {
             { label: ' ', name: 'actions', formatter: 'actions', width: 10, formatoptions: {
                     keys: true,
                     editbutton: false,
-                    delbutton: missions_rw
+                    delbutton: false,
+                }, formatter: function(cell, options, row) {
+                    var buttons = '<div title="Delete row" style="float: left;';
+                    if (!missions_rw)
+                        buttons += ' display: none;';
+                    buttons += '" class="ui-pg-div ui-inline-del" id="jDelButton_' + options.rowId + '" onclick="main.deleteRowConfirm(\'#missions\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-trash"></span></div> ';
+                    buttons += '<div title="Save row" style="float: left; display: none;" class="ui-pg-div ui-inline-row ui-inline-save-row" id="jSaveButton_' + options.rowId + '" onclick="main.saveRow(\'opnote\', \'#opnotes2\', \'' + options.rowId + '\')" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-disk"></span></div>';
+                    buttons += '<div title="Cancel row editing" style="float: left; display: none;" class="ui-pg-div ui-inline-cancel ui-inline-cancel-row" id="jCancelButton_' + options.rowId + '" onclick="jQuery.fn.fmatter.rowactions.call(this,\'cancel\'); addingRow = false;" onmouseover="jQuery(this).addClass(\'ui-state-hover\');" onmouseout="jQuery(this).removeClass(\'ui-state-hover\');"><span class="ui-icon ui-icon-cancel"></span></div>';
+                    return buttons;
                 }
             },
             { label: 'Mission Id', name: 'id', width: 15, key: true, editable: false },
@@ -138,3 +180,8 @@ $(document).ready(function() {
     }).triggerHandler("resize")
 
 });
+
+module.exports = {
+    deleteRow: deleteRow,
+    deleteRowConfirm: deleteRowConfirm
+}
