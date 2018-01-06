@@ -94,7 +94,7 @@ fabric.Object.prototype.objectCaching = true;
 var canvas = new fabric.Canvas('canvas', {
     preserveObjectStacking: true,
     renderOnAddRemove: false,
-    enableRetinaScaling: false,
+    enableRetinaScaling: true,
     uniScaleTransform: true
 });
 var background = new fabric.StaticCanvas('background', {
@@ -680,7 +680,6 @@ function editDetails(id, name) {
                     binding.setup();
                 }
             });
-            //$('#modal').modal('show');
         } else
             console.log('document already open');
     }
@@ -863,9 +862,9 @@ function addObjectToCanvas(o, selected) {
             originX: 'center',
             originY: 'top',
             textAlign: 'center',
-            fill: o.stroke_color,
+            fill: '#000000',
             angle: angle,
-            fontSize: 10,
+            fontSize: 12,
             fontFamily: 'verdana',
             left: line.getCenterPoint().x,
             top: line.getCenterPoint().y
@@ -918,8 +917,9 @@ function addObjectToCanvas(o, selected) {
                     originX: 'center',
                     originY: 'top',
                     textAlign: 'center',
+                    fill: '#000000',
                     fontSize: 12,
-                    fontFamily: 'verdana',
+                    fontFamily: 'lato',
                     left: o.x,
                     top: o.y + (shape.getHeight()/2)
                 });
@@ -993,6 +993,7 @@ function addObjectToCanvas(o, selected) {
             originX: 'center',
             originY: 'top',
             textAlign: 'center',
+            fill: '#000000',
             fontSize: 12,
             fontFamily: 'verdana',
             left: o.x,
